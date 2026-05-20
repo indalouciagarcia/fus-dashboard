@@ -15,40 +15,40 @@ interface ClubContextType {
   loading: boolean;
   setMainClub: (club: Partial<MyClubSettings>) => Promise<void>;
   opponentClubs: Club[];
-  addOpponentClub: (club: Omit<Club, 'id'>) => Promise<void>;
+  addOpponentClub: (club: any) => Promise<void>;
   updateOpponentClub: (id: string, club: Partial<Club>) => Promise<void>;
   deleteOpponentClub: (id: string) => Promise<void>;
   players: Player[];
-  addPlayer: (player: Omit<Player, 'id'>) => Promise<void>;
+  addPlayer: (player: any) => Promise<void>;
   updatePlayer: (id: string, player: Partial<Player>) => Promise<void>;
   deletePlayer: (id: string) => Promise<void>;
 
   staff: Staff[];
-  addStaff: (member: Omit<Staff, 'id'>) => Promise<void>;
+  addStaff: (member: any) => Promise<void>;
   updateStaff: (id: string, member: Partial<Staff>) => Promise<void>;
   deleteStaff: (id: string) => Promise<void>;
 
   teams: Team[];
-  addTeam: (team: Omit<Team, 'id'>) => Promise<void>;
+  addTeam: (team: any) => Promise<void>;
   updateTeam: (id: string, team: Partial<Team>) => Promise<void>;
   deleteTeam: (id: string) => Promise<void>;
 
   leagues: League[];
-  addLeague: (league: Omit<League, 'id'>) => Promise<void>;
+  addLeague: (league: any) => Promise<void>;
   updateLeague: (id: string, league: Partial<League>) => Promise<void>;
   deleteLeague: (id: string) => Promise<void>;
 
   stadiums: Stadium[];
-  addStadium: (stadium: Omit<Stadium, 'id'>) => Promise<void>;
+  addStadium: (stadium: any) => Promise<void>;
   updateStadium: (id: string, stadium: Partial<Stadium>) => Promise<void>;
   deleteStadium: (id: string) => Promise<void>;
 
   matches: Match[];
-  addMatch: (match: Omit<Match, 'id'>) => Promise<void>;
+  addMatch: (match: any) => Promise<void>;
   updateMatch: (id: string, match: Partial<Match>) => Promise<void>;
   deleteMatch: (id: string) => Promise<void>;
   saveMatchLineup: (matchId: string, startingXI: string[], substitutes: string[]) => Promise<void>;
-  addMatchEvent: (event: Omit<MatchEvent, 'id'>) => Promise<void>;
+  addMatchEvent: (event: any) => Promise<void>;
   saveMatchStaff: (matchId: string, staffIds: string[]) => Promise<void>;
   refreshData: () => Promise<void>;
   resetDatabase: () => Promise<void>;
@@ -116,7 +116,7 @@ export const ClubProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const addOpponentClub = async (club: Omit<Club, 'id'>) => {
+  const addOpponentClub = async (club: any) => {
     const added = await clubService.addOpponentClub(club);
     setOpponentClubs(prev => [...prev, added]);
   };
@@ -131,7 +131,7 @@ export const ClubProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setOpponentClubs(prev => prev.filter(c => c.id !== id));
   };
 
-  const addPlayer = async (player: Omit<Player, 'id'>) => {
+  const addPlayer = async (player: any) => {
     const added = await playerService.addPlayer(player);
     setPlayers(prev => [...prev, added]);
   };
@@ -146,7 +146,7 @@ export const ClubProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setPlayers(prev => prev.filter(p => p.id !== id));
   };
 
-  const addStaff = async (member: Omit<Staff, 'id'>) => {
+  const addStaff = async (member: any) => {
     const added = await staffService.addMember(member);
     setStaff(prev => [...prev, added]);
   };
@@ -161,7 +161,7 @@ export const ClubProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setStaff(prev => prev.filter(s => s.id !== id));
   };
 
-  const addTeam = async (team: Omit<Team, 'id'>) => {
+  const addTeam = async (team: any) => {
     const added = await teamService.addTeam(team);
     setTeams(prev => [...prev, added]);
   };
@@ -176,7 +176,7 @@ export const ClubProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setTeams(prev => prev.filter(t => t.id !== id));
   };
 
-  const addLeague = async (league: Omit<League, 'id'>) => {
+  const addLeague = async (league: any) => {
     const added = await competitionService.addLeague(league);
     setLeagues(prev => [...prev, added]);
   };
@@ -191,7 +191,7 @@ export const ClubProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLeagues(prev => prev.filter(l => l.id !== id));
   };
 
-  const addStadium = async (stadium: Omit<Stadium, 'id'>) => {
+  const addStadium = async (stadium: any) => {
     const added = await competitionService.addStadium(stadium);
     setStadiums(prev => [...prev, added]);
   };
@@ -206,7 +206,7 @@ export const ClubProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setStadiums(prev => prev.filter(s => s.id !== id));
   };
 
-  const addMatch = async (match: Omit<Match, 'id'>) => {
+  const addMatch = async (match: any) => {
     const added = await matchService.createMatch(match);
     setMatches(prev => [...prev, added]);
   };
@@ -226,7 +226,7 @@ export const ClubProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setMatches(prev => prev.map(m => m.id === matchId ? { ...m, lineup: { startingXI, substitutes, formation: m.formation || '4-3-3' } } : m));
   };
 
-  const addMatchEvent = async (event: Omit<MatchEvent, 'id'>) => {
+  const addMatchEvent = async (event: any) => {
     await matchService.addEvent(event);
   };
 

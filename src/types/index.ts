@@ -18,7 +18,18 @@ import type { Tables } from './supabase';
 // TYPES DOMAINE — Row types directs depuis la DB
 // -------------------------------------------------------
 
-export type Club                 = Tables<'clubs'>;
+export type Club = Tables<'clubs'> & {
+  club_name?: string;
+  preferred_view_mode?: string;
+  pagination_limit?: number;
+  image_url?: string;
+  category?: string;
+};
+
+export type MyClubSettings = Club & {
+  settings?: Settings | null;
+  [key: string]: any;
+};
 export type PlayerSurclassement = Tables<'player_surclassements'>;
 export type Settings = Tables<'settings'>;
 export type League   = Tables<'leagues'>;
