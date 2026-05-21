@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from './lib/utils';
 import './index.css';
 
 import { queryClient } from './lib/queryClient';
@@ -13,7 +14,6 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import ProtectedRoute from './components/ProtectedRoute';
 import DevRoleSwitcher from './components/dev/DevRoleSwitcher';
-import PlaceholderPage from './components/layout/PlaceholderPage';
 
 // Pages publiques (auth)
 import LoginPage from './features/auth/LoginPage';
@@ -30,7 +30,6 @@ import ClubSettings from './features/club-management/ClubSettings';
 import OpponentClubs from './features/club-management/OpponentClubs';
 import TeamManagement from './features/squad-management/TeamManagement';
 import StadiumManagement from './features/club-management/StadiumManagement';
-import BackupPage from './features/backup-management/BackupPage';
 import BlogManagement from './features/blog-management/BlogManagement';
 import StoreManagement from './features/store-management/StoreManagement';
 import UserManagement from './features/people-management/UserManagement';
@@ -44,9 +43,7 @@ const pageTitles: Record<string, string> = {
   '/leagues':    'Compétitions',
   '/opponents':  'Base Adversaires',
   '/stadiums':   'Gestion Stades',
-  '/messages':   'Communications',
   '/settings':   'Paramètres Club',
-  '/backup':     'Centre de Sauvegarde',
   '/blog':       'Blog & Actus',
   '/store':      'Store & Marketing',
   '/users':      'Utilisateurs App',
@@ -59,14 +56,25 @@ const pageTitles: Record<string, string> = {
 const AppContent: React.FC = () => {
   const location = useLocation();
   const currentTitle = pageTitles[location.pathname] || 'Tableau de Bord';
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50/50">
-      <Sidebar />
-      <Header title={currentTitle} />
+      <Sidebar 
+        mobileOpen={mobileSidebarOpen} 
+        onMobileClose={() => setMobileSidebarOpen(false)} 
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+      <Header 
+        title={currentTitle} 
+        onMobileMenuClick={() => setMobileSidebarOpen(true)} 
+        sidebarCollapsed={sidebarCollapsed}
+      />
 
-      <main className="pl-[72px] lg:pl-64 pt-[72px] transition-all duration-300">
-        <div className="p-6 lg:p-10 max-w-[1600px] mx-auto">
+      <main className={cn("pt-[72px] transition-all duration-300", sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-64")}>
+        <div className="p-3 sm:p-4 lg:p-6 xl:p-10 max-w-[1600px] mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -114,11 +122,6 @@ const AppContent: React.FC = () => {
                     <ClubSettings />
                   </ProtectedRoute>
                 } />
-                <Route path="/backup"    element={
-                  <ProtectedRoute requiredPermission="manage_backups">
-                    <BackupPage />
-                  </ProtectedRoute>
-                } />
                 <Route path="/blog"      element={<BlogManagement />} />
                 <Route path="/store"     element={<StoreManagement />} />
                 <Route path="/users"     element={
@@ -126,9 +129,6 @@ const AppContent: React.FC = () => {
                     <UserManagement />
                   </ProtectedRoute>
                 } />
-
-                {/* Stubs */}
-                <Route path="/messages"   element={<PlaceholderPage name="Team Communications" />} />
 
                 {/* 404 */}
                 <Route path="*" element={<Navigate to="/" replace />} />

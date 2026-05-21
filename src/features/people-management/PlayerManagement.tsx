@@ -662,29 +662,22 @@ const PlayerManagement: React.FC = () => {
             className="space-y-8"
           >
             {/* Header Section */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight text-foreground">Effectif Joueurs</h2>
-                <p className="text-muted-foreground text-sm font-medium">Gérez vos athlètes et leurs données physiques</p>
-              </div>
-              <div className="flex items-center gap-4">
-                  {/* Planning Button */}
-                  <Button
-                    variant={viewState === 'PLANNING' ? 'default' : 'outline'}
-                    onClick={() => setViewState(viewState === 'PLANNING' ? 'LIST' : 'PLANNING')}
-                    className={`h-11 px-5 rounded-2xl font-black uppercase tracking-widest text-xs gap-2 transition-all ${viewState === 'PLANNING' ? 'bg-primary shadow-lg shadow-primary/20' : 'border-primary/30 text-primary hover:bg-primary/5'}`}
-                  >
-                    <CalendarDays className="w-4 h-4" />
-                    Planning
-                  </Button>
-
+            <div className="flex flex-col gap-4 sm:gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Effectif Joueurs</h2>
+                  <p className="text-muted-foreground text-xs sm:text-sm font-medium">Gérez vos athlètes et leurs données physiques</p>
+                </div>
+                
+                {/* Main Action Buttons - Wrap on mobile */}
+                <div className="flex items-center gap-2 flex-wrap">
                   {/* View Toggle */}
-                  <div className="flex bg-secondary/30 p-1 rounded-2xl border ml-auto">
+                  <div className="flex bg-secondary/30 p-1 rounded-2xl border">
                     <Button
                       variant={displayMode === 'list' ? 'default' : 'ghost'}
                       size="icon"
                       onClick={() => setDisplayMode('list')}
-                      className="w-10 h-10 rounded-xl"
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl"
                     >
                       <ListIcon className="w-4 h-4" />
                     </Button>
@@ -692,114 +685,137 @@ const PlayerManagement: React.FC = () => {
                       variant={displayMode === 'grid' ? 'default' : 'ghost'}
                       size="icon"
                       onClick={() => setDisplayMode('grid')}
-                      className="w-10 h-10 rounded-xl"
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl"
                     >
                       <LayoutGrid className="w-4 h-4" />
                     </Button>
                   </div>
-                  {/* Bouton mode sélection */}
-                  <Button
-                    variant={selectionMode ? 'default' : 'outline'}
-                    onClick={() => { setSelectionMode(s => !s); setSelectedIds(new Set()); }}
-                    className={`h-11 px-5 rounded-2xl font-black uppercase tracking-widest text-xs gap-2 transition-all ${selectionMode ? 'bg-amber-500 hover:bg-amber-600 border-amber-500 text-white shadow-lg' : 'border-slate-200 text-slate-500'}`}
-                  >
-                    <CheckSquare className="w-4 h-4" />
-                    {selectionMode ? `Sélection (${selectedIds.size})` : 'Sélectionner'}
-                  </Button>
 
-                  {selectionMode && selectedIds.size > 0 && (
-                    <Button
-                      variant="destructive"
-                      disabled={isBulkDeleting}
-                      onClick={async () => {
-                        if (!confirm(`Supprimer ${selectedIds.size} joueur${selectedIds.size > 1 ? 's' : ''} et leurs photos définitivement ?`)) return;
-                        await bulkDeletePlayers([...selectedIds]);
-                        setSelectedIds(new Set());
-                        setSelectionMode(false);
-                      }}
-                      className="h-11 px-5 rounded-2xl font-black uppercase tracking-widest text-xs gap-2 bg-red-600 hover:bg-red-700 shadow-lg"
-                    >
-                      {isBulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                      Supprimer {selectedIds.size}
-                    </Button>
-                  )}
-
-                  {selectionMode && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const allIds = paginatedPlayers.map(p => p.id);
-                        const allSelected = allIds.every(id => selectedIds.has(id));
-                        setSelectedIds(allSelected ? new Set() : new Set(allIds));
-                      }}
-                      className="h-11 px-5 rounded-2xl font-black uppercase tracking-widest text-xs gap-2 border-slate-200"
-                    >
-                      {paginatedPlayers.every(p => selectedIds.has(p.id)) ? 'Tout désélect.' : 'Tout sélect.'}
-                    </Button>
-                  )}
-
-                  <Button
-                    variant="outline"
-                    onClick={() => { setGenCategory(''); setGenTeamId(''); setGenModal(true); }}
-                    className="gap-2 h-11 px-5 rounded-2xl font-black uppercase tracking-widest text-xs border-violet-300 text-violet-600 hover:bg-violet-50"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Générer 22
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={() => { setBulkRows([newBulkRow(0)]); setViewState('BULK_ADD'); }}
-                    className="gap-2 h-11 px-5 rounded-2xl font-black uppercase tracking-widest text-xs border-primary/30 text-primary hover:bg-primary/5"
-                  >
-                    <Users className="w-4 h-4" />
-                    Ajout multiple
-                  </Button>
-                  <Button onClick={handleOpenAdd} className="gap-2 shadow-lg shadow-primary/20 h-11 px-6 font-bold uppercase tracking-widest text-xs transition-all active:scale-95 bg-primary">
+                  <Button onClick={handleOpenAdd} className="gap-2 shadow-lg shadow-primary/20 h-10 sm:h-11 px-4 sm:px-6 font-bold uppercase tracking-widest text-[10px] sm:text-xs transition-all active:scale-95 bg-primary">
                     <UserPlus className="w-4 h-4" />
-                    Ajouter un Joueur
+                    <span className="hidden sm:inline">Ajouter un Joueur</span>
+                    <span className="sm:hidden">Ajouter</span>
                   </Button>
+                </div>
+              </div>
+
+              {/* Secondary Actions - Scrollable on mobile */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
+                {/* Planning Button */}
+                <Button
+                  variant={viewState === 'PLANNING' ? 'default' : 'outline'}
+                  onClick={() => setViewState(viewState === 'PLANNING' ? 'LIST' : 'PLANNING')}
+                  className={`h-9 sm:h-11 px-3 sm:px-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs gap-2 transition-all shrink-0 ${viewState === 'PLANNING' ? 'bg-primary shadow-lg shadow-primary/20' : 'border-primary/30 text-primary hover:bg-primary/5'}`}
+                >
+                  <CalendarDays className="w-4 h-4" />
+                  <span className="hidden sm:inline">Planning</span>
+                  <span className="sm:hidden">Plan</span>
+                </Button>
+
+                {/* Bouton mode sélection */}
+                <Button
+                  variant={selectionMode ? 'default' : 'outline'}
+                  onClick={() => { setSelectionMode(s => !s); setSelectedIds(new Set()); }}
+                  className={`h-9 sm:h-11 px-3 sm:px-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs gap-2 transition-all shrink-0 ${selectionMode ? 'bg-amber-500 hover:bg-amber-600 border-amber-500 text-white shadow-lg' : 'border-slate-200 text-slate-500'}`}
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  {selectionMode ? `${selectedIds.size}` : <span className="hidden sm:inline">Sélectionner</span>}
+                </Button>
+
+                {selectionMode && selectedIds.size > 0 && (
+                  <Button
+                    variant="destructive"
+                    disabled={isBulkDeleting}
+                    onClick={async () => {
+                      if (!confirm(`Supprimer ${selectedIds.size} joueur${selectedIds.size > 1 ? 's' : ''} et leurs photos définitivement ?`)) return;
+                      await bulkDeletePlayers([...selectedIds]);
+                      setSelectedIds(new Set());
+                      setSelectionMode(false);
+                    }}
+                    className="h-9 sm:h-11 px-3 sm:px-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs gap-2 bg-red-600 hover:bg-red-700 shadow-lg shrink-0"
+                  >
+                    {isBulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    <span className="hidden sm:inline">Supprimer {selectedIds.size}</span>
+                    <span className="sm:hidden">{selectedIds.size}</span>
+                  </Button>
+                )}
+
+                {selectionMode && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const allIds = paginatedPlayers.map(p => p.id);
+                      const allSelected = allIds.every(id => selectedIds.has(id));
+                      setSelectedIds(allSelected ? new Set() : new Set(allIds));
+                    }}
+                    className="h-9 sm:h-11 px-3 sm:px-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs gap-2 border-slate-200 shrink-0"
+                  >
+                    {paginatedPlayers.every(p => selectedIds.has(p.id)) ? 'Tout désélect.' : 'Tout sélect.'}
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  onClick={() => { setGenCategory(''); setGenTeamId(''); setGenModal(true); }}
+                  className="gap-2 h-9 sm:h-11 px-3 sm:px-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs border-violet-300 text-violet-600 hover:bg-violet-50 shrink-0"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span className="hidden sm:inline">Générer 22</span>
+                  <span className="sm:hidden">Générer</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => { setBulkRows([newBulkRow(0)]); setViewState('BULK_ADD'); }}
+                  className="gap-2 h-9 sm:h-11 px-3 sm:px-5 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs border-primary/30 text-primary hover:bg-primary/5 shrink-0"
+                >
+                  <Users className="w-4 h-4" />
+                  <span className="hidden sm:inline">Ajout multiple</span>
+                  <span className="sm:hidden">Multiple</span>
+                </Button>
               </div>
             </div>
 
             {/* Filters Bar */}
-            <div className="flex flex-col lg:flex-row items-center gap-4 p-4 rounded-2xl bg-white border shadow-sm">
-              <div className="relative flex-1 w-full">
+            <div className="flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white border shadow-sm">
+              <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input 
                   placeholder="Rechercher par nom ou numéro..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-11 bg-secondary/30 border-transparent focus:bg-white transition-all rounded-xl font-medium"
+                  className="pl-10 h-10 sm:h-11 bg-secondary/30 border-transparent focus:bg-white transition-all rounded-xl font-medium text-sm"
                 />
               </div>
               
-              <div className="flex bg-secondary/30 p-1 rounded-xl w-full lg:w-auto overflow-x-auto no-scrollbar">
-                {(['ALL', ...PLAYER_CATEGORIES, 'PRO'] as const).map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setCategoryFilter(cat)}
-                    className={`flex-1 lg:flex-none px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                      categoryFilter === cat ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-              
-              <div className="flex bg-secondary/30 p-1 rounded-xl w-full lg:w-auto">
-                {(['ALL', 'GK', 'DF', 'MF', 'FW'] as const).map((pos) => (
-                  <button
-                    key={pos}
-                    onClick={() => setPositionFilter(pos)}
-                    className={`flex-1 lg:flex-none px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                      positionFilter === pos ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {pos}
-                  </button>
-                ))}
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+                <div className="flex bg-secondary/30 p-1 rounded-xl w-full overflow-x-auto no-scrollbar">
+                  {(['ALL', ...PLAYER_CATEGORIES, 'PRO'] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setCategoryFilter(cat)}
+                      className={`flex-1 sm:flex-none px-2 sm:px-3 py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                        categoryFilter === cat ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                
+                <div className="flex bg-secondary/30 p-1 rounded-xl w-full sm:w-auto">
+                  {(['ALL', 'GK', 'DF', 'MF', 'FW'] as const).map((pos) => (
+                    <button
+                      key={pos}
+                      onClick={() => setPositionFilter(pos)}
+                      className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
+                        positionFilter === pos ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {pos}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

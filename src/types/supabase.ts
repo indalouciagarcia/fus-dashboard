@@ -316,6 +316,7 @@ export interface Database {
           match_id: string;
           player_id: string;
           is_starting: boolean;
+          position_index: number | null;
           position_x: number | null;
           position_y: number | null;
           created_at: string;
@@ -326,6 +327,7 @@ export interface Database {
           match_id: string;
           player_id: string;
           is_starting?: boolean;
+          position_index?: number | null;
           position_x?: number | null;
           position_y?: number | null;
           created_at?: string;

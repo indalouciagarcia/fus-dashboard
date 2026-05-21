@@ -13,7 +13,7 @@ export const matchService = {
 
     const { data, error } = await supabase
       .from('matches')
-      .select('*, match_players(player_id, is_starting), match_staff(staff_id)')
+      .select('*, match_players(player_id, is_starting, position_index), match_staff(staff_id)')
       .eq('club_id', clubId)
       .order('match_date', { ascending: false });
 
@@ -22,14 +22,38 @@ export const matchService = {
       throw error;
     }
 
-    return (data ?? []).map(m => ({
-      ...m,
-      lineup: {
-        startingXI: m.match_players?.filter((p: any) => p.is_starting).map((p: any) => p.player_id) ?? [],
-        substitutes: m.match_players?.filter((p: any) => !p.is_starting).map((p: any) => p.player_id) ?? [],
-      },
-      staff_ids: m.match_staff?.map((s: any) => s.staff_id) ?? [],
-    }));
+    return (data ?? []).map(m => {
+      // Build startingXI array with correct ordering using position_index
+      const startingPlayers = m.match_players?.filter((p: any) => p.is_starting) ?? [];
+      const substitutes = m.match_players?.filter((p: any) => !p.is_starting).map((p: any) => p.player_id) ?? [];
+      
+      // Sort by position_index if available, otherwise maintain original order (backward compatibility)
+      const sortedStarters = startingPlayers.sort((a: any, b: any) => {
+        // If position_index is null/undefined, treat as -1 (will be at the end)
+        const idxA = a.position_index ?? -1;
+        const idxB = b.position_index ?? -1;
+        return idxA - idxB;
+      });
+      
+      // Build startingXI array (11 slots)
+      const startingXI: string[] = Array(11).fill('');
+      sortedStarters.forEach((p: any) => {
+        const idx = p.position_index;
+        // Only place if index is valid (0-10)
+        if (idx !== null && idx !== undefined && idx >= 0 && idx < 11) {
+          startingXI[idx] = p.player_id;
+        }
+      });
+      
+      return {
+        ...m,
+        lineup: {
+          startingXI,
+          substitutes,
+        },
+        staff_ids: m.match_staff?.map((s: any) => s.staff_id) ?? [],
+      };
+    });
   },
 
   async createMatch(
@@ -134,9 +158,20 @@ export const matchService = {
   async saveLineup(matchId: string, startingXI: string[], substitutes: string[]): Promise<void> {
     await supabase.from('match_players').delete().eq('match_id', matchId);
 
+    // Build rows with position_index for starters to preserve their position in the array
     const rows = [
-      ...startingXI.filter(Boolean).map(pid => ({ match_id: matchId, player_id: pid, is_starting: true })),
-      ...substitutes.filter(Boolean).map(pid => ({ match_id: matchId, player_id: pid, is_starting: false })),
+      ...startingXI.map((pid, index) => ({ 
+        match_id: matchId, 
+        player_id: pid, 
+        is_starting: !!pid, // true if player exists, false for empty slots
+        position_index: pid ? index : null, // store index only for actual players
+      })).filter(r => r.player_id), // Only insert non-empty slots
+      ...substitutes.filter(Boolean).map(pid => ({ 
+        match_id: matchId, 
+        player_id: pid, 
+        is_starting: false,
+        position_index: null, // substitutes don't have a position index
+      })),
     ];
 
     if (rows.length) {
@@ -145,10 +180,10 @@ export const matchService = {
     }
   },
 
-  async getMatchLineup(matchId: string): Promise<{ player_id: string; is_starting: boolean }[]> {
+  async getMatchLineup(matchId: string): Promise<{ player_id: string; is_starting: boolean; position_index: number | null }[]> {
     const { data, error } = await supabase
       .from('match_players')
-      .select('player_id, is_starting')
+      .select('player_id, is_starting, position_index')
       .eq('match_id', matchId);
     if (error) throw error;
     return data ?? [];

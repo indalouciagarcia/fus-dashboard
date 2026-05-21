@@ -40,11 +40,34 @@ const FORMATIONS = ['4-3-3', '4-4-2', '4-2-3-1', '4-1-4-1', '3-5-2', '3-4-3', '5
 const CATEGORIES = PLAYER_CATEGORIES; // PRO est déjà inclus dans PLAYER_CATEGORIES
 
 const POSITION_GROUPS = [
-  { label: 'Gardiens',   roles: ['GK', 'G', 'GARDIEN', 'GKP'] },
-  { label: 'Défenseurs', roles: ['CB', 'LB', 'RB', 'LWB', 'RWB', 'D', 'DC', 'DG', 'DD', 'DF', 'DEF', 'DEFENDER'] },
-  { label: 'Milieux',    roles: ['CDM', 'CM', 'CAM', 'LM', 'RM', 'M', 'MDC', 'MC', 'MO', 'MD', 'MG', 'MF', 'MID', 'MILIEU'] },
-  { label: 'Attaquants', roles: ['ST', 'LW', 'RW', 'CF', 'F', 'BU', 'A', 'WG', 'FW', 'ATT', 'FOR', 'FORWARD'] }
+  { label: 'Gardiens',   roles: ['GK', 'G', 'GARDIEN', 'GKP'], color: 'from-amber-400 to-amber-600' },
+  { label: 'Défenseurs', roles: ['CB', 'LB', 'RB', 'LWB', 'RWB', 'D', 'DC', 'DG', 'DD', 'DF', 'DEF', 'DEFENDER'], color: 'from-blue-500 to-blue-700' },
+  { label: 'Milieux',    roles: ['CDM', 'CM', 'CAM', 'LM', 'RM', 'M', 'MDC', 'MC', 'MO', 'MD', 'MG', 'MF', 'MID', 'MILIEU'], color: 'from-emerald-500 to-emerald-700' },
+  { label: 'Attaquants', roles: ['ST', 'LW', 'RW', 'CF', 'F', 'BU', 'A', 'WG', 'FW', 'ATT', 'FOR', 'FORWARD'], color: 'from-rose-500 to-rose-700' }
 ];
+
+const getPositionColor = (position: string) => {
+  const upperPos = position?.toUpperCase() || '';
+  if (POSITION_GROUPS[0].roles.includes(upperPos)) return POSITION_GROUPS[0].color;
+  if (POSITION_GROUPS[1].roles.includes(upperPos)) return POSITION_GROUPS[1].color;
+  if (POSITION_GROUPS[2].roles.includes(upperPos)) return POSITION_GROUPS[2].color;
+  if (POSITION_GROUPS[3].roles.includes(upperPos)) return POSITION_GROUPS[3].color;
+  return 'from-slate-500 to-slate-700';
+};
+
+const getPositionPriority = (position: string) => {
+  const upperPos = position?.toUpperCase() || '';
+  if (['GK', 'G', 'GARDIEN', 'GKP'].includes(upperPos)) return 0;
+  if (['CB', 'DC', 'DEF', 'DF', 'DEFENDER'].includes(upperPos)) return 1;
+  if (['LB', 'RB', 'DG', 'DD', 'LWB', 'RWB'].includes(upperPos)) return 2;
+  if (['CDM', 'MDC'].includes(upperPos)) return 3;
+  if (['CM', 'MC', 'MID', 'MF', 'MILIEU'].includes(upperPos)) return 4;
+  if (['CAM', 'MO'].includes(upperPos)) return 5;
+  if (['LM', 'RM', 'MG', 'MD'].includes(upperPos)) return 6;
+  if (['ST', 'BU', 'CF', 'F', 'FOR', 'FORWARD'].includes(upperPos)) return 7;
+  if (['LW', 'RW', 'WG', 'ATT'].includes(upperPos)) return 8;
+  return 9;
+};
 
 const getFormationPositions = (formation: string) => {
   const roles: { [key: string]: { top: string; left: string; label: string }[] } = {
@@ -283,6 +306,103 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
      setOpponentSubs(next);
   };
   const removeOpponentSub = (idx: number) => setOpponentSubs(prev => prev.filter((_, i) => i !== idx));
+
+  // Auto-position players for home team
+  const autoPositionPlayers = () => {
+    const availablePlayers = [...matchPlayers].sort((a, b) => {
+      const priorityA = getPositionPriority(a.position);
+      const priorityB = getPositionPriority(b.position);
+      return priorityA - priorityB;
+    });
+    
+    const newXI = Array(11).fill('');
+    const newSubs: string[] = [];
+    
+    // First, place the goalkeeper
+    const gk = availablePlayers.find(p => ['GK', 'G', 'GARDIEN', 'GKP'].includes(p.position?.toUpperCase() || ''));
+    if (gk) {
+      newXI[0] = gk.id;
+    }
+    
+    // Get formation positions
+    const roles = getFormationPositions(formation);
+    
+    // Place remaining players by matching position
+    const remainingPlayers = availablePlayers.filter(p => p.id !== gk?.id);
+    
+    for (let i = 1; i < 11; i++) {
+      if (newXI[i]) continue;
+      
+      const positionLabel = roles[i]?.label;
+      const matchingPlayer = remainingPlayers.find(p => 
+        !newXI.includes(p.id) && 
+        !newSubs.includes(p.id) &&
+        p.position?.toUpperCase() === positionLabel
+      );
+      
+      if (matchingPlayer) {
+        newXI[i] = matchingPlayer.id;
+      }
+    }
+    
+    // Fill remaining slots with any available player
+    for (let i = 1; i < 11; i++) {
+      if (!newXI[i]) {
+        const anyPlayer = remainingPlayers.find(p => !newXI.includes(p.id) && !newSubs.includes(p.id));
+        if (anyPlayer) {
+          newXI[i] = anyPlayer.id;
+        }
+      }
+    }
+    
+    // Remaining players go to subs
+    remainingPlayers.forEach(p => {
+      if (!newXI.includes(p.id) && !newSubs.includes(p.id)) {
+        newSubs.push(p.id);
+      }
+    });
+    
+    setStartingXI(newXI);
+    setSubstitutes(newSubs);
+  };
+
+  // Auto-position opponent players (1-22)
+  const autoPositionOpponent = () => {
+    const newLineup = Array(11).fill('');
+    const newSubs: string[] = [];
+    
+    // GK is #1
+    newLineup[0] = '1';
+    
+    // Defenders: 2-5
+    const defenders = ['2', '3', '4', '5'];
+    const defPositions = [1, 2, 3, 4];
+    defenders.forEach((num, idx) => {
+      if (defPositions[idx] < 11) newLineup[defPositions[idx]] = num;
+    });
+    
+    // Midfielders: 6-10
+    const midfielders = ['6', '7', '8', '10'];
+    const midPositions = [5, 6, 7, 8];
+    midfielders.forEach((num, idx) => {
+      if (midPositions[idx] < 11) newLineup[midPositions[idx]] = num;
+    });
+    
+    // Attackers: 9, 11
+    const attackers = ['9', '11'];
+    const attPositions = [9, 10];
+    attackers.forEach((num, idx) => {
+      if (attPositions[idx] < 11) newLineup[attPositions[idx]] = num;
+    });
+    
+    // Subs: 12-22
+    for (let i = 12; i <= 22; i++) {
+      newSubs.push(i.toString());
+    }
+    
+    setOpponentLineup(newLineup);
+    setOpponentSubs(newSubs);
+  };
 
   const handleSave = async () => {
     if (!setup.team_id && !teams.find(t => t.category === setup.category)) {
@@ -577,7 +697,16 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                      </div>
 
                      <div className="flex-1 flex flex-col min-h-0 bg-white border-2 border-secondary/20 rounded-[3rem] p-6 shadow-sm overflow-hidden">
-                        <div className="relative mb-6">
+                        {/* Auto-position button */}
+                        <button
+                          onClick={autoPositionPlayers}
+                          className="mb-4 w-full h-12 rounded-2xl bg-gradient-to-r from-primary to-blue-600 text-white font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                        >
+                          <Users className="w-4 h-4" />
+                          Positionnement Auto
+                        </button>
+
+                        <div className="relative mb-4">
                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground opacity-30" />
                            <input 
                              type="text" 
@@ -592,7 +721,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                            {groupedPlayers.map(group => (
                               <div key={group.label} className="space-y-3">
                                  <div className="flex items-center gap-3 px-3">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                    <div className={`w-3 h-3 rounded-full bg-gradient-to-br ${group.color}`} />
                                     <h5 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{group.label}</h5>
                                     <div className="flex-1 h-px bg-secondary" />
                                  </div>
@@ -600,20 +729,23 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                                    {group.players.map(p => {
                                       const isStarter = startingXI.includes(p.id);
                                       const isSub = substitutes.includes(p.id);
+                                      const positionColor = getPositionColor(p.position);
                                       return (
                                          <motion.div 
                                            key={p.id} 
                                            layout
                                            draggable 
                                            onDragStart={(e) => { e.dataTransfer.setData('playerId', p.id); }}
-                                           className={`p-3 rounded-[1.8rem] border-2 transition-all flex items-center gap-4 cursor-grab active:cursor-grabbing hover:bg-black/5 ${isStarter ? 'border-primary bg-primary/5 shadow-md' : isSub ? 'border-emerald-400 bg-emerald-50/20' : 'border-secondary bg-white'}`}
+                                           className={`p-3 rounded-[1.8rem] border-2 transition-all flex items-center gap-4 cursor-grab active:cursor-grabbing hover:bg-black/5 ${isStarter ? `border-transparent bg-gradient-to-r ${positionColor} text-white shadow-md` : isSub ? 'border-emerald-400 bg-emerald-50/20' : 'border-secondary bg-white'}`}
                                          >
-                                            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center font-black text-xs overflow-hidden border-2 border-white"><img src={(p.photo_url && p.photo_url !== 'null') ? p.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name)}&background=random&color=fff&size=200`} className="w-full h-full object-cover" /></div>
-                                            <div className="flex-1 min-w-0">
-                                               <p className="font-black text-[11px] uppercase truncate">{p.full_name}</p>
-                                               <p className="text-[8px] font-bold text-muted-foreground opacity-60">#{p.jersey_number} • {p.position}</p>
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs overflow-hidden border-2 border-white ${isStarter ? 'bg-white/20' : 'bg-secondary'}`}>
+                                              <img src={(p.photo_url && p.photo_url !== 'null') ? p.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name)}&background=random&color=fff&size=200`} className="w-full h-full object-cover" />
                                             </div>
-                                            <button onClick={() => toggleLineupPlayer(p)} className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${ (isStarter || isSub) ? 'bg-primary text-white shadow-lg' : 'bg-secondary text-muted-foreground hover:bg-primary/20'}`}>
+                                            <div className="flex-1 min-w-0">
+                                               <p className={`font-black text-[11px] uppercase ${isStarter ? 'text-white' : ''} truncate`}>{p.full_name}</p>
+                                               <p className={`text-[8px] font-bold opacity-60 ${isStarter ? 'text-white/80' : 'text-muted-foreground'}`}>#{p.jersey_number} • {p.position}</p>
+                                            </div>
+                                            <button onClick={() => toggleLineupPlayer(p)} className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${ (isStarter || isSub) ? 'bg-white text-primary shadow-lg' : 'bg-secondary text-muted-foreground hover:bg-primary/20'}`}>
                                                {(isStarter || isSub) ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border-2 border-current" />}
                                             </button>
                                          </motion.div>
@@ -631,11 +763,17 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                            <Badge className="bg-emerald-500 text-white font-black px-4 py-2 rounded-xl text-[10px]">XI: {startingXI.filter(id => id !== '').length}/11</Badge>
                            <Badge className="bg-blue-500 text-white font-black px-4 py-2 rounded-xl text-[10px]">Subs: {substitutes.length}</Badge>
                         </div>
-                        <div className="flex items-center gap-2 opacity-30 italic text-[10px] font-bold uppercase">
-                           <Filter className="w-3.5 h-3.5" /> Glisser pour positionner
+                        <div className="flex items-center gap-2 opacity-50 italic text-[10px] font-bold uppercase">
+                           <Filter className="w-3.5 h-3.5" /> Glisser pour permuter • 2× clic pour retirer
                         </div>
                      </div>
-                     <Pitch positions={positions} startingXI={startingXI} getPlayerById={getPlayerById} onDropPlayer={handleSwap} />
+                     <Pitch positions={positions} startingXI={startingXI} getPlayerById={getPlayerById} onDropPlayer={handleSwap} onClearSlot={(idx) => {
+                       const playerId = startingXI[idx];
+                       if (playerId) {
+                         setStartingXI(prev => prev.map((id, i) => i === idx ? '' : id));
+                         setSubstitutes(prev => [...prev, playerId]);
+                       }
+                     }} />
                      
                      <div className="w-full mt-8 bg-secondary/10 p-6 rounded-[3rem] border-2 border-dashed border-secondary/50">
                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 px-4 flex items-center gap-2"><Layout className="w-3.5 h-3.5" /> Remplaçants convoqués</p>
@@ -694,27 +832,42 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                        </CardContent>
                     </Card>
 
-                    {/* Banque de numéros 1-22 */}
+                    {/* Auto-position opponent button */}
+                    <button
+                      onClick={autoPositionOpponent}
+                      className="w-full h-12 rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 text-white font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 mb-4"
+                    >
+                      <Users className="w-4 h-4" />
+                      Positionnement Auto (1-22)
+                    </button>
+
+                    {/* Banque de numéros 1-22 avec couleurs par position */}
                     <Card className="rounded-[2.5rem] border-primary/20 shadow-lg overflow-hidden bg-gradient-to-br from-primary/5 to-white">
                        <CardContent className="p-5">
                           <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
                              <Users className="w-3.5 h-3.5" /> Banque de Numéros (1-22)
                           </h4>
-                          <p className="text-[9px] text-muted-foreground mb-3">Cliquez pour placer sur le terrain</p>
+                          <p className="text-[9px] text-muted-foreground mb-3">Défense • Milieu • Attaque</p>
                           <div className="grid grid-cols-7 gap-2">
                              {Array.from({ length: 22 }, (_, i) => i + 1).map(num => {
                                 const isUsed = opponentLineup.includes(num.toString()) || opponentSubs.includes(num.toString());
+                                // Color by position: GK(1)=amber, Def(2-5)=blue, Mid(6-10)=green, Att(9,11)=red
+                                let colorClass = 'bg-white border-2 border-primary/30 text-primary hover:bg-primary hover:text-white';
+                                if (num === 1) colorClass = 'bg-gradient-to-br from-amber-400 to-amber-600 text-white border-transparent';
+                                else if (num >= 2 && num <= 5) colorClass = 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-transparent';
+                                else if (num >= 6 && num <= 10) colorClass = 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-transparent';
+                                else if (num === 9 || num === 11) colorClass = 'bg-gradient-to-br from-rose-500 to-rose-700 text-white border-transparent';
+                                else colorClass = 'bg-gradient-to-br from-slate-500 to-slate-700 text-white border-transparent';
+                                
                                 return (
                                    <button
                                       key={num}
                                       onClick={() => {
                                          if (isUsed) return;
-                                         // Find first empty slot
                                          const emptySlot = opponentLineup.findIndex(slot => slot === '');
                                          if (emptySlot !== -1) {
                                             updateOpponentJersey(emptySlot, num.toString());
                                          } else {
-                                            // If no empty slot in lineup, add to subs
                                             addOpponentSub();
                                             updateOpponentSub(opponentSubs.length, num.toString());
                                          }
@@ -723,7 +876,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                                       className={`w-9 h-9 rounded-xl font-black text-xs transition-all ${
                                          isUsed 
                                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                                            : 'bg-white border-2 border-primary/30 text-primary hover:bg-primary hover:text-white hover:shadow-lg hover:scale-110'
+                                            : `${colorClass} hover:shadow-lg hover:scale-110`
                                       }`}
                                    >
                                       {num}
@@ -995,7 +1148,7 @@ const Pitch: React.FC<{
               }}
               whileHover={(p || isOpponent) ? { scale: 1.1, rotate: 5, y: -5 } : { scale: 1.05 }}
               className={`w-16 h-16 rounded-full border-[4px] flex items-center justify-center shadow-2xl transition-all duration-300 relative
-                ${p ? 'bg-primary border-white ring-4 ring-primary/20' : (isOpponent && oppJersey) ? 'bg-slate-950 border-white/60' : 'bg-white/10 border-white/20 hover:bg-white/30 hover:border-white/50 cursor-crosshair'}`}
+                ${p ? `bg-gradient-to-br ${getPositionColor(p.position)} border-white ring-4 ring-white/30` : (isOpponent && oppJersey) ? 'bg-slate-950 border-white/60' : 'bg-white/10 border-white/20 hover:bg-white/30 hover:border-white/50 cursor-crosshair'}`}
             >
                {p ? (
                  <>
@@ -1008,23 +1161,26 @@ const Pitch: React.FC<{
                ) : (isOpponent && oppJersey) ? (
                   <span className="text-xl font-black text-white">{oppJersey}</span>
                ) : (
-                 <span className="text-[10px] font-black text-white/40">{pos.label}</span>
+                  <span className="text-[10px] font-black text-white/40">{pos.label}</span>
                )}
             </motion.div>
             
-            {isOpponent && oppJersey && (
+            {/* Delete button for both home team and opponent */}
+            {(p || (isOpponent && oppJersey)) && (
               <button 
                 onClick={() => onClearSlot?.(idx)}
                 className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center border-2 border-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 hover:bg-red-600 active:scale-90"
+                title="Retirer du terrain (double clic)"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase backdrop-blur-md truncate max-w-[90px] border shadow-lg transition-all
-            ${p ? 'bg-black/80 text-white border-white/20 scale-105' : (isOpponent && oppJersey) ? 'bg-slate-900/80 text-white border-white/10 shadow-xl' : 'bg-white/10 text-white/30 border-white/10'}`}>
-            {p ? p.full_name.split(' ').pop() : (isOpponent && oppJersey) ? `Adv #${oppJersey}` : pos.label}
+          <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase backdrop-blur-md border shadow-lg transition-all
+            ${p ? 'bg-black/80 text-white border-white/20 scale-105 max-w-[120px]' : (isOpponent && oppJersey) ? 'bg-slate-900/80 text-white border-white/10 shadow-xl max-w-[120px]' : 'bg-white/10 text-white/30 border-white/10 max-w-[90px]'}`}
+            title={p ? p.full_name : (isOpponent && oppJersey) ? `Adversaire #${oppJersey}` : pos.label}>
+            {p ? (p.full_name.length > 12 ? p.full_name.substring(0, 12) + '...' : p.full_name) : (isOpponent && oppJersey) ? `#${oppJersey}` : pos.label}
           </div>
         </motion.div>
       );

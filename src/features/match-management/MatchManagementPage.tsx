@@ -408,36 +408,40 @@ const MatchManagementPage: React.FC = () => {
                  className="space-y-8"
                >
                   {/* Premium Dashboard Header */}
-                  <div className="relative bg-gradient-to-r from-blue-900 to-indigo-900 rounded-[3rem] px-10 py-12 text-white overflow-hidden shadow-2xl border-b-[8px] border-blue-500/20">
+                  <div className="relative bg-gradient-to-r from-blue-900 to-indigo-900 rounded-3xl sm:rounded-[3rem] px-4 sm:px-6 lg:px-10 py-6 sm:py-8 lg:py-12 text-white overflow-hidden shadow-2xl border-b-4 sm:border-b-[8px] border-blue-500/20">
                      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'repeating-linear-gradient(45deg,#fff 0,#fff 1px,transparent 0,transparent 50%)', backgroundSize: '20px 20px' }} />
-                     <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
-                        <div className="flex items-center gap-8">
-                           <div className="w-20 h-20 rounded-[2.5rem] bg-white/10 flex items-center justify-center text-blue-400 shadow-2xl border border-white/20 ring-8 ring-white/5">
-                              <Activity className="w-10 h-10" />
+                     <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 lg:gap-8">
+                        <div className="flex items-center gap-4 sm:gap-6 lg:gap-8">
+                           <div className="w-12 h-12 sm:w-16 sm:h-16 lg:w-20 lg:h-20 rounded-2xl sm:rounded-3xl lg:rounded-[2.5rem] bg-white/10 flex items-center justify-center text-blue-400 shadow-2xl border border-white/20 ring-4 sm:ring-6 lg:ring-8 ring-white/5 shrink-0">
+                              <Activity className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10" />
                            </div>
-                           <div>
-                              <h1 className="text-5xl font-black tracking-tighter uppercase italic leading-none">Centre de Matchs</h1>
-                              <p className="text-white/40 text-[11px] font-black uppercase tracking-[0.4em] mt-3">Gestion des rencontres & analyses de performance</p>
+                           <div className="min-w-0">
+                              <h1 className="text-2xl sm:text-3xl lg:text-5xl font-black tracking-tighter uppercase italic leading-none">Centre de Matchs</h1>
+                              <p className="text-white/40 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.4em] mt-2 sm:mt-3">Gestion des rencontres & analyses</p>
                            </div>
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
                            <Button 
                               onClick={() => setViewMode(v => v === 'list' ? 'planning' : 'list')} 
-                              className="bg-white/10 hover:bg-white/20 text-white h-16 px-8 rounded-2xl font-black uppercase tracking-widest text-[10px] gap-3 border border-white/20 shadow-2xl transition-all hover:scale-105 active:scale-95 shrink-0"
+                              className="bg-white/10 hover:bg-white/20 text-white h-11 sm:h-14 lg:h-16 px-4 sm:px-6 lg:px-8 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] gap-2 sm:gap-3 border border-white/20 shadow-2xl transition-all hover:scale-105 active:scale-95 shrink-0"
                            >
-                              <Calendar className="w-4 h-4" /> 
-                              {viewMode === 'list' ? 'Voir Planning' : 'Voir Liste'}
+                              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
+                              <span className="hidden sm:inline">{viewMode === 'list' ? 'Planning' : 'Liste'}</span>
+                              <span className="sm:hidden">{viewMode === 'list' ? 'Plan' : 'List'}</span>
                            </Button>
-                           <Button onClick={() => setActiveTab('wizard')} className="bg-white hover:bg-white/90 text-blue-900 h-16 px-10 rounded-2xl font-black uppercase tracking-widest text-[10px] gap-4 shadow-2xl transition-all hover:scale-105 active:scale-95 group shrink-0">
-                              <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" /> Planifier un Match
+                           <Button onClick={() => setActiveTab('wizard')} className="bg-white hover:bg-white/90 text-blue-900 h-11 sm:h-14 lg:h-16 px-4 sm:px-6 lg:px-10 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] gap-2 sm:gap-4 shadow-2xl transition-all hover:scale-105 active:scale-95 group shrink-0">
+                              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:rotate-90 transition-transform duration-500" /> 
+                              <span className="hidden sm:inline">Planifier un Match</span>
+                              <span className="sm:hidden">Planifier</span>
                            </Button>
                         </div>
                      </div>
                   </div>
 
                   {/* Filters Bar */}
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
-                     <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  <div className="flex flex-col gap-4 sm:gap-6">
+                     {/* Category filters - scrollable on mobile */}
+                     <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
                         {['All', ...PLAYER_CATEGORIES].map(cat => {
                            const count = cat === 'All' ? matches.length : (categoryCounts[cat] || 0);
                            return (
@@ -445,40 +449,44 @@ const MatchManagementPage: React.FC = () => {
                               key={cat}
                               variant={categoryFilter === cat ? 'default' : 'ghost'}
                               onClick={() => setCategoryFilter(cat)}
-                              className={`rounded-[1.2rem] px-6 font-black uppercase tracking-widest text-[10px] h-12 transition-all gap-2 ${categoryFilter === cat ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-105' : count === 0 ? 'opacity-30 text-muted-foreground hover:bg-secondary' : 'text-muted-foreground hover:bg-secondary'}`}
+                              className={`rounded-xl sm:rounded-[1.2rem] px-3 sm:px-4 lg:px-6 font-black uppercase tracking-widest text-[9px] sm:text-[10px] h-10 sm:h-12 transition-all gap-1.5 sm:gap-2 shrink-0 ${categoryFilter === cat ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-105' : count === 0 ? 'opacity-30 text-muted-foreground hover:bg-secondary' : 'text-muted-foreground hover:bg-secondary'}`}
                            >
                               {cat}
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${categoryFilter === cat ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                              <span className={`text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 rounded-md ${categoryFilter === cat ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-500'}`}>
                                  {count}
                               </span>
                            </Button>
                            );
                         })}
                      </div>
-                     <div className="flex items-center gap-4">
-                        <div className="bg-secondary/40 p-1.5 rounded-[1.5rem] flex border shadow-inner max-w-sm">
+                     
+                     {/* Secondary filters */}
+                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+                        <div className="bg-secondary/40 p-1 sm:p-1.5 rounded-xl sm:rounded-[1.5rem] flex border shadow-inner overflow-x-auto">
                            {[
-                              { id: 'scheduled', label: 'Calendrier', icon: Calendar },
-                              { id: 'today', label: 'Aujourd\'hui', icon: Timer },
-                              { id: 'finished', label: 'Passé', icon: History }
+                              { id: 'scheduled', label: 'Calendrier', icon: Calendar, shortLabel: 'Cal' },
+                              { id: 'today', label: 'Aujourd\'hui', icon: Timer, shortLabel: 'Auj' },
+                              { id: 'finished', label: 'Passé', icon: History, shortLabel: 'Passé' }
                            ].map(f => (
                               <button
                                  key={f.id}
                                  onClick={() => setListFilter(f.id as any)}
-                                 className={`flex-1 px-6 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all gap-2 flex items-center justify-center ${listFilter === f.id ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:bg-white/50'}`}
+                                 className={`flex-1 sm:flex-none px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[9px] font-black uppercase tracking-widest transition-all gap-1.5 sm:gap-2 flex items-center justify-center shrink-0 ${listFilter === f.id ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:bg-white/50'}`}
                               >
-                                 <f.icon className="w-3.5 h-3.5" /> {f.label}
+                                 <f.icon className="w-3.5 h-3.5 shrink-0" /> 
+                                 <span className="hidden sm:inline">{f.label}</span>
+                                 <span className="sm:hidden">{f.shortLabel}</span>
                               </button>
                            ))}
                         </div>
 
-                        <div className="flex items-center gap-2">
-                             <div className="flex items-center gap-3 bg-white/50 p-1.5 px-4 rounded-[1.5rem] border shadow-sm group">
-                                <Trophy className="w-4 h-4 text-emerald-500" />
+                        <div className="flex items-center gap-2 overflow-x-auto">
+                             <div className="flex items-center gap-2 sm:gap-3 bg-white/50 p-1 sm:p-1.5 px-2 sm:px-4 rounded-xl sm:rounded-[1.5rem] border shadow-sm group shrink-0">
+                                <Trophy className="w-4 h-4 text-emerald-500 shrink-0" />
                                 <select 
                                    value={leagueFilter}
                                    onChange={(e) => setLeagueFilter(e.target.value)}
-                                   className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-0 cursor-pointer pr-4"
+                                   className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-0 cursor-pointer pr-2 sm:pr-4"
                                 >
                                    <option value="All">Toutes les Ligues</option>
                                    {leagues.map(l => (
@@ -490,7 +498,7 @@ const MatchManagementPage: React.FC = () => {
                              {leagueFilter !== 'All' && (
                                 <button 
                                    onClick={() => { setLeagueFilter('All'); }}
-                                   className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-full transition-all border border-slate-200"
+                                   className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-full transition-all border border-slate-200 shrink-0"
                                 >
                                    <X className="w-4 h-4" />
                                 </button>
@@ -498,21 +506,21 @@ const MatchManagementPage: React.FC = () => {
                          </div>
 
                         {/* Date Filter */}
-                        <div className="flex items-center gap-2">
-                           <div className="flex items-center gap-3 bg-white p-1.5 px-4 rounded-[1.5rem] border shadow-sm">
-                              <Calendar className="w-4 h-4 text-primary" />
+                        <div className="flex items-center gap-2 shrink-0">
+                           <div className="flex items-center gap-2 sm:gap-3 bg-white p-1 sm:p-1.5 px-2 sm:px-4 rounded-xl sm:rounded-[1.5rem] border shadow-sm">
+                              <Calendar className="w-4 h-4 text-primary shrink-0" />
                               <input
                                  type="date"
                                  value={dateFilter}
                                  onChange={(e) => setDateFilter(e.target.value)}
-                                 className="bg-transparent border-none text-[11px] font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-0 cursor-pointer"
+                                 className="bg-transparent border-none text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-0 cursor-pointer"
                                  placeholder="Choisir une date"
                               />
                            </div>
                            {dateFilter && (
                               <button 
                                  onClick={() => setDateFilter('')}
-                                 className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-full transition-all border border-slate-200"
+                                 className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-slate-100 hover:bg-red-50 hover:text-red-500 rounded-full transition-all border border-slate-200 shrink-0"
                               >
                                  <X className="w-4 h-4" />
                               </button>
@@ -526,75 +534,149 @@ const MatchManagementPage: React.FC = () => {
                         initial={{ opacity: 0, y: 15 }} 
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -15 }}
-                        className="bg-white border rounded-[3rem] p-8 shadow-2xl space-y-6"
+                        className="bg-white border rounded-2xl sm:rounded-[3rem] p-4 sm:p-6 lg:p-8 shadow-2xl space-y-4 sm:space-y-6 overflow-x-auto"
                      >
                         {/* Month Navigation Header */}
-                        <div className="flex items-center justify-between border-b pb-6">
-                           <div className="flex items-center gap-4">
-                              <h2 className="text-3xl font-black uppercase tracking-tight text-slate-800">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 sm:pb-6 gap-4">
+                           <div className="flex items-center gap-3 sm:gap-4">
+                              <h2 className="text-xl sm:text-2xl lg:text-3xl font-black uppercase tracking-tight text-slate-800">
                                  {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                               </h2>
-                              <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl border">
+                              <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-100 p-1 sm:p-1.5 rounded-lg sm:rounded-xl border">
                                  <button 
                                     onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-                                    className="p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-500"
+                                    className="p-1 sm:p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-500"
                                  >
-                                    <ChevronRight className="w-4 h-4 rotate-180" />
+                                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 rotate-180" />
                                  </button>
                                  <button 
                                     onClick={() => setCurrentMonth(new Date())}
-                                    className="px-4 py-1.5 bg-white text-xs font-black uppercase tracking-wider rounded-lg text-slate-700 hover:text-primary shadow-sm transition-all"
+                                    className="px-2 sm:px-4 py-1 sm:py-1.5 bg-white text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-lg text-slate-700 hover:text-primary shadow-sm transition-all"
                                  >
                                     Aujourd'hui
                                  </button>
                                  <button 
                                     onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
-                                    className="p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-500"
+                                    className="p-1 sm:p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-500"
                                  >
-                                    <ChevronRight className="w-4 h-4" />
+                                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                  </button>
                               </div>
                            </div>
 
                            {/* Calendar legend / info */}
-                           <div className="flex items-center gap-4 text-[10px] font-black text-muted-foreground uppercase tracking-wider">
+                           <div className="flex items-center gap-2 sm:gap-4 text-[9px] sm:text-[10px] font-black text-muted-foreground uppercase tracking-wider flex-wrap">
                               {categoryFilter !== 'All' && (() => {
                                  const monthMatchCount = matches.filter(m => {
                                     const d = new Date(m.match_date);
                                     return d.getFullYear() === year && d.getMonth() === month && m.category === categoryFilter;
                                  }).length;
                                  return (
-                                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${monthMatchCount === 0 ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-primary/10 text-primary border border-primary/20'}`}>
-                                       {monthMatchCount === 0 ? `Aucun match ${categoryFilter} ce mois` : `${monthMatchCount} match${monthMatchCount > 1 ? 's' : ''} ${categoryFilter} ce mois`}
+                                    <span className={`px-2 sm:px-3 py-1 rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${monthMatchCount === 0 ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-primary/10 text-primary border border-primary/20'}`}>
+                                       {monthMatchCount === 0 ? `Aucun match ${categoryFilter}` : `${monthMatchCount} match${monthMatchCount > 1 ? 's' : ''} ${categoryFilter}`}
                                     </span>
                                  );
                               })()}
-                              <div className="flex items-center gap-1.5">
-                                 <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                                 <span>En Direct</span>
+                              <div className="flex items-center gap-1 sm:gap-1.5">
+                                 <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-500" />
+                                 <span>Live</span>
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                              <div className="flex items-center gap-1 sm:gap-1.5">
+                                 <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500" />
                                  <span>Planifié</span>
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                 <div className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+                              <div className="flex items-center gap-1 sm:gap-1.5">
+                                 <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-400" />
                                  <span>Terminé</span>
                               </div>
                            </div>
                         </div>
 
-                        {/* Weekdays Header */}
-                        <div className="grid grid-cols-7 gap-3 text-center">
+                        {/* Weekdays Header - Hide on very small screens */}
+                        <div className="hidden sm:grid grid-cols-7 gap-2 sm:gap-3 text-center">
                            {daysOfWeek.map(day => (
-                              <div key={day} className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-2">
+                              <div key={day} className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 py-2">
                                  {day}
                               </div>
                            ))}
                         </div>
 
-                        {/* Calendar Grid cells */}
-                        <div className="grid grid-cols-7 gap-3">
+                        {/* Mobile: List view of days with matches */}
+                        <div className="sm:hidden space-y-3">
+                           {calendarDays
+                              .filter(({ formattedDate }) => {
+                                 const dayMatches = matches.filter(m => {
+                                    const matchesDate = m.match_date === formattedDate;
+                                    const matchesCategory = categoryFilter === 'All' || m.category === categoryFilter;
+                                    const matchesLeague = leagueFilter === 'All' || m.league_id === leagueFilter;
+                                    return matchesDate && matchesCategory && matchesLeague;
+                                 });
+                                 return dayMatches.length > 0 || new Date().toLocaleDateString('en-CA') === formattedDate;
+                              })
+                              .map(({ date, isCurrentMonth, formattedDate }) => {
+                                 const dayMatches = matches.filter(m => {
+                                    const matchesDate = m.match_date === formattedDate;
+                                    const matchesCategory = categoryFilter === 'All' || m.category === categoryFilter;
+                                    const matchesLeague = leagueFilter === 'All' || m.league_id === leagueFilter;
+                                    return matchesDate && matchesCategory && matchesLeague;
+                                 });
+                                 const isToday = new Date().toLocaleDateString('en-CA') === formattedDate;
+                                 
+                                 return (
+                                    <div
+                                       key={formattedDate}
+                                       className={`p-3 sm:p-4 rounded-xl border-2 ${
+                                          isToday 
+                                             ? 'bg-blue-50/30 border-primary' 
+                                             : 'bg-slate-50/30 border-slate-100'
+                                       }`}
+                                    >
+                                       <div className="flex items-center justify-between mb-3">
+                                          <span className={`text-sm font-black ${isToday ? 'text-primary' : 'text-slate-700'}`}>
+                                             {date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}
+                                          </span>
+                                          {isToday && <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full font-black">AUJ</span>}
+                                       </div>
+                                       <div className="space-y-2">
+                                          {dayMatches.map(match => (
+                                             <div
+                                                key={match.id}
+                                                onClick={() => {
+                                                   setSelectedMatchId(match.id);
+                                                   setViewMode('list');
+                                                }}
+                                                className={`p-2.5 rounded-lg text-xs font-black uppercase flex items-center justify-between border cursor-pointer ${
+                                                   match.status === 'live' 
+                                                      ? 'bg-red-50 border-red-200 text-red-700' 
+                                                      : match.status === 'scheduled' 
+                                                         ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                                                         : 'bg-slate-50 border-slate-200 text-slate-700'
+                                                }`}
+                                             >
+                                                <div className="flex items-center gap-2">
+                                                   <div className="w-6 h-6 rounded bg-white flex items-center justify-center border shrink-0">
+                                                      <img 
+                                                         src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`} 
+                                                         alt="" 
+                                                         className="w-full h-full object-contain p-0.5" 
+                                                      />
+                                                   </div>
+                                                   <span className="truncate">{getOpponentName(match.opponent_id)}</span>
+                                                </div>
+                                                <span className="font-mono text-[10px] opacity-75">{match.match_time?.slice(0, 5)}</span>
+                                             </div>
+                                          ))}
+                                          {dayMatches.length === 0 && (
+                                             <p className="text-xs text-muted-foreground text-center py-2">Aucun match</p>
+                                          )}
+                                       </div>
+                                    </div>
+                                 );
+                              })}
+                        </div>
+
+                        {/* Desktop Calendar Grid cells */}
+                        <div className="hidden sm:grid grid-cols-7 gap-2 sm:gap-3 min-w-[600px]">
                            {calendarDays.map(({ date, isCurrentMonth, formattedDate }, idx) => {
                               const dayMatches = matches.filter(m => {
                                  // Filter match_date
@@ -619,7 +701,7 @@ const MatchManagementPage: React.FC = () => {
                                     key={idx}
                                     onDragOver={handleDragOver}
                                     onDrop={(e) => handleDrop(e, formattedDate)}
-                                    className={`min-h-[140px] p-3 rounded-2xl border-2 transition-all flex flex-col justify-between group ${
+                                    className={`min-h-[100px] sm:min-h-[140px] p-2 sm:p-3 rounded-xl sm:rounded-2xl border-2 transition-all flex flex-col justify-between group ${
                                        isCurrentMonth 
                                           ? isToday 
                                              ? 'bg-blue-50/30 border-primary shadow-lg shadow-primary/5' 
@@ -628,10 +710,10 @@ const MatchManagementPage: React.FC = () => {
                                     }`}
                                  >
                                     {/* Cell Day Header */}
-                                    <div className="flex items-center justify-between mb-2">
-                                       <span className={`text-[11px] font-black tracking-tight ${
+                                    <div className="flex items-center justify-between mb-1 sm:mb-2">
+                                       <span className={`text-[10px] sm:text-[11px] font-black tracking-tight ${
                                           isToday 
-                                             ? 'bg-primary text-white w-6 h-6 rounded-full flex items-center justify-center' 
+                                             ? 'bg-primary text-white w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center' 
                                              : 'text-slate-600'
                                        }`}>
                                           {date.getDate()}
@@ -645,12 +727,12 @@ const MatchManagementPage: React.FC = () => {
                                           className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-primary transition-all"
                                           title="Planifier un match ce jour"
                                        >
-                                          <Plus className="w-3.5 h-3.5" />
+                                          <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                        </button>
                                     </div>
 
                                     {/* Matches List inside this Day */}
-                                    <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[100px] scrollbar-hide">
+                                    <div className="flex-1 space-y-1 sm:space-y-1.5 overflow-y-auto max-h-[80px] sm:max-h-[100px] scrollbar-hide">
                                        {dayMatches.map(match => (
                                           <div
                                              key={match.id}
@@ -661,7 +743,7 @@ const MatchManagementPage: React.FC = () => {
                                                 setSelectedMatchId(match.id);
                                                 setViewMode('list');
                                              }}
-                                             className={`p-2 rounded-xl text-[9px] font-black uppercase tracking-tight flex items-center justify-between border cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-95 transition-all ${
+                                             className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-tight flex items-center justify-between border cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-95 transition-all ${
                                                 match.status === 'live' 
                                                    ? 'bg-red-50 border-red-200 text-red-700 shadow-md shadow-red-500/5' 
                                                    : match.status === 'scheduled' 
@@ -669,17 +751,17 @@ const MatchManagementPage: React.FC = () => {
                                                       : 'bg-slate-50 border-slate-200 text-slate-700'
                                              }`}
                                           >
-                                             <div className="flex items-center gap-1.5 truncate">
-                                                <div className="w-4 h-4 rounded bg-white flex items-center justify-center border shrink-0">
+                                             <div className="flex items-center gap-1 sm:gap-1.5 truncate">
+                                                <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-white flex items-center justify-center border shrink-0">
                                                    <img 
                                                       src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`} 
                                                       alt="" 
                                                       className="w-full h-full object-contain p-0.5" 
                                                    />
                                                 </div>
-                                                <span className="truncate">{getOpponentName(match.opponent_id)}</span>
+                                                <span className="truncate hidden sm:inline">{getOpponentName(match.opponent_id)}</span>
                                              </div>
-                                             <span className="shrink-0 font-mono text-[8px] opacity-75">{match.match_time?.slice(0, 5)}</span>
+                                             <span className="shrink-0 font-mono text-[7px] sm:text-[8px] opacity-75">{match.match_time?.slice(0, 5)}</span>
                                           </div>
                                        ))}
                                     </div>
