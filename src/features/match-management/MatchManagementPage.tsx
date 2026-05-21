@@ -975,7 +975,7 @@ const MatchManagementPage: React.FC = () => {
                                                 </Button>
                                              )}
                                              {selectedMatch.status !== 'finished' && (
-                                                <Button onClick={() => setActiveTab('live')} className="h-16 px-12 rounded-[2rem] bg-primary hover:bg-slate-900 text-white shadow-2xl shadow-primary/20 font-black uppercase tracking-widest text-xs gap-4 transition-all hover:scale-105 active:scale-95 group">
+                                                <Button onClick={() => handleStartLive(selectedMatch.id)} className="h-16 px-12 rounded-[2rem] bg-primary hover:bg-slate-900 text-white shadow-2xl shadow-primary/20 font-black uppercase tracking-widest text-xs gap-4 transition-all hover:scale-105 active:scale-95 group">
                                                    <Play className="w-5 h-5 group-hover:translate-x-1 transition-all" /> Lancer le Live Tracking
                                                 </Button>
                                              )}
