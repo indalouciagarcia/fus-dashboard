@@ -64,7 +64,7 @@ const getFormationPositions = (formation: string) => {
       { top: '90%', left: '50%', label: 'GK' },
       { top: '72%', left: '15%', label: 'LB' }, { top: '76%', left: '36%', label: 'CB' }, { top: '76%', left: '64%', label: 'CB' }, { top: '72%', left: '85%', label: 'RB' },
       { top: '60%', left: '36%', label: 'CDM' }, { top: '60%', left: '64%', label: 'CDM' },
-      { top: '42%', left: '20%', label: 'LAM' }, { top: '34%', left: '50%', label: 'CAM' }, { top: '42%', left: '80%', RAM: 'RAM' },
+      { top: '42%', left: '20%', label: 'LAM' }, { top: '34%', left: '50%', label: 'CAM' }, { top: '42%', left: '80%', label: 'RAM' },
       { top: '12%', left: '50%', label: 'ST' },
     ],
     '5-3-2': [
@@ -109,7 +109,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
   const isFirstRender = useRef(true);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [formData, setFormData] = useState<Partial<Match>>({
+  const [formData, setFormData] = useState<any>({
     ...(match || {}),
     lineup: match?.lineup || { startingXI: Array(11).fill(''), substitutes: [], formation: match?.formation || '4-3-3' },
     staff_ids: match?.staff_ids || [],

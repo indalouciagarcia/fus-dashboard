@@ -184,6 +184,12 @@ const TeamManagement: React.FC = () => {
     return member ? member.full_name : 'Staff Inconnu';
   };
 
+  const getAssistantCoachName = (coachId?: string) => {
+    if (!coachId) return null;
+    const assistant = staff.find(s => s.role === 'assistant_coach' && s.parent_coach_id === coachId);
+    return assistant ? assistant.full_name : null;
+  };
+
   if (teamsLoading || clubLoading) {
     return (
       <div className="space-y-8 animate-in fade-in duration-700">
@@ -315,6 +321,12 @@ const TeamManagement: React.FC = () => {
                                    <User className="w-3.5 h-3.5 text-primary" />
                                    <span className="text-xs font-bold">{getCoachName(team.coach_id)}</span>
                                 </div>
+                                {getAssistantCoachName(team.coach_id) && (
+                                  <div className="flex items-center gap-3 text-muted-foreground">
+                                     <UserCog className="w-3.5 h-3.5 text-emerald-500" />
+                                     <span className="text-xs font-bold text-emerald-600">{getAssistantCoachName(team.coach_id)}</span>
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-3 text-muted-foreground">
                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
                                    <span className="text-xs font-bold uppercase tracking-widest text-[9px]">Elite Performance Level</span>
@@ -350,7 +362,16 @@ const TeamManagement: React.FC = () => {
                               <span className="font-black text-base uppercase italic tracking-tighter">{team.name}</span>
                            </div>
                         </td>
-                        <td className="py-4 text-xs font-bold text-muted-foreground uppercase">{getCoachName(team.coach_id)}</td>
+                        <td className="py-4">
+                           <div className="flex flex-col gap-1">
+                              <span className="text-xs font-bold text-muted-foreground uppercase">{getCoachName(team.coach_id)}</span>
+                              {getAssistantCoachName(team.coach_id) && (
+                                <span className="text-[10px] font-bold text-emerald-600 uppercase">
+                                  <UserCog className="w-3 h-3 inline mr-1" />{getAssistantCoachName(team.coach_id)}
+                                </span>
+                              )}
+                           </div>
+                        </td>
                         <td className="px-10 py-4 text-right">
                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                               <Button variant="ghost" size="sm" onClick={() => handleOpenRoster(team)} className="rounded-xl font-black uppercase text-[9px] h-10 px-4 mr-2 hover:bg-primary hover:text-white transition-all">Roster</Button>

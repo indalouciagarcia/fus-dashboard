@@ -88,7 +88,8 @@ const StaffManagement: React.FC = () => {
     email: '',
     phone: '',
     photo_url: '',
-    team_ids: []
+    team_ids: [],
+    parent_coach_id: undefined
   });
 
   const filteredStaff = useMemo(() => {
@@ -163,10 +164,11 @@ const StaffManagement: React.FC = () => {
 
   const handleSave = async () => {
     if (selectedStaff) {
-      const { id, created_at, ...updateData } = formData as any;
+      const { id, created_at, parent_coach_id, ...updateData } = formData as any;
       await updateStaff({ id: selectedStaff.id, data: updateData });
     } else {
-      await addStaff(formData as Omit<StaffMember, 'id'>);
+      const { parent_coach_id, ...createData } = formData as any;
+      await addStaff(createData as Omit<StaffMember, 'id'>);
     }
     setShowForm(false);
   };
@@ -321,22 +323,53 @@ const StaffManagement: React.FC = () => {
                                     )}
                                  </div>
                                  
-                                 {person.team_ids && person.team_ids.length > 0 && (
+                                 {/* Coach Principal pour les Adjoints */}
+                                 {person.role === 'assistant_coach' && person.parent_coach_id && (
                                    <div className="pt-4 border-t border-secondary/50">
-                                      <div className="text-[9px] font-black uppercase text-muted-foreground mb-2 flex items-center gap-1.5 leading-none">Équipes Assignées</div>
-                                      <div className="flex flex-wrap gap-1">
-                                         {person.team_ids.map(tid => {
-                                            const team = teams.find(t => t.id === tid);
-                                            if (!team) return null;
-                                            return (
-                                              <Badge key={tid} variant="secondary" className="text-[8px] font-black uppercase tracking-widest py-0.5 px-2 bg-slate-100 text-slate-600 border-none">
-                                                {team.category} • {team.name}
-                                              </Badge>
-                                            );
-                                         })}
+                                      <div className="text-[9px] font-black uppercase text-primary mb-2 flex items-center gap-1.5 leading-none">
+                                        <UserIcon className="w-3 h-3" /> Sous la direction de
                                       </div>
+                                      {(() => {
+                                        const parentCoach = staff.find(s => s.id === person.parent_coach_id);
+                                        if (!parentCoach) return null;
+                                        return (
+                                          <Badge variant="outline" className="text-[9px] font-black border-primary/30 text-primary bg-primary/5 uppercase py-1 px-2">
+                                            {parentCoach.full_name}
+                                          </Badge>
+                                        );
+                                      })()}
                                    </div>
                                  )}
+
+                                 {/* Équipes Assignées (directes ou héritées) */}
+                                 {(person.team_ids && person.team_ids.length > 0) || (person.role === 'assistant_coach' && person.parent_coach_id) ? (
+                                   <div className="pt-4 border-t border-secondary/50">
+                                      <div className="text-[9px] font-black uppercase text-muted-foreground mb-2 flex items-center gap-1.5 leading-none">
+                                        {person.role === 'assistant_coach' && person.parent_coach_id ? 'Équipes (héritées)' : 'Équipes Assignées'}
+                                      </div>
+                                      <div className="flex flex-wrap gap-1">
+                                         {(() => {
+                                           // Pour les adjoints, récupérer les équipes du coach parent
+                                           let teamIdsToShow = person.team_ids || [];
+                                           if (person.role === 'assistant_coach' && person.parent_coach_id) {
+                                             const parentCoach = staff.find(s => s.id === person.parent_coach_id);
+                                             if (parentCoach?.team_ids) {
+                                               teamIdsToShow = parentCoach.team_ids;
+                                             }
+                                           }
+                                           return teamIdsToShow.map(tid => {
+                                              const team = teams.find(t => t.id === tid);
+                                              if (!team) return null;
+                                              return (
+                                                <Badge key={tid} variant="secondary" className="text-[8px] font-black uppercase tracking-widest py-0.5 px-2 bg-slate-100 text-slate-600 border-none">
+                                                  {team.category} • {team.name}
+                                                </Badge>
+                                              );
+                                           });
+                                         })()}
+                                      </div>
+                                   </div>
+                                 ) : null}
 
                                  {accessProfiles[person.id] && (accessProfiles[person.id].roles.length > 0 || accessProfiles[person.id].teams.length > 0) && (
                                       <div className="pt-4 border-t border-secondary/50 mt-4">
@@ -543,6 +576,28 @@ const StaffManagement: React.FC = () => {
                           {STAFF_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                         </select>
                       </div>
+                      
+                      {/* Sélecteur de Coach Principal pour les Entraîneurs Adjoints */}
+                      {formData.role === 'assistant_coach' && (
+                        <div className="space-y-3">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2 flex items-center gap-2">
+                            <UserIcon className="w-3 h-3" /> Entraîneur Principal
+                          </label>
+                          <select 
+                            value={formData.parent_coach_id || ''} 
+                            onChange={e => setFormData({...formData, parent_coach_id: e.target.value || undefined})}
+                            className="w-full h-16 rounded-2xl bg-secondary/30 border-none font-bold px-8 text-lg outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
+                          >
+                            <option value="">-- Sélectionner un Coach Principal --</option>
+                            {staff.filter(s => s.role === 'coach' || s.role === 'head_coach').map(coach => (
+                              <option key={coach.id} value={coach.id}>{coach.full_name}</option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-muted-foreground ml-2">
+                            L'adjoint hérite automatiquement des équipes de son coach principal
+                          </p>
+                        </div>
+                      )}
                       <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Spécialité Technique</label>
                         <Input 

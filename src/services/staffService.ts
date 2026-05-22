@@ -46,17 +46,35 @@ export const staffService = {
   async updateMember(id: string, updates: Partial<Staff> & { team_ids?: string[] }): Promise<Staff> {
     const { team_ids, ...baseData } = updates;
 
-    const sanitized = { ...baseData } as any;
-    (['id', 'created_at', 'staff_team_assignments'] as const).forEach(f => delete sanitized[f]);
+    // Whitelist explicit des champs autorisés - évite d'envoyer des colonnes inexistantes
+    const allowedFields = [
+      'club_id', 'full_name', 'role', 'specialty', 'category',
+      'phone', 'email', 'photo_url', 'is_active'
+    ];
 
-    const { data, error } = await supabase
+    const sanitized: any = {};
+    allowedFields.forEach(field => {
+      if (field in baseData && baseData[field as keyof typeof baseData] !== undefined) {
+        sanitized[field] = baseData[field as keyof typeof baseData];
+      }
+    });
+
+    // 1. Update
+    const { error: updateError } = await supabase
       .from('staff')
       .update(sanitized)
+      .eq('id', id);
+
+    if (updateError) throw updateError;
+
+    // 2. Re-fetch updated record
+    const { data, error: fetchError } = await supabase
+      .from('staff')
+      .select('*, staff_team_assignments(team_id)')
       .eq('id', id)
-      .select()
       .single();
 
-    if (error) throw error;
+    if (fetchError) throw fetchError;
 
     if (team_ids !== undefined) {
       await staffService.saveTeamAssignments(id, team_ids);

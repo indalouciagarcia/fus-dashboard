@@ -590,6 +590,29 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                               <option key={t.id} value={t.id}>{t.name}</option>
                            ))}
                         </select>
+                        {/* Affichage du Coach assigné */}
+                        {(() => {
+                          const selectedTeam = teams.find(t => t.id === setup.team_id);
+                          if (!selectedTeam?.coach_id) return null;
+                          const coach = staff.find(s => s.id === selectedTeam.coach_id);
+                          if (!coach) return null;
+                          return (
+                            <div className="mt-3 flex items-center gap-3 bg-primary/5 p-3 rounded-2xl border border-primary/20">
+                              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-white shadow-sm">
+                                <img 
+                                  src={(coach.photo_url && coach.photo_url !== 'null') 
+                                    ? coach.photo_url 
+                                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(coach.full_name)}&background=random&color=fff&size=200`} 
+                                  className="w-full h-full object-cover" 
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-black uppercase tracking-tight truncate">{coach.full_name}</p>
+                                <p className="text-[9px] font-bold text-primary/70 uppercase tracking-wider">Entraîneur • {selectedTeam.name}</p>
+                              </div>
+                            </div>
+                          );
+                        })()}
                      </div>
                      <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Shield className="inline w-3.5 h-3.5 mr-2 text-primary" /> Club Adversaire</label>
