@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { matchService } from '../services/matchService';
 import { toast } from 'sonner';
 import type { Match } from '../types';
+import { enqueue } from '../services/offlineQueue';
 
 export const useMatches = () => {
   const queryClient = useQueryClient();
@@ -10,6 +11,10 @@ export const useMatches = () => {
     queryKey: ['matches'],
     queryFn: matchService.getAllMatches,
   });
+
+  const isNetworkError = (err: any) => {
+    return !navigator.onLine || err.message.includes('Failed to fetch') || err.message.includes('Network');
+  };
 
   const createMutation = useMutation({
     mutationFn: matchService.createMatch,
@@ -25,12 +30,25 @@ export const useMatches = () => {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<Match> }) => 
       matchService.updateMatch(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['matches'] });
-      toast.success('Match mis à jour');
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ['matches'] });
+      const previousMatches = queryClient.getQueryData<Match[]>(['matches']);
+      queryClient.setQueryData<Match[]>(['matches'], old => 
+        (old || []).map(m => m.id === id ? { ...m, ...data } : m)
+      );
+      return { previousMatches, id, data };
     },
-    onError: (error: any) => {
-      toast.error(`Erreur: ${error.message}`);
+    onError: (err: any, variables, context: any) => {
+      if (isNetworkError(err)) {
+        enqueue({ kind: 'update_match', matchId: context.id, updates: context.data }, context.id);
+        toast.success('Modification de match sauvegardée hors ligne');
+      } else {
+        queryClient.setQueryData(['matches'], context.previousMatches);
+        toast.error(`Erreur: ${err.message}`);
+      }
+    },
+    onSettled: () => {
+      if (navigator.onLine) queryClient.invalidateQueries({ queryKey: ['matches'] });
     }
   });
 

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from './lib/utils';
 import './index.css';
@@ -9,6 +9,7 @@ import './index.css';
 import { queryClient } from './lib/queryClient';
 import { ClubProvider } from './context/ClubContext';
 import { PermissionsProvider } from './context/PermissionsContext';
+import { syncQueue } from './services/offlineQueue';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -147,6 +148,21 @@ const AppContent: React.FC = () => {
 // -------------------------------------------------------
 
 function App() {
+  useEffect(() => {
+    const handleOnline = async () => {
+      const { synced, failed } = await syncQueue();
+      if (synced > 0) {
+        toast.success(`${synced} opération(s) synchronisée(s) après reconnexion`);
+      }
+      if (failed > 0) {
+        toast.error(`${failed} opération(s) ont échoué lors de la synchronisation`);
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <PermissionsProvider>
