@@ -13,7 +13,6 @@ import { PermissionsProvider } from './context/PermissionsContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import ProtectedRoute from './components/ProtectedRoute';
-import DevRoleSwitcher from './components/dev/DevRoleSwitcher';
 
 // Pages publiques (auth)
 import LoginPage from './features/auth/LoginPage';
@@ -74,7 +73,7 @@ const AppContent: React.FC = () => {
       />
 
       <main className={cn("pt-[72px] transition-all duration-300", sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-64")}>
-        <div className="p-3 sm:p-4 lg:p-6 xl:p-10 max-w-[1600px] mx-auto">
+        <div className="p-3 sm:p-4 md:p-6 lg:p-6 xl:p-10 max-w-[1600px] mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -138,7 +137,6 @@ const AppContent: React.FC = () => {
         </div>
       </main>
 
-      <DevRoleSwitcher />
       <Toaster position="top-right" richColors closeButton />
     </div>
   );

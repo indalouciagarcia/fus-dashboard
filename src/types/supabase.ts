@@ -254,6 +254,9 @@ export interface Database {
           match_time: string | null;
           formation: string | null;
           opponent_formation: string | null;
+          opponent_lineup: string[] | null;
+          opponent_subs: string[] | null;
+          opponent_lineup_positions: any[] | null;
           is_home: boolean;
           score_home: number;
           score_away: number;
@@ -288,6 +291,9 @@ export interface Database {
           match_time?: string | null;
           formation?: string | null;
           opponent_formation?: string | null;
+          opponent_lineup?: string[] | null;
+          opponent_subs?: string[] | null;
+          opponent_lineup_positions?: any[] | null;
           is_home?: boolean;
           score_home?: number;
           score_away?: number;

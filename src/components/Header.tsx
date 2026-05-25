@@ -87,11 +87,14 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
   return (
     <header className={cn(
       "fixed top-0 right-0 h-[72px] left-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b flex items-center px-3 sm:px-4 lg:px-6 z-40 transition-all duration-300",
-      sidebarCollapsed ? "lg:left-[72px]" : "lg:left-64"
+      sidebarCollapsed ? "lg:left-[72px]" : "lg:left-64",
+      "md:left-0"
     )}>
-      {/* Mobile menu button */}
+      {/* Mobile/Tablet menu button - visible when sidebar is hidden (below lg breakpoint) */}
       {onMobileMenuClick && (
-        <MobileMenuButton onClick={onMobileMenuClick} />
+        <div className="md:block lg:hidden">
+          <MobileMenuButton onClick={onMobileMenuClick} />
+        </div>
       )}
 
       {/* Titre + date / match du jour */}

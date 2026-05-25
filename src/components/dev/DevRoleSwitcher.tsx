@@ -14,7 +14,7 @@ const DevRoleSwitcher: React.FC = () => {
       drag
       dragMomentum={false}
       whileDrag={{ scale: 1.02, cursor: 'grabbing' }}
-      className="fixed bottom-6 right-6 z-[9999] bg-slate-900/95 backdrop-blur-xl border border-white/20 p-4 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 max-w-[420px] cursor-grab active:cursor-grabbing"
+      className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] bg-slate-900/95 backdrop-blur-xl border border-white/20 p-3 sm:p-4 rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-3 sm:gap-4 max-w-[320px] sm:max-w-[420px] cursor-grab active:cursor-grabbing"
     >
       <div className="flex items-center justify-between border-b border-white/10 pb-3">
         <div className="text-[10px] font-black uppercase text-white/40 tracking-[0.2em] flex items-center gap-2">
@@ -31,7 +31,7 @@ const DevRoleSwitcher: React.FC = () => {
           <button
             key={r}
             onClick={() => loginAs(r)}
-            className={`px-4 py-2 text-[10px] font-black uppercase rounded-2xl transition-all duration-300 border ${isActive ? 'bg-primary border-primary text-white shadow-lg shadow-primary/20 scale-105' : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10 hover:border-white/20'}`}
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 text-[9px] sm:text-[10px] font-black uppercase rounded-xl sm:rounded-2xl transition-all duration-300 border ${isActive ? 'bg-primary border-primary text-white shadow-lg shadow-primary/20 scale-105' : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10 hover:border-white/20'}`}
           >
             {r.split('_').join(' ')}
           </button>

@@ -30,7 +30,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose, collapsed 
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
 
-  // Detect mobile viewport
+  // Detect mobile/tablet viewport (below lg breakpoint where sidebar is hidden)
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
     checkMobile();
@@ -314,8 +314,8 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose, collapsed 
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={onMobileClose}
           />
-          {/* Mobile sidebar */}
-          <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r flex flex-col z-50 lg:hidden shadow-2xl">
+          {/* Mobile/Tablet sidebar - wider on tablet for better usability */}
+          <aside className="fixed left-0 top-0 h-full w-72 sm:w-80 bg-white border-r flex flex-col z-50 lg:hidden shadow-2xl">
             {sidebarContent}
           </aside>
         </>

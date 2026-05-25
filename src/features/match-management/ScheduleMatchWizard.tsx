@@ -5,6 +5,7 @@ import { usePlayers } from '../../hooks/usePlayers';
 import { useStaff } from '../../hooks/useStaff';
 import { useMatches } from '../../hooks/useMatches';
 import { useTeams } from '../../hooks/useTeams';
+import { useTouchDragAndDrop } from '../../hooks/useTouchDragAndDrop';
 import { PLAYER_CATEGORIES } from '../../constants';
 import { Skeleton } from '../../components/ui/skeleton';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -1121,54 +1122,139 @@ const Pitch: React.FC<{
   opponentJerseyNumbers?: string[];
   onDropPlayer?: (playerId: string, posIndex: number) => void;
   onClearSlot?: (posIndex: number) => void;
-}> = ({ positions, startingXI = [], getPlayerById, isOpponent, opponentJerseyNumbers, onDropPlayer, onClearSlot }) => (
-  <div className="w-full max-w-[500px] bg-[#3fa375] aspect-[0.66] rounded-[4rem] shadow-2xl relative overflow-hidden ring-[16px] ring-white/5 border-[12px] border-[#52b788] group/pitch">
-    <div className="absolute inset-0 opacity-[0.25]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, #52b788 0, #52b788 40px, #40916c 40px, #40916c 80px)' }} />
-    <div className="absolute inset-6 border-[3px] border-white/50 rounded-[3rem] pointer-events-none" />
-    <div className="absolute inset-x-6 top-1/2 -translate-y-px border-t-[3px] border-white/50 pointer-events-none" />
-    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 border-[3px] border-white/50 rounded-full pointer-events-none" />
-    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white/50 rounded-full" />
-    <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[55%] h-[18%] border-b-[3px] border-x-[3px] border-white/50 pointer-events-none" />
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[55%] h-[18%] border-t-[3px] border-x-[3px] border-white/50 pointer-events-none" />
-    
-    <AnimatePresence>
-    {positions.map((pos, idx) => {
-      const p = getPlayerById ? (startingXI[idx] ? getPlayerById(startingXI[idx]) : null) : null;
-      const displayTop = isOpponent ? (100 - parseFloat(pos.top)) + '%' : pos.top;
-      const displayLeft = isOpponent ? (100 - parseFloat(pos.left)) + '%' : pos.left;
-      const oppJersey = opponentJerseyNumbers?.[idx] || '';
+}> = ({ positions, startingXI = [], getPlayerById, isOpponent, opponentJerseyNumbers, onDropPlayer, onClearSlot }) => {
+  const {
+    isDragging,
+    draggedItem,
+    dragPosition,
+    longPressProgress,
+    pitchRef,
+    isTouchDevice,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  } = useTouchDragAndDrop({
+    onDrop: (draggedId, targetIndex) => {
+      if (onDropPlayer) onDropPlayer(draggedId, targetIndex);
+    },
+    longPressDuration: 600,
+  });
 
-      return (
-        <motion.div 
-          key={idx} 
-          initial={{ scale: 0, x: "-50%", y: "-50%" }} 
-          animate={{ scale: 1, x: "-50%", y: "-50%" }} 
-          layout
-          className="absolute flex flex-col items-center gap-2 z-30" 
-          style={{ top: displayTop, left: displayLeft }}
-          onDragOver={(e) => { 
-            if (onDropPlayer) {
-              e.preventDefault(); 
-              e.currentTarget.classList.add('scale-110'); 
-            }
-          }}
-          onDragLeave={(e) => { e.currentTarget.classList.remove('scale-110'); }}
-          onDrop={(e) => {
-             if (onDropPlayer) {
-               e.preventDefault();
-               e.currentTarget.classList.remove('scale-110');
-               const droppedId = e.dataTransfer.getData(isOpponent ? 'oppIdx' : 'playerId');
-               if (droppedId) onDropPlayer(droppedId, idx);
-             }
+  return (
+    <div 
+      ref={pitchRef}
+      className="w-full max-w-[500px] bg-[#3fa375] aspect-[0.66] rounded-[4rem] shadow-2xl relative overflow-hidden ring-[16px] ring-white/5 border-[12px] border-[#52b788] group/pitch touch-none select-none"
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div className="absolute inset-0 opacity-[0.25]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, #52b788 0, #52b788 40px, #40916c 40px, #40916c 80px)' }} />
+      <div className="absolute inset-6 border-[3px] border-white/50 rounded-[3rem] pointer-events-none" />
+      <div className="absolute inset-x-6 top-1/2 -translate-y-px border-t-[3px] border-white/50 pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 border-[3px] border-white/50 rounded-full pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white/50 rounded-full" />
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[55%] h-[18%] border-b-[3px] border-x-[3px] border-white/50 pointer-events-none" />
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[55%] h-[18%] border-t-[3px] border-x-[3px] border-white/50 pointer-events-none" />
+      
+      {/* Touch instruction hint */}
+      {isTouchDevice && !isDragging && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-black/60 text-white px-3 py-1.5 rounded-full text-[9px] font-black uppercase backdrop-blur-sm z-40 pointer-events-none animate-pulse">
+          👆 Maintenez pour déplacer
+        </div>
+      )}
+      
+      {/* Drag preview following finger */}
+      {isDragging && draggedItem && dragPosition && getPlayerById && (
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="fixed z-[9999] pointer-events-none"
+          style={{
+            left: dragPosition.x - 32,
+            top: dragPosition.y - 32,
           }}
         >
-          <div className="relative group">
-            <motion.div 
-              draggable={(!!p && !isOpponent) || (isOpponent && !!oppJersey)}
-              onDragStart={(e) => { 
-                if(!isOpponent && p) e.dataTransfer.setData('playerId', p.id); 
-                if(isOpponent && oppJersey) e.dataTransfer.setData('oppIdx', idx.toString());
-              }}
+          <div className={`w-16 h-16 rounded-full border-[4px] border-white shadow-2xl flex items-center justify-center ring-4 ring-white/30 ${isOpponent ? 'bg-slate-950' : 'bg-primary'}`}>
+            {(() => {
+              const p = getPlayerById(draggedItem.id);
+              return p ? (
+                <img 
+                  src={(p.photo_url && p.photo_url !== 'null') ? p.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name)}&background=random&color=fff&size=200`} 
+                  className="w-full h-full rounded-full object-cover p-0.5" 
+                />
+              ) : null;
+            })()}
+          </div>
+        </motion.div>
+      )}
+      
+      <AnimatePresence>
+      {positions.map((pos, idx) => {
+        const p = getPlayerById ? (startingXI[idx] ? getPlayerById(startingXI[idx]) : null) : null;
+        const displayTop = isOpponent ? (100 - parseFloat(pos.top)) + '%' : pos.top;
+        const displayLeft = isOpponent ? (100 - parseFloat(pos.left)) + '%' : pos.left;
+        const oppJersey = opponentJerseyNumbers?.[idx] || '';
+        const isBeingDragged = draggedItem?.id === (p?.id || '');
+
+        return (
+          <motion.div 
+            key={idx}
+            data-pitch-slot={idx}
+            initial={{ scale: 0, x: "-50%", y: "-50%" }} 
+            animate={{ 
+              scale: isBeingDragged ? 0.3 : 1, 
+              x: "-50%", 
+              y: "-50%",
+              opacity: isBeingDragged ? 0.3 : 1
+            }} 
+            layout
+            className="absolute flex flex-col items-center gap-2 z-30" 
+            style={{ top: displayTop, left: displayLeft }}
+            onDragOver={(e) => { 
+              if (onDropPlayer) {
+                e.preventDefault(); 
+                e.currentTarget.classList.add('scale-110'); 
+              }
+            }}
+            onDragLeave={(e) => { e.currentTarget.classList.remove('scale-110'); }}
+            onDrop={(e) => {
+               if (onDropPlayer) {
+                 e.preventDefault();
+                 e.currentTarget.classList.remove('scale-110');
+                 const droppedId = (e as any).dataTransfer?.getData(isOpponent ? 'oppIdx' : 'playerId');
+                 if (droppedId) onDropPlayer(droppedId, idx);
+               }
+            }}
+          >
+            {/* Long press progress ring */}
+            {isTouchDevice && p && !isOpponent && longPressProgress > 0 && !isDragging && (
+              <div className="absolute inset-0 -m-1 pointer-events-none">
+                <svg className="w-[calc(100%+8px)] h-[calc(100%+8px)] -m-1 rotate-[-90deg]">
+                  <circle
+                    cx="50%"
+                    cy="50%"
+                    r="46%"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="3"
+                    strokeDasharray={`${longPressProgress * 283} 283`}
+                    className="transition-all duration-75"
+                  />
+                </svg>
+              </div>
+            )}
+
+            <div className="relative group">
+              <motion.div 
+                draggable={(!!p && !isOpponent) || (isOpponent && !!oppJersey)}
+                onDragStart={(e) => { 
+                  if(!isOpponent && p) (e as any).dataTransfer?.setData('playerId', p.id); 
+                  if(isOpponent && oppJersey) (e as any).dataTransfer?.setData('oppIdx', idx.toString());
+                }}
+                onTouchStart={(e) => {
+                  if (p && !isOpponent && isTouchDevice) {
+                    handleTouchStart(e, { id: p.id, type: 'player' }, idx);
+                  }
+                }}
               whileHover={(p || isOpponent) ? { scale: 1.1, rotate: 5, y: -5 } : { scale: 1.05 }}
               className={`w-16 h-16 rounded-full border-[4px] flex items-center justify-center shadow-2xl transition-all duration-300 relative
                 ${p ? `bg-gradient-to-br ${getPositionColor(p.position)} border-white ring-4 ring-white/30` : (isOpponent && oppJersey) ? 'bg-slate-950 border-white/60' : 'bg-white/10 border-white/20 hover:bg-white/30 hover:border-white/50 cursor-crosshair'}`}
@@ -1209,8 +1295,9 @@ const Pitch: React.FC<{
       );
     })}
     </AnimatePresence>
-  </div>
-);
+    </div>
+  );
+};
 
 const SectionTitle: React.FC<{ icon: React.ReactNode; title: string; subtitle: string }> = ({ icon, title, subtitle }) => (
   <div className="flex items-center gap-8">
