@@ -50,6 +50,7 @@ export const matchService = {
         lineup: {
           startingXI,
           substitutes,
+          formation: (m.lineup as any)?.formation ?? m.formation ?? '4-3-3',
         },
         staff_ids: m.match_staff?.map((s: any) => s.staff_id) ?? [],
       };
@@ -119,6 +120,7 @@ export const matchService = {
     const { lineup, staff_ids, ...payload } = updates;
 
     const sanitized = { ...payload } as any;
+    if (lineup) sanitized.lineup = lineup;
     (['id', 'created_at', 'match_players', 'match_staff'] as const).forEach(f => delete sanitized[f]);
     (['opponent_id', 'league_id', 'stadium_id', 'team_id'] as const).forEach(f => {
       if (sanitized[f] === '') sanitized[f] = null;
@@ -144,6 +146,8 @@ export const matchService = {
   },
 
   async deleteMatch(id: string): Promise<void> {
+    await supabase.from('player_match_stats').delete().eq('match_id', id);
+    await supabase.from('match_stats').delete().eq('match_id', id);
     await supabase.from('match_players').delete().eq('match_id', id);
     await supabase.from('match_staff').delete().eq('match_id', id);
     await supabase.from('match_events').delete().eq('match_id', id);

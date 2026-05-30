@@ -73,7 +73,7 @@ const AppContent: React.FC = () => {
         sidebarCollapsed={sidebarCollapsed}
       />
 
-      <main className={cn("pt-[72px] transition-all duration-300", sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-64")}>
+      <main className={cn("pt-[72px] transition-all duration-300 md:pl-[72px]", sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-64")}>
         <div className="p-3 sm:p-4 md:p-6 lg:p-6 xl:p-10 max-w-[1600px] mx-auto">
           <AnimatePresence mode="wait">
             <motion.div

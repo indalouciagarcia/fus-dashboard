@@ -197,6 +197,11 @@ const MatchManagementPage: React.FC = () => {
    const [draggedMatchId, setDraggedMatchId] = useState<string | null>(null);
 
    const handleDragStart = (e: React.DragEvent, matchId: string) => {
+      const match = matches.find(m => m.id === matchId);
+      if (match?.status === 'finished') {
+         e.preventDefault();
+         return;
+      }
       setDraggedMatchId(matchId);
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', matchId);
@@ -675,8 +680,8 @@ const MatchManagementPage: React.FC = () => {
                               })}
                         </div>
 
-                        {/* Desktop Calendar Grid cells */}
-                        <div className="hidden sm:grid grid-cols-7 gap-2 sm:gap-3 min-w-[600px]">
+                        {/* Tablet/Desktop Calendar Grid cells */}
+                        <div className="hidden sm:grid grid-cols-7 gap-1.5 sm:gap-2 md:gap-3">
                            {calendarDays.map(({ date, isCurrentMonth, formattedDate }, idx) => {
                               const dayMatches = matches.filter(m => {
                                  // Filter match_date
@@ -701,7 +706,7 @@ const MatchManagementPage: React.FC = () => {
                                     key={idx}
                                     onDragOver={handleDragOver}
                                     onDrop={(e) => handleDrop(e, formattedDate)}
-                                    className={`min-h-[100px] sm:min-h-[140px] p-2 sm:p-3 rounded-xl sm:rounded-2xl border-2 transition-all flex flex-col justify-between group ${
+                                    className={`min-h-[90px] sm:min-h-[120px] md:min-h-[150px] p-1.5 sm:p-2 md:p-3 rounded-xl sm:rounded-2xl border-2 transition-all flex flex-col justify-between group ${
                                        isCurrentMonth 
                                           ? isToday 
                                              ? 'bg-blue-50/30 border-primary shadow-lg shadow-primary/5' 
@@ -732,11 +737,11 @@ const MatchManagementPage: React.FC = () => {
                                     </div>
 
                                     {/* Matches List inside this Day */}
-                                    <div className="flex-1 space-y-1 sm:space-y-1.5 overflow-y-auto max-h-[80px] sm:max-h-[100px] scrollbar-hide">
+                                    <div className="flex-1 space-y-1 sm:space-y-1.5 overflow-y-auto max-h-[60px] sm:max-h-[80px] md:max-h-[110px] scrollbar-hide">
                                        {dayMatches.map(match => (
                                           <div
                                              key={match.id}
-                                             draggable
+                                             draggable={match.status !== 'finished'}
                                              onDragStart={(e) => handleDragStart(e, match.id)}
                                              onClick={(e) => {
                                                 e.stopPropagation();
@@ -752,14 +757,14 @@ const MatchManagementPage: React.FC = () => {
                                              }`}
                                           >
                                              <div className="flex items-center gap-1 sm:gap-1.5 truncate">
-                                                <div className="w-3 h-3 sm:w-4 sm:h-4 rounded bg-white flex items-center justify-center border shrink-0">
-                                                   <img 
-                                                      src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`} 
-                                                      alt="" 
-                                                      className="w-full h-full object-contain p-0.5" 
+                                                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded bg-white flex items-center justify-center border shrink-0">
+                                                   <img
+                                                      src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`}
+                                                      alt=""
+                                                      className="w-full h-full object-contain p-0.5"
                                                    />
                                                 </div>
-                                                <span className="truncate hidden sm:inline">{getOpponentName(match.opponent_id)}</span>
+                                                <span className="truncate hidden md:inline">{getOpponentName(match.opponent_id)}</span>
                                              </div>
                                              <span className="shrink-0 font-mono text-[7px] sm:text-[8px] opacity-75">{match.match_time?.slice(0, 5)}</span>
                                           </div>
@@ -771,17 +776,17 @@ const MatchManagementPage: React.FC = () => {
                         </div>
                      </motion.div>
                   ) : (
-                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 lg:gap-8">
                         {/* Left Column: Match Details Card */}
-                        <div className="lg:col-span-8 space-y-6">
+                        <div className="md:col-span-8 space-y-6">
                            <AnimatePresence mode="wait">
                               {selectedMatch ? (
                                  <motion.div key={selectedMatch.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                                     <Card className="border shadow-2xl rounded-[4rem] overflow-hidden bg-white relative group min-h-[500px]">
                                        <div className="absolute top-0 right-0 w-96 h-96 -mr-48 -mt-48 bg-primary/5 rounded-full blur-[100px] pointer-events-none group-hover:bg-primary/10 transition-all duration-1000" />
                                        <CardContent className="p-0 flex flex-col h-full">
-                                          <div className="p-16 border-b border-secondary/50 flex-1">
-                                             <div className="flex justify-between items-center mb-16">
+                                          <div className="p-4 md:p-8 lg:p-16 border-b border-secondary/50 flex-1">
+                                             <div className="flex flex-wrap justify-between items-start gap-3 mb-6 md:mb-10 lg:mb-16">
                                                 <div className="flex items-center gap-3">
                                                    <Badge className={`border-none font-black uppercase italic text-[10px] tracking-widest px-6 py-2.5 rounded-xl shadow-sm ${selectedMatch.status === 'finished' ? 'bg-slate-900 text-white' : 'bg-primary/10 text-primary border-primary/20'}`}>
                                                       {selectedMatch.status === 'scheduled' ? 'Prochain Match' : selectedMatch.status === 'finished' ? 'Terminé' : 'En cours'}
@@ -821,10 +826,10 @@ const MatchManagementPage: React.FC = () => {
                                                 </div>
                                              </div>
 
-                                             <div className={`flex items-center justify-between gap-12 ${!selectedMatch.is_home ? 'flex-row-reverse' : ''}`}>
+                                             <div className={`flex items-center justify-between gap-4 md:gap-8 lg:gap-12 ${!selectedMatch.is_home ? 'flex-row-reverse' : ''}`}>
                                                 {/* Home Team */}
-                                                <div className="flex flex-col items-center gap-8 group/home relative flex-1">
-                                                   <div className="w-40 h-40 rounded-[3rem] bg-white flex items-center justify-center shadow-2xl border-4 border-white transition-all group-hover/home:scale-110 group-hover/home:-rotate-6 overflow-hidden relative">
+                                                <div className="flex flex-col items-center gap-4 md:gap-6 lg:gap-8 group/home relative flex-1">
+                                                   <div className="w-20 h-20 md:w-28 md:h-28 lg:w-40 lg:h-40 rounded-[1.5rem] md:rounded-[2rem] lg:rounded-[3rem] bg-white flex items-center justify-center shadow-2xl border-4 border-white transition-all group-hover/home:scale-110 group-hover/home:-rotate-6 overflow-hidden relative">
                                                       {mainClub?.logo_url ? (
                                                          <img src={mainClub.logo_url} alt={mainClub.club_name} className="w-full h-full object-contain p-6" />
                                                       ) : (
@@ -835,7 +840,7 @@ const MatchManagementPage: React.FC = () => {
                                                       {selectedMatch.category}
                                                    </div>
                                                    <div className="text-center">
-                                                      <h4 className="text-3xl font-black tracking-tighter uppercase italic text-foreground leading-none">
+                                                      <h4 className="text-xl md:text-2xl lg:text-3xl font-black tracking-tighter uppercase italic text-foreground leading-none">
                                                          {mainClub?.club_name || 'My Club'}
                                                       </h4>
                                                       <p className="text-[10px] font-black text-muted-foreground opacity-40 uppercase tracking-widest mt-2">{selectedMatch.is_home ? 'Domicile' : 'Extérieur'}</p>
@@ -843,13 +848,13 @@ const MatchManagementPage: React.FC = () => {
                                                 </div>
 
                                                 {/* VS Divider */}
-                                                <div className="flex flex-col items-center gap-6">
+                                                <div className="flex flex-col items-center gap-3 md:gap-4 lg:gap-6">
                                                    {selectedMatch.status === 'finished' ? (
                                                       <div className="text-center">
-                                                         <div className="flex items-center gap-8 mb-4">
-                                                            <span className="text-7xl font-black tabular-nums tracking-tighter">{selectedMatch.score_home}</span>
-                                                            <span className="text-3xl font-black text-muted-foreground opacity-10 italic">/</span>
-                                                            <span className="text-7xl font-black tabular-nums tracking-tighter">{selectedMatch.score_away}</span>
+                                                         <div className="flex items-center gap-3 md:gap-5 lg:gap-8 mb-4">
+                                                            <span className="text-4xl md:text-5xl lg:text-7xl font-black tabular-nums tracking-tighter">{selectedMatch.score_home}</span>
+                                                            <span className="text-xl md:text-2xl lg:text-3xl font-black text-muted-foreground opacity-10 italic">/</span>
+                                                            <span className="text-4xl md:text-5xl lg:text-7xl font-black tabular-nums tracking-tighter">{selectedMatch.score_away}</span>
                                                          </div>
                                                          <Badge variant="outline" className="font-black text-[10px] uppercase tracking-widest text-emerald-500 bg-emerald-500/5 border-emerald-500/20 px-4 py-1.5">Score Officiel</Badge>
                                                       </div>
@@ -865,8 +870,8 @@ const MatchManagementPage: React.FC = () => {
                                                 </div>
 
                                                 {/* Away Team */}
-                                                <div className="flex flex-col items-center gap-8 group/away relative flex-1">
-                                                   <div className="w-40 h-40 rounded-[3rem] bg-white flex items-center justify-center shadow-2xl border-4 border-white transition-all group-hover/away:scale-110 group-hover/away:rotate-6 overflow-hidden relative">
+                                                <div className="flex flex-col items-center gap-4 md:gap-6 lg:gap-8 group/away relative flex-1">
+                                                   <div className="w-20 h-20 md:w-28 md:h-28 lg:w-40 lg:h-40 rounded-[1.5rem] md:rounded-[2rem] lg:rounded-[3rem] bg-white flex items-center justify-center shadow-2xl border-4 border-white transition-all group-hover/away:scale-110 group-hover/away:rotate-6 overflow-hidden relative">
                                                       {opponentClubs.find(c => c.id === selectedMatch.opponent_id)?.logo_url ? (
                                                          <img 
                                                             src={opponentClubs.find(c => c.id === selectedMatch.opponent_id)?.logo_url} 
@@ -878,7 +883,7 @@ const MatchManagementPage: React.FC = () => {
                                                       )}
                                                    </div>
                                                    <div className="text-center">
-                                                      <h4 className="text-3xl font-black tracking-tighter uppercase italic text-muted-foreground/40 leading-none">{getOpponentName(selectedMatch.opponent_id)}</h4>
+                                                      <h4 className="text-xl md:text-2xl lg:text-3xl font-black tracking-tighter uppercase italic text-muted-foreground/40 leading-none">{getOpponentName(selectedMatch.opponent_id)}</h4>
                                                       <p className="text-[10px] font-black text-muted-foreground opacity-20 uppercase tracking-widest mt-2">{!selectedMatch.is_home ? 'Domicile' : 'Extérieur'}</p>
                                                    </div>
                                                 </div>
@@ -886,7 +891,7 @@ const MatchManagementPage: React.FC = () => {
                                           </div>
 
                                           {/* Video Section */}
-                                          <div className="mx-12 mb-6 space-y-3">
+                                          <div className="mx-4 md:mx-8 lg:mx-12 mb-6 space-y-3">
                                              {selectedMatch.video_url && !showVideoInput ? (() => {
                                                 const embedUrl = getYouTubeEmbedUrl(selectedMatch.video_url);
                                                 return (
@@ -963,14 +968,14 @@ const MatchManagementPage: React.FC = () => {
                                              )}
                                           </div>
 
-                                          <div className="p-12 bg-secondary/20 flex flex-wrap items-center justify-center gap-6">
-                                             <Button onClick={() => setActiveTab('preparation')} className="h-16 px-12 rounded-[2rem] bg-white hover:bg-secondary text-foreground border shadow-xl font-black uppercase tracking-widest text-xs gap-4 transition-all hover:scale-105 group">
-                                                <LayoutPanelLeft className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
+                                          <div className="p-4 md:p-8 lg:p-12 bg-secondary/20 flex flex-wrap items-center justify-center gap-4 md:gap-6">
+                                             <Button onClick={() => setActiveTab('preparation')} className="h-12 md:h-14 lg:h-16 px-6 md:px-10 lg:px-12 rounded-[1.5rem] md:rounded-[2rem] bg-white hover:bg-secondary text-foreground border shadow-xl font-black uppercase tracking-widest text-xs gap-3 md:gap-4 transition-all hover:scale-105 group">
+                                                <LayoutPanelLeft className="w-4 h-4 md:w-5 md:h-5 text-primary group-hover:scale-110 transition-transform" />
                                                 {selectedMatch.status === 'finished' ? 'Consulter la Compo' : 'Orchestrer le Match'}
                                              </Button>
                                              {selectedMatch.status === 'finished' && (
-                                                <Button onClick={() => setActiveTab('stats')} className="h-16 px-12 rounded-[2rem] bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/20 font-black uppercase tracking-widest text-xs gap-4 transition-all hover:scale-105 group">
-                                                   <BarChart3 className="w-5 h-5 group-hover:scale-110 transition-transform" /> 
+                                                <Button onClick={() => setActiveTab('stats')} className="h-12 md:h-14 lg:h-16 px-6 md:px-10 lg:px-12 rounded-[1.5rem] md:rounded-[2rem] bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/20 font-black uppercase tracking-widest text-xs gap-3 md:gap-4 transition-all hover:scale-105 group">
+                                                   <BarChart3 className="w-4 h-4 md:w-5 md:h-5 group-hover:scale-110 transition-transform" />
                                                    Voir les Stats
                                                 </Button>
                                              )}
@@ -993,13 +998,13 @@ const MatchManagementPage: React.FC = () => {
                         </div>
 
                         {/* Right Column: Organized Match List */}
-                        <div className="lg:col-span-4 space-y-6">
-                           <div className="flex items-center justify-between px-6">
+                        <div className="md:col-span-4 space-y-6">
+                           <div className="flex items-center justify-between px-3 md:px-6">
                               <h4 className="text-[11px] font-black tracking-[0.2em] uppercase text-muted-foreground">Registre des Rencontres</h4>
                               <Badge className="bg-secondary text-foreground rounded-lg font-black text-[9px]">{filteredMatches.length}</Badge>
                            </div>
 
-                           <div className="flex flex-col gap-6 max-h-[600px] overflow-y-auto pr-2 scrollbar-hide pb-10">
+                           <div className="flex flex-col gap-4 md:gap-6 max-h-[400px] md:max-h-[520px] lg:max-h-[600px] overflow-y-auto pr-2 scrollbar-hide pb-10">
                               {/* LIVE MATCHES */}
                               {filteredMatches.filter(m => m.status === 'live').length > 0 && (
                                  <div className="space-y-3">

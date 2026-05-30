@@ -179,11 +179,12 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose, collapsed 
     </>
   );
 
-  // Desktop sidebar - collapsible
+  // Desktop sidebar - icône seule sur tablette (md), expansible sur desktop (lg+)
   const desktopSidebar = (
     <aside className={cn(
-      "fixed left-0 top-0 h-full bg-white border-r hidden lg:flex flex-col z-50 transition-all duration-300 overflow-y-auto overflow-hidden",
-      collapsed ? "w-[72px]" : "w-64"
+      "fixed left-0 top-0 h-full bg-white border-r hidden md:flex flex-col z-50 transition-all duration-300 overflow-y-auto overflow-hidden",
+      // Tablette (md < lg) : toujours icône. Desktop (lg+) : respect collapsed
+      collapsed ? "w-[72px]" : "w-[72px] lg:w-64"
     )}>
       <div className="h-[72px] flex items-center px-4 border-b shrink-0 bg-white sticky top-0 z-10">
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
@@ -191,16 +192,17 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose, collapsed 
         </div>
         <span className={cn(
           "ml-3 font-bold text-lg text-foreground tracking-tight transition-all duration-300",
-          collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+          // Cacher le texte sur tablette et quand collapsed sur desktop
+          collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-0 w-0 overflow-hidden lg:opacity-100 lg:w-auto"
         )}>
           Fusc<span className="text-primary">Club</span>
         </span>
-        
-        {/* Toggle button */}
+
+        {/* Toggle button — visible seulement sur desktop (lg+) */}
         <button
           onClick={onToggleCollapse}
           className={cn(
-            "ml-auto p-1.5 rounded-lg hover:bg-secondary transition-all duration-300",
+            "ml-auto p-1.5 rounded-lg hover:bg-secondary transition-all duration-300 hidden lg:flex",
             collapsed ? "opacity-100" : "opacity-60 hover:opacity-100"
           )}
           title={collapsed ? "Développer" : "Réduire"}

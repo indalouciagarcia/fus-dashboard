@@ -423,8 +423,8 @@ const MatchDayPage: React.FC = () => {
                            </div>
                            <div className="md:col-span-2 pt-6">
                               <div className="flex bg-secondary/30 p-2 rounded-[2.5rem] border-2 border-secondary shadow-inner">
-                                  <button onClick={() => updateField('is_home', true)} className={`flex-1 h-14 rounded-[2rem] font-black uppercase text-[10px] tracking-widest transition-all ${formData.is_home ? 'bg-primary text-white shadow-xl scale-105' : 'text-muted-foreground hover:bg-white/50'}`}>Domicile</button>
-                                 <button onClick={() => updateField('is_home', false)} className={`flex-1 h-14 rounded-[2rem] font-black uppercase text-[10px] tracking-widest transition-all ${!formData.is_home ? 'bg-slate-900 text-white shadow-xl scale-105' : 'text-muted-foreground hover:bg-white/50'}`}>Extérieur</button>
+                                  <button onClick={() => { if (!formData.is_home) setFormData(prev => ({ ...prev, is_home: true, score_home: prev.score_away ?? 0, score_away: prev.score_home ?? 0 })); }} className={`flex-1 h-14 rounded-[2rem] font-black uppercase text-[10px] tracking-widest transition-all ${formData.is_home ? 'bg-primary text-white shadow-xl scale-105' : 'text-muted-foreground hover:bg-white/50'}`}>Domicile</button>
+                                 <button onClick={() => { if (formData.is_home) setFormData(prev => ({ ...prev, is_home: false, score_home: prev.score_away ?? 0, score_away: prev.score_home ?? 0 })); }} className={`flex-1 h-14 rounded-[2rem] font-black uppercase text-[10px] tracking-widest transition-all ${!formData.is_home ? 'bg-slate-900 text-white shadow-xl scale-105' : 'text-muted-foreground hover:bg-white/50'}`}>Extérieur</button>
                               </div>
                            </div>
                         </div>

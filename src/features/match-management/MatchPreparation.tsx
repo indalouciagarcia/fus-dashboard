@@ -109,16 +109,54 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
   const isFirstRender = useRef(true);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDirty = useRef(false);
 
-  const [formData, setFormData] = useState<any>({
-    ...(match || {}),
-    lineup: match?.lineup || { startingXI: Array(11).fill(''), substitutes: [], formation: match?.formation || '4-3-3' },
-    staff_ids: match?.staff_ids || [],
-    opponent_formation: match?.opponent_formation || '4-4-2',
-    opponent_lineup: match?.opponent_lineup || Array(11).fill(''),
-    opponent_subs: match?.opponent_subs || [],
-    is_home: match?.is_home ?? true
-  });
+  const buildFormData = (m: any) => {
+    const formation = m?.lineup?.formation ?? m?.formation ?? '4-3-3';
+    return {
+      ...(m || {}),
+      lineup: {
+        startingXI: m?.lineup?.startingXI || Array(11).fill(''),
+        substitutes: m?.lineup?.substitutes || [],
+        formation,
+      },
+      formation,
+      staff_ids: m?.staff_ids || [],
+      opponent_formation: m?.opponent_formation || '4-4-2',
+      opponent_lineup: m?.opponent_lineup || Array(11).fill(''),
+      opponent_subs: m?.opponent_subs || [],
+      is_home: m?.is_home ?? true
+    };
+  };
+
+  const [formData, setFormDataRaw] = useState<any>(() => buildFormData(match));
+  const setFormData = useCallback((value: any) => {
+    isDirty.current = true;
+    setFormDataRaw(value);
+  }, []);
+
+  // Re-sync formData when navigating back to this match (matchId change or fresh server data)
+  const prevMatchId = useRef(matchId);
+  useEffect(() => {
+    if (prevMatchId.current !== matchId) {
+      prevMatchId.current = matchId;
+      isFirstRender.current = true;
+      isDirty.current = false;
+      setFormDataRaw(buildFormData(match));
+    }
+  }, [matchId]);
+
+  // Sync from server when match data refreshes and user has no pending unsaved changes
+  const prevMatchJson = useRef('');
+  useEffect(() => {
+    if (!match) return;
+    const json = JSON.stringify(match);
+    if (json === prevMatchJson.current) return;
+    prevMatchJson.current = json;
+    if (!isDirty.current) {
+      setFormDataRaw(buildFormData(match));
+    }
+  }, [match]);
 
   // Normalize XI length
   useEffect(() => {
@@ -141,6 +179,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
     autoSaveTimer.current = setTimeout(async () => {
       try {
         await updateMatch({ id: matchId, data: formData });
+        isDirty.current = false;
         setAutoSaved(true);
         setTimeout(() => setAutoSaved(false), 2000);
       } catch (e) { console.error('Auto-save failed', e); }

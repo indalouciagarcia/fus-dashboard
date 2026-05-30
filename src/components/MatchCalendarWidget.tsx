@@ -190,16 +190,16 @@ const MatchCalendarWidget: React.FC = () => {
               <div className="flex items-center justify-between gap-4">
                 {/* My Club */}
                 <div className="flex flex-col items-center gap-2 flex-1">
-                  <div className="w-14 h-14 rounded-2xl bg-white border-2 border-slate-100 shadow-sm flex items-center justify-center overflow-hidden p-1.5">
+                  <div className="w-20 h-20 rounded-2xl bg-white border-2 border-slate-100 shadow-md flex items-center justify-center overflow-hidden p-2 ring-2 ring-primary/10">
                     <img
                       src={mainClub?.logo_url && mainClub.logo_url !== 'null'
                         ? mainClub.logo_url
-                        : `https://ui-avatars.com/api/?name=${encodeURIComponent((mainClub as any)?.club_name || (mainClub as any)?.name || 'FC')}&background=0D8ABC&color=fff&size=80`}
+                        : `https://ui-avatars.com/api/?name=${encodeURIComponent((mainClub as any)?.club_name || (mainClub as any)?.name || 'FC')}&background=0D8ABC&color=fff&size=128`}
                       alt="Club"
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-contain drop-shadow-sm"
                     />
                   </div>
-                  <p className="text-[10px] font-black uppercase tracking-tight text-center leading-tight text-foreground max-w-[70px] truncate">
+                  <p className="text-[10px] font-black uppercase tracking-tight text-center leading-tight text-foreground max-w-[80px] truncate">
                     {(mainClub as any)?.club_name || (mainClub as any)?.name || 'Mon Club'}
                   </p>
                 </div>
@@ -226,16 +226,16 @@ const MatchCalendarWidget: React.FC = () => {
 
                 {/* Opponent */}
                 <div className="flex flex-col items-center gap-2 flex-1">
-                  <div className="w-14 h-14 rounded-2xl bg-white border-2 border-slate-100 shadow-sm flex items-center justify-center overflow-hidden p-1.5">
+                  <div className="w-20 h-20 rounded-2xl bg-white border-2 border-slate-100 shadow-md flex items-center justify-center overflow-hidden p-2 ring-2 ring-slate-100">
                     <img
                       src={getOpponent(displayedMatch.opponent_id)?.logo_url && getOpponent(displayedMatch.opponent_id)?.logo_url !== 'null'
                         ? getOpponent(displayedMatch.opponent_id)!.logo_url!
-                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponent(displayedMatch.opponent_id)?.name || 'Adv')}&background=random&color=fff&size=80`}
+                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponent(displayedMatch.opponent_id)?.name || 'Adv')}&background=random&color=fff&size=128`}
                       alt="Adversaire"
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-contain drop-shadow-sm"
                     />
                   </div>
-                  <p className="text-[10px] font-black uppercase tracking-tight text-center leading-tight text-slate-400 max-w-[70px] truncate">
+                  <p className="text-[10px] font-black uppercase tracking-tight text-center leading-tight text-slate-400 max-w-[80px] truncate">
                     {getOpponent(displayedMatch.opponent_id)?.name || 'Adversaire'}
                   </p>
                 </div>

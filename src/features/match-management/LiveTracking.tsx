@@ -488,13 +488,23 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
       <div className="max-w-[1600px] mx-auto px-8 py-10 space-y-8">
         
         {/* Scoreboard Header */}
+        {(() => {
+          // Left = home team, Right = away team (standard convention)
+          const leftLogo  = match.is_home ? mainClub?.logo_url  : opponent?.logo_url;
+          const leftName  = match.is_home ? mainClub?.club_name : opponent?.name;
+          const leftScore = homeScore; // score_home always belongs to the home team (left)
+          const rightLogo  = match.is_home ? opponent?.logo_url  : mainClub?.logo_url;
+          const rightName  = match.is_home ? opponent?.name      : mainClub?.club_name;
+          const rightScore = awayScore; // score_away always belongs to the away team (right)
+          return (
         <div className="bg-slate-950 text-white rounded-[3rem] p-10 shadow-2xl relative overflow-hidden flex items-center justify-between">
+           {/* Home team (left) */}
            <div className="flex items-center gap-6">
               <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center p-2 border-4 border-white/5 shadow-xl">
-                 {mainClub?.logo_url ? <img src={mainClub.logo_url} className="w-full h-full object-contain" /> : <Shield className="w-8 h-8 text-primary" />}
+                 {leftLogo ? <img src={leftLogo} className="w-full h-full object-contain" /> : <Shield className="w-8 h-8 text-primary" />}
               </div>
               <div className="space-y-2">
-                 <h2 className="text-2xl font-black italic tracking-tighter uppercase leading-none">{mainClub?.club_name}</h2>
+                 <h2 className="text-2xl font-black italic tracking-tighter uppercase leading-none">{leftName}</h2>
                  <div className="flex items-center gap-2">
                     <Badge className="bg-primary text-[8px] font-black uppercase px-2 h-4 border-none shadow-sm">HOME</Badge>
                     {match.category && (
@@ -511,15 +521,15 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
               </div>
            </div>
 
+           {/* Score */}
            <div className="flex flex-col items-center">
               <div className="flex items-center gap-6">
-                 <span className="text-7xl font-black italic tabular-nums text-primary leading-none">{homeScore}</span>
+                 <span className="text-7xl font-black italic tabular-nums text-primary leading-none">{leftScore}</span>
                  <div className="flex flex-col items-center">
                     <span className="text-lg font-black opacity-10 uppercase">v</span>
                     <div className="bg-white/5 px-3 py-1 rounded-xl border border-white/10 mt-1">
                        <span className="text-sm font-black tabular-nums italic text-slate-300">{formatTime(isActive ? totalElapsedSeconds : cursorTime)}</span>
                     </div>
-                    {/* Penalty Score Display */}
                     {matchPhase === 'penalties' && (
                        <div className="bg-purple-500/20 px-3 py-1 rounded-xl border border-purple-400/30 mt-1">
                           <span className="text-sm font-black tabular-nums italic text-purple-300">
@@ -528,20 +538,23 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
                        </div>
                     )}
                  </div>
-                 <span className="text-7xl font-black italic tabular-nums leading-none">{awayScore}</span>
+                 <span className="text-7xl font-black italic tabular-nums leading-none">{rightScore}</span>
               </div>
            </div>
 
+           {/* Away team (right) */}
            <div className="flex items-center gap-6 text-right">
               <div className="space-y-1">
-                 <h2 className="text-2xl font-black italic tracking-tighter uppercase leading-none">{opponent?.name}</h2>
+                 <h2 className="text-2xl font-black italic tracking-tighter uppercase leading-none">{rightName}</h2>
                  <Badge variant="outline" className="text-[8px] font-black uppercase px-2 h-4 text-slate-500 border-slate-700">AWAY</Badge>
               </div>
               <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center p-2 border-4 border-white/5 shadow-xl">
-                 {opponent?.logo_url ? <img src={opponent.logo_url} className="w-full h-full object-contain" /> : <Shield className="w-8 h-8 text-slate-300" />}
+                 {rightLogo ? <img src={rightLogo} className="w-full h-full object-contain" /> : <Shield className="w-8 h-8 text-slate-300" />}
               </div>
            </div>
         </div>
+          );
+        })()}
 
         {/* MINIMIZED DUAL-TRACK TIMELINE */}
         <div className="bg-white rounded-[4rem] border-2 border-slate-100 p-10 space-y-8 shadow-sm relative overflow-hidden">
