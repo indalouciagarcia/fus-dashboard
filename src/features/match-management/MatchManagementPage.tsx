@@ -737,7 +737,7 @@ const MatchManagementPage: React.FC = () => {
                                     </div>
 
                                     {/* Matches List inside this Day */}
-                                    <div className="flex-1 space-y-1 sm:space-y-1.5 overflow-y-auto max-h-[60px] sm:max-h-[80px] md:max-h-[110px] scrollbar-hide">
+                                    <div className="flex-1 space-y-1 sm:space-y-1.5 overflow-y-auto max-h-[80px] sm:max-h-[110px] md:max-h-[140px] scrollbar-hide">
                                        {dayMatches.map(match => (
                                           <div
                                              key={match.id}
@@ -756,8 +756,8 @@ const MatchManagementPage: React.FC = () => {
                                                       : 'bg-slate-50 border-slate-200 text-slate-700'
                                              }`}
                                           >
-                                             <div className="flex items-center gap-1 sm:gap-1.5 truncate">
-                                                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded bg-white flex items-center justify-center border shrink-0">
+                                             <div className="flex items-center gap-1.5 sm:gap-2 truncate">
+                                                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-white flex items-center justify-center border shrink-0 shadow-sm">
                                                    <img
                                                       src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`}
                                                       alt=""
