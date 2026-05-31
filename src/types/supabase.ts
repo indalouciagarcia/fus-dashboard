@@ -413,6 +413,8 @@ export interface Database {
           id: string;
           match_id: string;
           player_id: string;
+          played_category: string | null;
+          jersey_number_worn: number | null;
           minutes_played: number | null;
           goals: number;
           assists: number;
@@ -424,6 +426,8 @@ export interface Database {
           id?: string;
           match_id: string;
           player_id: string;
+          played_category?: string | null;
+          jersey_number_worn?: number | null;
           minutes_played?: number | null;
           goals?: number;
           assists?: number;
@@ -588,6 +592,7 @@ export interface Database {
           status: 'active' | 'reverted';
           notes: string | null;
           original_jersey_number: number | null;
+          target_jersey_number: number | null;
           promoted_at: string;
           reverted_at: string | null;
           created_at: string;
@@ -604,6 +609,7 @@ export interface Database {
           status?: 'active' | 'reverted';
           notes?: string | null;
           original_jersey_number?: number | null;
+          target_jersey_number?: number | null;
           promoted_at?: string;
           reverted_at?: string | null;
           created_at?: string;

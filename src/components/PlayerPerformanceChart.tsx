@@ -152,9 +152,8 @@ const usePlayerPerformances = (): PlayerPerformance[] => {
           matchesPlayed
         );
 
-        // Catégorie d'âge depuis le match ou défaut
-        const sampleMatch = finishedMatches.find(m => playerMatchIds.has(m.id));
-        const category = (sampleMatch?.category || 'SENIOR') as AgeCategory;
+        // Catégorie d'âge depuis le joueur (sa catégorie officielle d'appartenance)
+        const category = (player.category || 'SENIOR') as AgeCategory;
 
         return {
           player,

@@ -790,7 +790,7 @@ const PlayerManagement: React.FC = () => {
               
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
                 <div className="flex bg-secondary/30 p-1 rounded-xl w-full overflow-x-auto no-scrollbar">
-                  {(['ALL', ...PLAYER_CATEGORIES, 'PRO'] as const).map((cat) => (
+                  {(['ALL', ...PLAYER_CATEGORIES] as const).map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setCategoryFilter(cat)}
@@ -2208,7 +2208,7 @@ function SurclassementModalWrapper({
     ? teams.find(t => t.id === activeSurclassement.original_team_id)
     : teams.find(t => t.id === player.team_id);
 
-  const handleConfirmSurclasser = async (targetTeamId: string, notes: string) => {
+  const handleConfirmSurclasser = async (targetTeamId: string, notes: string, targetJerseyNumber: number | null) => {
     const targetTeam = teams.find(t => t.id === targetTeamId);
     if (!targetTeam || !currentTeam) return;
     await createSurclassement({
@@ -2218,6 +2218,8 @@ function SurclassementModalWrapper({
       original_category: currentTeam.category,
       target_category: targetTeam.category,
       notes: notes || null,
+      original_jersey_number: player.jersey_number ?? null,
+      target_jersey_number: targetJerseyNumber,
     });
     onClose();
   };

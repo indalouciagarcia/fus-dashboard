@@ -40,7 +40,7 @@ interface Props {
   historyLoading: boolean;
   isCreating: boolean;
   isReverting: boolean;
-  onConfirmSurclasser: (targetTeamId: string, notes: string) => void;
+  onConfirmSurclasser: (targetTeamId: string, notes: string, targetJerseyNumber: number | null) => void;
   onConfirmRevert: (surclassementId: string) => void;
   onClose: () => void;
 }
@@ -72,6 +72,7 @@ export default function SurclassementModal({
 
   const [targetTeamId, setTargetTeamId] = useState(eligibleTeams[0]?.id ?? '');
   const [notes, setNotes] = useState('');
+  const [targetJerseyNumber, setTargetJerseyNumber] = useState<string>('');
   const [tab, setTab] = useState<'action' | 'history'>('action');
   const [confirmRevert, setConfirmRevert] = useState(false);
 
@@ -79,7 +80,8 @@ export default function SurclassementModal({
 
   const handleSubmit = () => {
     if (!targetTeamId) return;
-    onConfirmSurclasser(targetTeamId, notes);
+    const jersey = targetJerseyNumber !== '' ? parseInt(targetJerseyNumber, 10) : null;
+    onConfirmSurclasser(targetTeamId, notes, jersey);
   };
 
   return (
@@ -278,6 +280,41 @@ export default function SurclassementModal({
                             </span>
                           </div>
                         )}
+
+                        {/* Numéro de maillot dans l'équipe cible */}
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                            N° maillot dans l'équipe cible
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="text-xs font-black text-muted-foreground bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
+                                Actuel #{player.jersey_number ?? '—'}
+                              </span>
+                              <span className="text-slate-300 font-black">→</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={99}
+                                value={targetJerseyNumber}
+                                onChange={e => setTargetJerseyNumber(e.target.value)}
+                                placeholder="N° cible"
+                                className="w-28 px-4 py-2 rounded-xl border border-slate-200 text-sm font-black text-center focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all"
+                              />
+                            </div>
+                            {targetJerseyNumber && (
+                              <button
+                                onClick={() => setTargetJerseyNumber('')}
+                                className="text-[10px] font-black text-muted-foreground hover:text-slate-600 underline"
+                              >
+                                Effacer
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Laisser vide pour conserver le numéro actuel ({player.jersey_number ?? '—'})
+                          </p>
+                        </div>
 
                         {/* Notes */}
                         <div className="space-y-2">

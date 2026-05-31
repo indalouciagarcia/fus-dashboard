@@ -5,6 +5,7 @@ import { useMatchEvents } from '../../hooks/useMatchEvents';
 import { useMatches } from '../../hooks/useMatches';
 import { useClubData } from '../../hooks/useClubData';
 import { matchService } from '../../services/matchService';
+import { useSurclassements } from '../../hooks/useSurclassements';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -104,6 +105,7 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
   const { matches, updateMatch } = useMatches();
   const { mainClub, opponentClubs: clubs } = useClubData();
   const { events, addEvent, updateEvent, deleteEvent } = useMatchEvents(matchId);
+  const { surclassements } = useSurclassements();
 
   // --- Disciplinary Tracking ---
   const sentOffPlayerIds = React.useMemo(() => {
@@ -289,6 +291,22 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
     redCards: events.filter(e => e.type === 'red_card').length,
     substitutions: events.filter(e => e.type === 'substitution').length,
   };
+
+  // Résolution du numéro de maillot porté lors de ce match (surclassement pris en compte)
+  const jerseyWornMap = useMemo(() => {
+    const matchDate = currentMatch?.match_date ?? '';
+    const t = matchDate ? new Date(matchDate).getTime() : 0;
+    const map: Record<string, number | null> = {};
+    players.forEach(p => {
+      const s = surclassements.find(sr => {
+        const promoted = new Date(sr.promoted_at).getTime();
+        const reverted = sr.reverted_at ? new Date(sr.reverted_at).getTime() : null;
+        return sr.player_id === p.id && promoted <= t && (reverted === null || reverted >= t);
+      });
+      map[p.id] = (s as any)?.target_jersey_number ?? p.jersey_number ?? null;
+    });
+    return map;
+  }, [players, surclassements, currentMatch?.match_date]);
 
   // Stats par joueur
   const playerStats = players
@@ -1074,7 +1092,14 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm truncate">{stat.player.full_name}</p>
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.player.position}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{stat.player.position}</p>
+                        {jerseyWornMap[stat.player.id] != null && (
+                          <span className="text-[10px] font-black text-primary bg-primary/10 px-1.5 py-0.5 rounded-md">
+                            #{jerseyWornMap[stat.player.id]}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2 flex-wrap">

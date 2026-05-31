@@ -25,6 +25,8 @@ export type CreateSurclassementPayload = {
   original_category: string;
   target_category: string;
   notes?: string | null;
+  original_jersey_number?: number | null;
+  target_jersey_number?: number | null;
 };
 
 export const surclassementService = {

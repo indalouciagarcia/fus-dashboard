@@ -107,6 +107,20 @@ const TeamManagement: React.FC = () => {
     );
   }, [surclassements, rosterTeam]);
 
+  // Map playerId → target_jersey_number pour joueurs surclassés
+  const surclassedJerseyMap = useMemo(() => {
+    if (!rosterTeam) return {} as Record<string, number | null>;
+    return Object.fromEntries(
+      surclassements
+        .filter(s => s.status === 'active' && s.target_team_id === rosterTeam.id && s.target_jersey_number != null)
+        .map(s => [s.player_id, s.target_jersey_number])
+    );
+  }, [surclassements, rosterTeam]);
+
+  // État pour l'édition inline du numéro de maillot
+  const [editingJerseyId, setEditingJerseyId] = useState<string | null>(null);
+  const [editingJerseyValue, setEditingJerseyValue] = useState<string>('');
+
   const rosterPlayers = useMemo(() => {
     if (!rosterTeam) return [];
     const regular = players.filter(p => (p as any).team_id === rosterTeam.id);
@@ -550,6 +564,8 @@ const TeamManagement: React.FC = () => {
                                  rosterPlayers.map(player => {
                                     const originCat = surclassedOriginMap[player.id];
                                     const isSurclasse = !!originCat;
+                                    const displayJersey = surclassedJerseyMap[player.id] ?? player.jersey_number;
+                                    const isEditingJersey = editingJerseyId === player.id;
                                     return (
                                     <motion.div key={player.id} layout className={`flex items-center gap-6 p-4 rounded-3xl border transition-all ${isAssignMode ? 'bg-red-50/20 border-red-100' : isSurclasse ? 'bg-orange-50/30 border-orange-200' : 'bg-slate-50/50 border-secondary'} group`}>
                                        <div className="w-16 h-16 bg-white rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 border shadow-sm">
@@ -565,7 +581,59 @@ const TeamManagement: React.FC = () => {
                                             )}
                                           </div>
                                           <div className="flex items-center gap-3 mt-2">
-                                             <span className="text-[10px] font-black uppercase tracking-widest text-primary">#{player.jersey_number}</span>
+                                             {isEditingJersey ? (
+                                               <div className="flex items-center gap-2">
+                                                 <span className="text-[10px] font-black text-muted-foreground">#</span>
+                                                 <input
+                                                   type="number"
+                                                   min={1} max={99}
+                                                   autoFocus
+                                                   value={editingJerseyValue}
+                                                   onChange={e => setEditingJerseyValue(e.target.value)}
+                                                   onBlur={async () => {
+                                                     const n = parseInt(editingJerseyValue, 10);
+                                                     if (!isNaN(n) && n > 0 && n !== player.jersey_number) {
+                                                       try {
+                                                         await updatePlayer({ id: player.id, data: { jersey_number: n } as any });
+                                                       } catch {
+                                                         setEditingJerseyValue(String(player.jersey_number ?? ''));
+                                                         return;
+                                                       }
+                                                     }
+                                                     setEditingJerseyId(null);
+                                                   }}
+                                                   onKeyDown={async e => {
+                                                     if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                                     if (e.key === 'Escape') setEditingJerseyId(null);
+                                                   }}
+                                                   className="w-16 px-2 py-1 text-xs font-black text-center rounded-lg border-2 border-primary bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                 />
+                                                 <span className="text-[9px] text-muted-foreground">↵ valider</span>
+                                               </div>
+                                             ) : (
+                                               <div className="flex items-center gap-2">
+                                                 <span className="text-[10px] font-black uppercase tracking-widest text-primary">
+                                                   #{displayJersey ?? '—'}
+                                                   {isSurclasse && surclassedJerseyMap[player.id] != null && (
+                                                     <span className="ml-1 text-orange-500 text-[9px]">(surclassé)</span>
+                                                   )}
+                                                 </span>
+                                                 <button
+                                                   onMouseDown={e => e.stopPropagation()}
+                                                   onClick={e => {
+                                                     e.stopPropagation();
+                                                     e.preventDefault();
+                                                     setEditingJerseyId(player.id);
+                                                     setEditingJerseyValue(String(player.jersey_number ?? ''));
+                                                   }}
+                                                   title="Modifier le numéro de maillot"
+                                                   className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 bg-white hover:border-primary hover:text-primary text-muted-foreground transition-all text-[9px] font-black uppercase cursor-pointer"
+                                                 >
+                                                   <Edit2 className="w-2.5 h-2.5" />
+                                                   Modifier
+                                                 </button>
+                                               </div>
+                                             )}
                                              <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest h-5">{player.position}</Badge>
                                           </div>
                                        </div>

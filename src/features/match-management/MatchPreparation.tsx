@@ -14,7 +14,7 @@ import { Badge } from '../../components/ui/badge';
 import {
   ChevronRight, ChevronLeft, Check,
   Briefcase, Users, Target, Shield, Star, Save, Gamepad2, Settings, Clock, MapPin,
-  Calendar, Search, Filter, Loader2, UserPlus, X, Trophy, CheckCircle2
+  Calendar, Search, Filter, Loader2, UserPlus, X, Trophy, CheckCircle2, Edit2
 } from 'lucide-react';
 import type { Match, Player, MatchPhase } from '../../types';
 
@@ -94,7 +94,7 @@ const getFormationPositions = (formation: string) => {
 const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) => {
   const { matches, updateMatch, refetch } = useMatches();
   const { authState } = usePermissions();
-  const { players } = usePlayers();
+  const { players, updatePlayer } = usePlayers();
   const { staff } = useStaff();
   const { opponentClubs } = useClubData();
   const { stadiums, leagues } = useCompetitions();
@@ -107,6 +107,8 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
   const [autoSaved, setAutoSaved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
+  const [editingJerseyId, setEditingJerseyId] = useState<string | null>(null);
+  const [editingJerseyValue, setEditingJerseyValue] = useState<string>('');
   const isFirstRender = useRef(true);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDirty = useRef(false);
@@ -370,6 +372,15 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
       .map(s => s.player_id)
   ), [surclassements, match.team_id]);
 
+  // Map playerId → numéro de maillot effectif (target si surclassé, sinon jersey_number)
+  const jerseyOverrides = useMemo(() => {
+    const map: Record<string, number> = {};
+    surclassements
+      .filter(s => s.status === 'active' && s.target_team_id === match.team_id && s.target_jersey_number != null)
+      .forEach(s => { map[s.player_id] = s.target_jersey_number!; });
+    return map;
+  }, [surclassements, match.team_id]);
+
   const categoryPlayers = useMemo(() => {
     return players
       .filter(p =>
@@ -585,6 +596,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                                const surclassement = isSurclasse
                                  ? surclassements.find(s => s.player_id === player.id && s.status === 'active')
                                  : null;
+                               const displayJersey = surclassement?.target_jersey_number ?? player.jersey_number;
                                return (
                                  <motion.div
                                     key={player.id}
@@ -607,7 +619,60 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                                            </span>
                                          )}
                                        </div>
-                                       <p className="text-[9px] font-bold text-muted-foreground uppercase mt-1">#{player.jersey_number} • {player.position}</p>
+                                       <div
+                                         className="flex items-center gap-2 mt-1"
+                                         draggable={false}
+                                         onMouseDown={e => e.stopPropagation()}
+                                         onClick={e => e.stopPropagation()}
+                                       >
+                                         {editingJerseyId === player.id ? (
+                                           <input
+                                             type="number"
+                                             min={1} max={99}
+                                             autoFocus
+                                             draggable={false}
+                                             value={editingJerseyValue}
+                                             onChange={e => setEditingJerseyValue(e.target.value)}
+                                             onBlur={async () => {
+                                               const n = parseInt(editingJerseyValue, 10);
+                                               if (!isNaN(n) && n > 0 && n !== player.jersey_number) {
+                                                 try {
+                                                   await updatePlayer({ id: player.id, data: { jersey_number: n } as any });
+                                                 } catch {
+                                                   setEditingJerseyValue(String(player.jersey_number ?? ''));
+                                                   return;
+                                                 }
+                                               }
+                                               setEditingJerseyId(null);
+                                             }}
+                                             onKeyDown={async e => {
+                                               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                               if (e.key === 'Escape') setEditingJerseyId(null);
+                                             }}
+                                             className="w-14 px-1.5 py-0.5 text-[10px] font-black text-center rounded-lg border-2 border-primary bg-primary/5 focus:outline-none"
+                                           />
+                                         ) : (
+                                           <button
+                                             draggable={false}
+                                             onMouseDown={e => e.stopPropagation()}
+                                             onClick={e => {
+                                               e.stopPropagation();
+                                               e.preventDefault();
+                                               setEditingJerseyId(player.id);
+                                               setEditingJerseyValue(String(player.jersey_number ?? ''));
+                                             }}
+                                             className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 bg-white hover:border-primary hover:text-primary text-muted-foreground transition-all text-[9px] font-black uppercase cursor-pointer"
+                                             title="Modifier le numéro de maillot"
+                                           >
+                                             <Edit2 className="w-2.5 h-2.5 shrink-0" />
+                                             #{displayJersey ?? '—'}
+                                           </button>
+                                         )}
+                                         <span className="text-[9px] font-bold text-muted-foreground uppercase">• {player.position}</span>
+                                         {surclassement?.target_jersey_number != null && surclassement.target_jersey_number !== player.jersey_number && (
+                                           <span className="text-[8px] text-orange-400 font-black">(#{player.jersey_number} orig.)</span>
+                                         )}
+                                       </div>
                                     </div>
                                     <button
                                        onClick={() => toggleLineup(player)}
@@ -652,12 +717,13 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                          </div>
                       </div>
 
-                      <Pitch 
-                        positions={positions} 
-                        startingXI={startingXI} 
-                        getPlayerById={getPlayerById} 
+                      <Pitch
+                        positions={positions}
+                        startingXI={startingXI}
+                        getPlayerById={getPlayerById}
                         onSwap={handleSwap}
                         onRemove={removeFromPitch}
+                        jerseyOverrides={jerseyOverrides}
                       />
                    </div>
 
@@ -670,8 +736,10 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                          {substitutes.map(sid => {
                             const p = getPlayerById(sid);
                             if (!p) return null;
+                            const pSurc = surclassements.find(s => s.player_id === p.id && s.status === 'active');
+                            const pJersey = pSurc?.target_jersey_number ?? p.jersey_number;
                             return (
-                               <motion.div 
+                               <motion.div
                                  key={sid}
                                  draggable
                                  onDragStart={(e) => { e.dataTransfer.setData('playerId', sid); }}
@@ -682,7 +750,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                                   </div>
                                   <div className="min-w-0">
                                      <p className="text-[11px] font-black uppercase truncate leading-none">{p.full_name.split(' ').pop()}</p>
-                                     <p className="text-[8px] font-bold text-muted-foreground mt-1 uppercase">#{p.jersey_number} • {p.position}</p>
+                                     <p className="text-[8px] font-bold text-muted-foreground mt-1 uppercase">#{pJersey ?? '—'} • {p.position}</p>
                                   </div>
                                   <button onClick={() => toggleLineup(p)} className="ml-2 w-6 h-6 rounded-lg bg-red-50 text-red-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white">
                                      <X className="w-3.5 h-3.5 mx-auto" />
@@ -979,16 +1047,17 @@ const SectionTitle: React.FC<{ icon: React.ReactNode; title: string; subtitle: s
   </div>
 );
 
-const Pitch: React.FC<{ 
-  positions: { top: string; left: string; label: string }[]; 
-  startingXI?: string[]; 
-  getPlayerById?: (id: string) => any; 
-  isOpponent?: boolean; 
+const Pitch: React.FC<{
+  positions: { top: string; left: string; label: string }[];
+  startingXI?: string[];
+  getPlayerById?: (id: string) => any;
+  isOpponent?: boolean;
   opponentJerseyNumbers?: string[];
   onUpdateOpponentJersey?: (slotIndex: number, jersey: string) => void;
   onSwap?: (playerId: string, slotIndex: number) => void;
   onRemove?: (slotIndex: number) => void;
-}> = ({ positions, startingXI = [], getPlayerById, isOpponent, opponentJerseyNumbers, onUpdateOpponentJersey, onSwap, onRemove }) => {
+  jerseyOverrides?: Record<string, number>;
+}> = ({ positions, startingXI = [], getPlayerById, isOpponent, opponentJerseyNumbers, onUpdateOpponentJersey, onSwap, onRemove, jerseyOverrides = {} }) => {
   const {
     isDragging,
     draggedItem,
@@ -1059,6 +1128,7 @@ const Pitch: React.FC<{
       <AnimatePresence>
       {positions.map((pos, idx) => {
         const p = getPlayerById ? (startingXI[idx] ? getPlayerById(startingXI[idx]) : null) : null;
+        const pFieldJersey = p ? (jerseyOverrides[p.id] ?? p.jersey_number) : null;
         const displayTop = isOpponent ? (100 - parseFloat(pos.top)) + '%' : pos.top;
         const displayLeft = isOpponent ? (100 - parseFloat(pos.left)) + '%' : pos.left;
         const opponentJersey = opponentJerseyNumbers?.[idx] || '';
@@ -1136,11 +1206,11 @@ const Pitch: React.FC<{
                     src={(p.photo_url && p.photo_url !== 'null') ? p.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name)}&background=random&color=fff&size=200`} 
                     className="w-full h-full rounded-full object-cover p-1" 
                   />
-                  <Badge className="absolute -top-1 -right-1 bg-black text-white h-7 w-7 rounded-full flex items-center justify-center p-0 border-2 border-white text-[11px] font-black shadow-xl">{p.jersey_number}</Badge>
+                  <Badge className="absolute -top-1 -right-1 bg-black text-white h-7 w-7 rounded-full flex items-center justify-center p-0 border-2 border-white text-[11px] font-black shadow-xl">{pFieldJersey ?? '—'}</Badge>
                   {!isOpponent && onRemove && (
-                     <button 
+                     <button
                        onClick={(e) => { e.stopPropagation(); onRemove(idx); }}
-                       className="absolute -bottom-1 -right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover/player:opacity-100 transition-all hover:scale-110 shadow-lg"
+                       className="absolute -top-1 -left-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover/player:opacity-100 transition-all hover:scale-110 shadow-lg"
                      >
                         <X className="w-3.5 h-3.5" />
                      </button>
