@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { usePlayers } from '../../hooks/usePlayers';
 import { useTeams } from '../../hooks/useTeams';
 import { useClubData } from '../../hooks/useClubData';
+import { useCompetitions } from '../../hooks/useCompetitions';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -60,29 +61,29 @@ import SurclassementModal from './SurclassementModal';
 
 // ─── Fake player generation utilities ────────────────────────────────────────
 const _FIRST_NAMES = [
-  'Yassine','Mehdi','Soufiane','Omar','Amine','Hamza','Bilal','Rachid',
-  'Karim','Saad','Adil','Younes','Tarik','Zakaria','Hicham','Khalid',
-  'Abdellah','Nabil','Said','Driss','Mouad','Ayoub','Reda','Othmane',
-  'Ilyas','Marouane','Nassim','Walid','Badr','Sami','Anass','Imad',
-  'Hakim','Ryad','Taha','Brahim','Jawad','Aziz','Salim','Fouad',
+  'Yassine', 'Mehdi', 'Soufiane', 'Omar', 'Amine', 'Hamza', 'Bilal', 'Rachid',
+  'Karim', 'Saad', 'Adil', 'Younes', 'Tarik', 'Zakaria', 'Hicham', 'Khalid',
+  'Abdellah', 'Nabil', 'Said', 'Driss', 'Mouad', 'Ayoub', 'Reda', 'Othmane',
+  'Ilyas', 'Marouane', 'Nassim', 'Walid', 'Badr', 'Sami', 'Anass', 'Imad',
+  'Hakim', 'Ryad', 'Taha', 'Brahim', 'Jawad', 'Aziz', 'Salim', 'Fouad',
 ];
 const _LAST_NAMES = [
-  'Benali','El Amrani','Ouali','Benabdallah','Rami','Hajji','Benameur',
-  'Zine','Hassani','El Idrissi','Boukhari','Sebari','Naciri','El Housni',
-  'Khadhraoui','Derras','Benkhali','Lahmidi','Talbi','Bensalem','Arabi',
-  'Mouttaki','Faqir','Cherkaoui','Alaoui','Benjelloun','El Khamlichi',
-  'Boussairi','Rahimi','Tlemçani','El Yamani','Chaabi','Ghazali','Essafi',
+  'Benali', 'El Amrani', 'Ouali', 'Benabdallah', 'Rami', 'Hajji', 'Benameur',
+  'Zine', 'Hassani', 'El Idrissi', 'Boukhari', 'Sebari', 'Naciri', 'El Housni',
+  'Khadhraoui', 'Derras', 'Benkhali', 'Lahmidi', 'Talbi', 'Bensalem', 'Arabi',
+  'Mouttaki', 'Faqir', 'Cherkaoui', 'Alaoui', 'Benjelloun', 'El Khamlichi',
+  'Boussairi', 'Rahimi', 'Tlemçani', 'El Yamani', 'Chaabi', 'Ghazali', 'Essafi',
 ];
 const _POSITIONS = [
-  'GK','GK','GK',
-  'CB','CB','CB','CB','RB','RB','LB','LB',
-  'CDM','CDM','CM','CM','CAM',
-  'LW','LW','RW','RW','ST','ST',
+  'GK', 'GK', 'GK',
+  'CB', 'CB', 'CB', 'CB', 'RB', 'RB', 'LB', 'LB',
+  'CDM', 'CDM', 'CM', 'CM', 'CAM',
+  'LW', 'LW', 'RW', 'RW', 'ST', 'ST',
 ];
 const _CAT_YEAR: Record<string, number> = {
-  U7:2019, U9:2017, U11:2015, U13:2013, U14:2012,
-  U15:2011, U16:2010, U17:2009, U19:2007, U21:2005,
-  U23:2003, SENIOR:1998, PRO:1997, OTHER:1998,
+  U7: 2019, U9: 2017, U11: 2015, U13: 2013, U14: 2012,
+  U15: 2011, U16: 2010, U17: 2009, U19: 2007, U21: 2005,
+  U23: 2003, SENIOR: 1998, PRO: 1997, OTHER: 1998,
 };
 const _r = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const _pick = <T,>(arr: T[]): T => arr[_r(0, arr.length - 1)];
@@ -96,14 +97,14 @@ const _shuffle = <T,>(arr: T[]): T[] => {
 };
 
 function buildFakePlayers(category: string, teamId: string) {
-  const year    = _CAT_YEAR[category] ?? 1998;
-  const isYouth = ['U7','U9','U11'].includes(category);
-  const isMid   = ['U13','U14','U15','U16'].includes(category);
-  const isAdol  = ['U17','U19'].includes(category);
-  const feet    = ['right','right','right','left','left','both'] as const;
+  const year = _CAT_YEAR[category] ?? 1998;
+  const isYouth = ['U7', 'U9', 'U11'].includes(category);
+  const isMid = ['U13', 'U14', 'U15', 'U16'].includes(category);
+  const isAdol = ['U17', 'U19'].includes(category);
+  const feet = ['right', 'right', 'right', 'left', 'left', 'both'] as const;
 
   // Numéros 1-99 mélangés, on prend les 22 premiers
-  const jerseys  = _shuffle(Array.from({ length: 99 }, (_, i) => i + 1)).slice(0, 22);
+  const jerseys = _shuffle(Array.from({ length: 99 }, (_, i) => i + 1)).slice(0, 22);
   const positions = _shuffle([..._POSITIONS]);
 
   // Pool de noms : toutes les combinaisons prénom+nom possibles, mélangées
@@ -113,33 +114,33 @@ function buildFakePlayers(category: string, teamId: string) {
 
   return Array.from({ length: 22 }, (_, i) => {
     const birthYear = year + _r(-1, 1);
-    const birthDate = `${birthYear}-${String(_r(1,12)).padStart(2,'0')}-${String(_r(1,28)).padStart(2,'0')}`;
+    const birthDate = `${birthYear}-${String(_r(1, 12)).padStart(2, '0')}-${String(_r(1, 28)).padStart(2, '0')}`;
     let height: number, weight: number;
-    if (isYouth)      { height = _r(110,135); weight = _r(25,40); }
-    else if (isMid)   { height = _r(140,165); weight = _r(38,58); }
-    else if (isAdol)  { height = _r(160,182); weight = _r(55,72); }
-    else              { height = _r(170,192); weight = _r(65,85); }
+    if (isYouth) { height = _r(110, 135); weight = _r(25, 40); }
+    else if (isMid) { height = _r(140, 165); weight = _r(38, 58); }
+    else if (isAdol) { height = _r(160, 182); weight = _r(55, 72); }
+    else { height = _r(170, 192); weight = _r(65, 85); }
     return {
-      full_name:      namePool[i],
-      jersey_number:  jerseys[i],
-      position:       positions[i],
-      birth_date:     birthDate,
-      nationality:    'Maroc',
+      full_name: namePool[i],
+      jersey_number: jerseys[i],
+      position: positions[i],
+      birth_date: birthDate,
+      nationality: 'Maroc',
       height,
       weight,
-      preferred_foot: _pick([...feet]) as 'right'|'left'|'both',
-      photo_url:      null,
-      team_id:        teamId,
-      category:       category === 'PRO' ? 'SENIOR' : category,
-      is_active:      true,
+      preferred_foot: _pick([...feet]) as 'right' | 'left' | 'both',
+      photo_url: null,
+      team_id: teamId,
+      category: category === 'PRO' ? 'SENIOR' : category,
+      is_active: true,
     };
   });
 }
 
 // ─── Planning utilities ───────────────────────────────────────────────────────
 const FR_DAYS_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-const FR_DAYS_FULL  = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-const FR_MONTHS     = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
+const FR_DAYS_FULL = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+const FR_MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
 const getWeekDays = (offset: number): string[] => {
   const today = new Date();
@@ -164,20 +165,20 @@ const fmtFull = (iso: string) => {
 
 type Attendance = 'present' | 'absent' | 'blesse' | 'suspendu';
 interface PlanningEntry { attendance: Attendance; rating: number; notes: string; }
-interface PlanningData  { [playerId: string]: { [isoDate: string]: PlanningEntry } }
+interface PlanningData { [playerId: string]: { [isoDate: string]: PlanningEntry } }
 interface ScheduleModal { players: Player[]; days: string[]; }
 
 const ATTENDANCE_OPTS: { value: Attendance; label: string; color: string }[] = [
-  { value: 'present',   label: '✅ Présent',   color: 'emerald' },
-  { value: 'absent',    label: '❌ Absent',    color: 'red'     },
-  { value: 'blesse',    label: '🤕 Blessé',    color: 'orange'  },
-  { value: 'suspendu',  label: '🚫 Suspendu',  color: 'amber'   },
+  { value: 'present', label: '✅ Présent', color: 'emerald' },
+  { value: 'absent', label: '❌ Absent', color: 'red' },
+  { value: 'blesse', label: '🤕 Blessé', color: 'orange' },
+  { value: 'suspendu', label: '🚫 Suspendu', color: 'amber' },
 ];
 
 const ATTENDANCE_BG: Record<Attendance, string> = {
-  present:  'bg-emerald-500',
-  absent:   'bg-red-500',
-  blesse:   'bg-orange-500',
+  present: 'bg-emerald-500',
+  absent: 'bg-red-500',
+  blesse: 'bg-orange-500',
   suspendu: 'bg-amber-500',
 };
 
@@ -196,11 +197,11 @@ const PlayerManagement: React.FC = () => {
   const queryClient = useQueryClient();
 
   // ─── Generate fake players ────────────────────────────────────────────────
-  const [genModal, setGenModal]       = useState(false);
+  const [genModal, setGenModal] = useState(false);
   const [genCategory, setGenCategory] = useState('');
-  const [genTeamId, setGenTeamId]     = useState('');
+  const [genTeamId, setGenTeamId] = useState('');
   const [genProgress, setGenProgress] = useState(0);
-  const [genRunning, setGenRunning]   = useState(false);
+  const [genRunning, setGenRunning] = useState(false);
 
   const genTeams = useMemo(
     () => teams.filter(t => t.category === genCategory),
@@ -250,7 +251,7 @@ const PlayerManagement: React.FC = () => {
 
   const handleOpenSurclassement = (player: Player) => setSurclassementPlayer(player);
   const handleCloseSurclassement = () => setSurclassementPlayer(null);
-  
+
   // Settings sync
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>(mainClub?.preferred_view_mode || 'list');
   const [pageSize, setPageSize] = useState(mainClub?.pagination_limit || 10);
@@ -263,7 +264,7 @@ const PlayerManagement: React.FC = () => {
 
   const isLoading = playersLoading || teamsLoading || clubLoading;
   const isError = playersError || teamsError;
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -321,12 +322,127 @@ const PlayerManagement: React.FC = () => {
   // Player Stats State
   const [playerStats, setPlayerStats] = useState<any>(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  const { leagues } = useCompetitions();
+  const [selectedSeasonFilter, setSelectedSeasonFilter] = useState('ALL');
+  const [selectedLeagueFilter, setSelectedLeagueFilter] = useState('ALL');
+  const [selectedMatchFilter, setSelectedMatchFilter] = useState('ALL');
+  const [rawPlayerEvents, setRawPlayerEvents] = useState<any[]>([]);
+  const [rawPlayerMatches, setRawPlayerMatches] = useState<any[]>([]);
+
+  const { participatedMatches, participatedLeagues, participatedSeasons } = useMemo(() => {
+    if (!rawPlayerMatches || !selectedPlayer) return { participatedMatches: [], participatedLeagues: [], participatedSeasons: [] };
+
+    const pMatches: any[] = [];
+    const leagueIds = new Set<string>();
+
+    rawPlayerMatches.forEach(m => {
+      const lineup = m.lineup as any;
+      if (lineup?.startingXI?.includes(selectedPlayer.id) || lineup?.substitutes?.includes(selectedPlayer.id)) {
+        pMatches.push(m);
+        if (m.league_id) leagueIds.add(m.league_id);
+      }
+    });
+
+    rawPlayerEvents?.forEach(e => {
+      if (!pMatches.some(m => m.id === e.match_id)) {
+        const m = rawPlayerMatches.find(m => m.id === e.match_id);
+        if (m) {
+          pMatches.push(m);
+          if (m.league_id) leagueIds.add(m.league_id);
+        }
+      }
+    });
+
+    const pLeagues = leagues?.filter((l: any) => leagueIds.has(l.id)) || [];
+    const seasons = new Set<string>();
+    pLeagues.forEach(l => { if (l.season) seasons.add(l.season) });
+
+    return {
+      participatedMatches: pMatches,
+      participatedLeagues: pLeagues,
+      participatedSeasons: Array.from(seasons)
+    };
+  }, [rawPlayerMatches, rawPlayerEvents, selectedPlayer, leagues]);
+
+  const computedPlayerStats = useMemo(() => {
+    if (!rawPlayerEvents && !rawPlayerMatches) return null;
+
+    let eventsToUse = rawPlayerEvents || [];
+    let matchesToUse = rawPlayerMatches || [];
+
+    if (selectedSeasonFilter !== 'ALL') {
+      const validLeagueIds = leagues?.filter(l => l.season === selectedSeasonFilter).map(l => l.id) || [];
+      eventsToUse = eventsToUse.filter(e => validLeagueIds.includes(e.matches?.league_id));
+      matchesToUse = matchesToUse.filter(m => validLeagueIds.includes(m.league_id));
+    }
+
+    if (selectedLeagueFilter !== 'ALL') {
+      eventsToUse = eventsToUse.filter(e => e.matches?.league_id === selectedLeagueFilter);
+      matchesToUse = matchesToUse.filter(m => m.league_id === selectedLeagueFilter);
+    }
+
+    if (selectedMatchFilter !== 'ALL') {
+      eventsToUse = eventsToUse.filter(e => e.match_id === selectedMatchFilter);
+      matchesToUse = matchesToUse.filter(m => m.id === selectedMatchFilter);
+    }
+
+    if (viewState === 'VIEW') {
+      let matchesPlayed = 0;
+      let minutesPlayed = 0;
+
+      matchesToUse.forEach(match => {
+        const lineup = match.lineup as { startingXI?: string[]; substitutes?: string[] } | null;
+        if (lineup?.startingXI?.includes(selectedPlayer?.id) || lineup?.substitutes?.includes(selectedPlayer?.id)) {
+          matchesPlayed++;
+          const isStarter = lineup.startingXI?.includes(selectedPlayer?.id);
+          const matchDuration = (match.half_duration_minutes || 45) * 2;
+          if (isStarter) {
+            minutesPlayed += matchDuration;
+          } else {
+            minutesPlayed += 30;
+          }
+        }
+      });
+
+      eventsToUse.forEach((e: any) => {
+        if (e.type === 'substitution') {
+          if (e.player_id === selectedPlayer?.id) {
+            minutesPlayed -= 15;
+          } else if (e.related_player_id === selectedPlayer?.id) {
+            minutesPlayed += 15;
+          }
+        }
+      });
+
+      return {
+        matches: matchesPlayed,
+        minutes: Math.max(0, minutesPlayed),
+        goals: eventsToUse.filter((e: any) => e.type === 'goal').length || 0,
+        assists: eventsToUse.filter((e: any) => e.type === 'assist').length || 0,
+        yellowCards: eventsToUse.filter((e: any) => e.type === 'yellow_card').length || 0,
+        redCards: eventsToUse.filter((e: any) => e.type === 'red_card').length || 0,
+      };
+    } else if (viewState === 'STATS') {
+      return {
+        matches: eventsToUse.length || 0,
+        goals: eventsToUse.filter((e: any) => e.type === 'goal').length || 0,
+        assists: eventsToUse.filter((e: any) => e.type === 'goal' && e.related_player_id === selectedPlayer?.id).length || 0,
+        yellowCards: eventsToUse.filter((e: any) => e.type === 'yellow_card').length || 0,
+        redCards: eventsToUse.filter((e: any) => e.type === 'red_card').length || 0,
+        substitutions: eventsToUse.filter((e: any) => e.type === 'substitution').length || 0,
+      };
+    }
+
+    return null;
+  }, [rawPlayerEvents, rawPlayerMatches, selectedLeagueFilter, viewState, selectedPlayer]);
+
+  const displayStats = computedPlayerStats || playerStats;
 
   // Planning State
-  const [weekOffset, setWeekOffset]       = useState(0);
-  const [selectedDays, setSelectedDays]   = useState<string[]>([]);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [scheduleModal, setScheduleModal] = useState<ScheduleModal | null>(null);
-  const [planningData, setPlanningData]   = useState<PlanningData>(() => {
+  const [planningData, setPlanningData] = useState<PlanningData>(() => {
     try { return JSON.parse(localStorage.getItem('fus_planning') || '{}'); }
     catch { return {}; }
   });
@@ -415,8 +531,8 @@ const PlayerManagement: React.FC = () => {
 
   const filteredPlayers = useMemo(() => {
     return players.filter(p => {
-      const matchesSearch = p.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           p.jersey_number?.toString().includes(searchQuery);
+      const matchesSearch = p.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.jersey_number?.toString().includes(searchQuery);
       const matchesPosition = positionFilter === 'ALL' || p.position?.toUpperCase() === positionFilter.toUpperCase();
       const playerCategory = teams.find(t => t.id === p.team_id)?.category;
       const matchesCategory = categoryFilter === 'ALL' || playerCategory?.toUpperCase() === categoryFilter.toUpperCase();
@@ -501,23 +617,23 @@ const PlayerManagement: React.FC = () => {
     setSelectedPlayer(player);
     setViewState('VIEW');
     setLoadingStats(true);
-    
+
     // Fetch player stats from match_events and matches
     try {
       const { data: events } = await supabase
         .from('match_events')
-        .select('*')
+        .select('*, matches(league_id)')
         .eq('player_id', player.id);
-      
+
       const { data: playerMatches } = await supabase
         .from('matches')
-        .select('lineup, status, half_duration_minutes')
+        .select('id, lineup, status, half_duration_minutes, league_id, match_date, clubs!matches_opponent_id_fkey(name)')
         .eq('status', 'finished');
-      
+
       // Calculate matches played from lineup data
       let matchesPlayed = 0;
       let minutesPlayed = 0;
-      
+
       playerMatches?.forEach(match => {
         const lineup = match.lineup as { startingXI?: string[]; substitutes?: string[] } | null;
         if (lineup?.startingXI?.includes(player.id) || lineup?.substitutes?.includes(player.id)) {
@@ -533,7 +649,7 @@ const PlayerManagement: React.FC = () => {
           }
         }
       });
-      
+
       // Check for substitution events to adjust minutes
       events?.forEach((e: any) => {
         if (e.type === 'substitution') {
@@ -546,7 +662,7 @@ const PlayerManagement: React.FC = () => {
           }
         }
       });
-      
+
       const stats = {
         matches: matchesPlayed,
         minutes: Math.max(0, minutesPlayed),
@@ -555,8 +671,13 @@ const PlayerManagement: React.FC = () => {
         yellowCards: events?.filter((e: any) => e.type === 'yellow_card').length || 0,
         redCards: events?.filter((e: any) => e.type === 'red_card').length || 0,
       };
-      
+
       setPlayerStats(stats);
+      setRawPlayerEvents(events || []);
+      setRawPlayerMatches(playerMatches || []);
+      setSelectedSeasonFilter('ALL');
+      setSelectedLeagueFilter('ALL');
+      setSelectedMatchFilter('ALL');
     } catch (error) {
       console.error('Error fetching stats:', error);
       setPlayerStats({ matches: 0, minutes: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0 });
@@ -569,14 +690,19 @@ const PlayerManagement: React.FC = () => {
     setSelectedPlayer(player);
     setLoadingStats(true);
     setViewState('STATS');
-    
+
     // Fetch player stats from match_events
     try {
       const { data: events } = await supabase
         .from('match_events')
-        .select('*')
+        .select('*, matches(league_id)')
         .eq('player_id', player.id);
-      
+
+      const { data: playerMatches } = await supabase
+        .from('matches')
+        .select('id, lineup, status, half_duration_minutes, league_id, match_date, clubs!matches_opponent_id_fkey(name)')
+        .eq('status', 'finished');
+
       const stats = {
         matches: events?.length || 0,
         goals: events?.filter((e: any) => e.type === 'goal').length || 0,
@@ -585,8 +711,13 @@ const PlayerManagement: React.FC = () => {
         redCards: events?.filter((e: any) => e.type === 'red_card').length || 0,
         substitutions: events?.filter((e: any) => e.type === 'substitution').length || 0,
       };
-      
+
       setPlayerStats(stats);
+      setRawPlayerEvents(events || []);
+      setRawPlayerMatches(playerMatches || []);
+      setSelectedSeasonFilter('ALL');
+      setSelectedLeagueFilter('ALL');
+      setSelectedMatchFilter('ALL');
     } catch (error) {
       console.error('Error fetching stats:', error);
       setPlayerStats({ matches: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, substitutions: 0 });
@@ -631,7 +762,7 @@ const PlayerManagement: React.FC = () => {
         <div className="h-16 w-full rounded-2xl bg-secondary/20 border border-secondary/50 animate-pulse" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-             <Skeleton key={i} className="h-64 w-full rounded-3xl" />
+            <Skeleton key={i} className="h-64 w-full rounded-3xl" />
           ))}
         </div>
       </div>
@@ -641,10 +772,10 @@ const PlayerManagement: React.FC = () => {
   if (isError) {
     return (
       <div className="min-h-[600px] flex items-center justify-center">
-        <ErrorEmptyState 
-           title="Accès au Roster Impossible"
-           message="Nous n'avons pas pu charger la liste des joueurs. Vérifiez la table 'players' dans votre base."
-           onRetry={() => window.location.reload()}
+        <ErrorEmptyState
+          title="Accès au Roster Impossible"
+          message="Nous n'avons pas pu charger la liste des joueurs. Vérifiez la table 'players' dans votre base."
+          onRetry={() => window.location.reload()}
         />
       </div>
     );
@@ -668,7 +799,7 @@ const PlayerManagement: React.FC = () => {
                   <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Effectif Joueurs</h2>
                   <p className="text-muted-foreground text-xs sm:text-sm font-medium">Gérez vos athlètes et leurs données physiques</p>
                 </div>
-                
+
                 {/* Main Action Buttons - Wrap on mobile */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {/* View Toggle */}
@@ -780,37 +911,35 @@ const PlayerManagement: React.FC = () => {
             <div className="flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white border shadow-sm">
               <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Rechercher par nom ou numéro..." 
+                <Input
+                  placeholder="Rechercher par nom ou numéro..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 h-10 sm:h-11 bg-secondary/30 border-transparent focus:bg-white transition-all rounded-xl font-medium text-sm"
                 />
               </div>
-              
+
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
                 <div className="flex bg-secondary/30 p-1 rounded-xl w-full overflow-x-auto no-scrollbar">
                   {(['ALL', ...PLAYER_CATEGORIES] as const).map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setCategoryFilter(cat)}
-                      className={`flex-1 sm:flex-none px-2 sm:px-3 py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                        categoryFilter === cat ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                      className={`flex-1 sm:flex-none px-2 sm:px-3 py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${categoryFilter === cat ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        }`}
                     >
                       {cat}
                     </button>
                   ))}
                 </div>
-                
+
                 <div className="flex bg-secondary/30 p-1 rounded-xl w-full sm:w-auto">
                   {(['ALL', 'GK', 'DF', 'MF', 'FW'] as const).map((pos) => (
                     <button
                       key={pos}
                       onClick={() => setPositionFilter(pos)}
-                      className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
-                        positionFilter === pos ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                      className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${positionFilter === pos ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                        }`}
                     >
                       {pos}
                     </button>
@@ -836,81 +965,80 @@ const PlayerManagement: React.FC = () => {
                         <CardContent className="p-0">
                           {/* Card Header Illustration */}
                           <div className="h-24 bg-gradient-to-br from-secondary to-secondary/50 relative overflow-hidden">
-                             {/* Club Logo + Category Badge stacked */}
-                             {mainClub?.logo_url && (
-                               <div className="absolute top-3 left-3 flex flex-col items-center gap-2">
-                                 <div className="w-16 h-16 rounded-full bg-white shadow-lg p-2">
-                                   <img src={mainClub.logo_url} alt="Club" className="w-full h-full object-contain rounded-full" />
-                                 </div>
-                                 <Badge className="bg-white/90 backdrop-blur-sm text-primary font-black text-[10px] uppercase tracking-widest border-none shadow-md px-3 py-1">
-                                   {teams.find(t => t.id === player.team_id)?.category || 'N/A'}
-                                 </Badge>
-                               </div>
-                             )}
-                             <div className="absolute top-3 right-4 text-3xl font-black italic text-black/5 select-none transition-all group-hover:text-primary/10">
-                                {player.jersey_number}
-                             </div>
-                          </div>
-                          
-                          <div className="px-6 pb-6 -mt-8 relative z-10 text-center">
-                             <div className="w-20 h-20 rounded-2xl bg-white border-4 border-white shadow-xl overflow-hidden mx-auto mb-4 group-hover:scale-105 transition-transform duration-500">
-                                <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} alt={player.full_name} className="w-full h-full object-cover" />
-                             </div>
-                             
-                             <h3 className="font-black text-lg tracking-tight uppercase group-hover:text-primary transition-colors truncate">{player.full_name}</h3>
-                             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1 mb-6">{player.position}</p>
-
-                             {/* Badge surclassement actif */}
-                             {activeByPlayerId[player.id] && (
-                               <div className="mb-3 flex items-center justify-center gap-1.5 bg-orange-50 border border-orange-200 rounded-xl px-3 py-1.5">
-                                 <ArrowUpCircle className="w-3 h-3 text-orange-500" />
-                                 <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">
-                                   SURCLASSÉ → {activeByPlayerId[player.id].target_category}
-                                 </span>
-                               </div>
-                             )}
-
-                             <div className="flex items-center justify-between pt-4 border-t border-secondary">
-                                <div className="flex gap-2">
-                                  <Button variant="secondary" size="icon" onClick={() => handleViewPlayer(player)} className="h-9 w-9 rounded-xl bg-secondary/50 hover:bg-primary hover:text-white transition-all">
-                                    <Eye className="w-4 h-4" />
-                                  </Button>
-                                  <Button variant="secondary" size="icon" onClick={() => handleViewStats(player)} className="h-9 w-9 rounded-xl bg-secondary/50 hover:bg-emerald-500 hover:text-white transition-all" title="Statistiques">
-                                    <BarChart3 className="w-4 h-4" />
-                                  </Button>
-                                  <Button variant="secondary" size="icon" onClick={() => handleOpenEdit(player)} className="h-9 w-9 rounded-xl bg-secondary/50 hover:bg-primary hover:text-white transition-all">
-                                    <Edit2 className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    variant="secondary"
-                                    size="icon"
-                                    onClick={() => handleOpenSurclassement(player)}
-                                    title={activeByPlayerId[player.id] ? 'Réintégrer' : 'Surclasser'}
-                                    className={`h-9 w-9 rounded-xl transition-all ${
-                                      activeByPlayerId[player.id]
-                                        ? 'bg-orange-100 text-orange-600 hover:bg-orange-200'
-                                        : 'bg-secondary/50 hover:bg-orange-500 hover:text-white'
-                                    }`}
-                                  >
-                                    {activeByPlayerId[player.id]
-                                      ? <RotateCcw className="w-4 h-4" />
-                                      : <ArrowUpCircle className="w-4 h-4" />
-                                    }
-                                  </Button>
+                            {/* Club Logo + Category Badge stacked */}
+                            {mainClub?.logo_url && (
+                              <div className="absolute top-3 left-3 flex flex-col items-center gap-2">
+                                <div className="w-16 h-16 rounded-full bg-white shadow-lg p-2">
+                                  <img src={mainClub.logo_url} alt="Club" className="w-full h-full object-contain rounded-full" />
                                 </div>
-                                                {selectionMode ? (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(player.id) ? n.delete(player.id) : n.add(player.id); return n; }); }}
-                                    className={`h-9 w-9 rounded-xl flex items-center justify-center transition-all ${selectedIds.has(player.id) ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500'}`}
-                                  >
-                                    {selectedIds.has(player.id) ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 rounded border-2 border-current" />}
-                                  </button>
-                                ) : (
+                                <Badge className="bg-white/90 backdrop-blur-sm text-primary font-black text-[10px] uppercase tracking-widest border-none shadow-md px-3 py-1">
+                                  {teams.find(t => t.id === player.team_id)?.category || 'N/A'}
+                                </Badge>
+                              </div>
+                            )}
+                            <div className="absolute top-3 right-4 text-3xl font-black italic text-black/5 select-none transition-all group-hover:text-primary/10">
+                              {player.jersey_number}
+                            </div>
+                          </div>
+
+                          <div className="px-6 pb-6 -mt-8 relative z-10 text-center">
+                            <div className="w-20 h-20 rounded-2xl bg-white border-4 border-white shadow-xl overflow-hidden mx-auto mb-4 group-hover:scale-105 transition-transform duration-500">
+                              <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} alt={player.full_name} className="w-full h-full object-cover" />
+                            </div>
+
+                            <h3 className="font-black text-lg tracking-tight uppercase group-hover:text-primary transition-colors truncate">{player.full_name}</h3>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1 mb-6">{player.position}</p>
+
+                            {/* Badge surclassement actif */}
+                            {activeByPlayerId[player.id] && (
+                              <div className="mb-3 flex items-center justify-center gap-1.5 bg-orange-50 border border-orange-200 rounded-xl px-3 py-1.5">
+                                <ArrowUpCircle className="w-3 h-3 text-orange-500" />
+                                <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">
+                                  SURCLASSÉ → {activeByPlayerId[player.id].target_category}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between pt-4 border-t border-secondary">
+                              <div className="flex gap-2">
+                                <Button variant="secondary" size="icon" onClick={() => handleViewPlayer(player)} className="h-9 w-9 rounded-xl bg-secondary/50 hover:bg-primary hover:text-white transition-all">
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                                <Button variant="secondary" size="icon" onClick={() => handleViewStats(player)} className="h-9 w-9 rounded-xl bg-secondary/50 hover:bg-emerald-500 hover:text-white transition-all" title="Statistiques">
+                                  <BarChart3 className="w-4 h-4" />
+                                </Button>
+                                <Button variant="secondary" size="icon" onClick={() => handleOpenEdit(player)} className="h-9 w-9 rounded-xl bg-secondary/50 hover:bg-primary hover:text-white transition-all">
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="icon"
+                                  onClick={() => handleOpenSurclassement(player)}
+                                  title={activeByPlayerId[player.id] ? 'Réintégrer' : 'Surclasser'}
+                                  className={`h-9 w-9 rounded-xl transition-all ${activeByPlayerId[player.id]
+                                      ? 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                                      : 'bg-secondary/50 hover:bg-orange-500 hover:text-white'
+                                    }`}
+                                >
+                                  {activeByPlayerId[player.id]
+                                    ? <RotateCcw className="w-4 h-4" />
+                                    : <ArrowUpCircle className="w-4 h-4" />
+                                  }
+                                </Button>
+                              </div>
+                              {selectionMode ? (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); n.has(player.id) ? n.delete(player.id) : n.add(player.id); return n; }); }}
+                                  className={`h-9 w-9 rounded-xl flex items-center justify-center transition-all ${selectedIds.has(player.id) ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500'}`}
+                                >
+                                  {selectedIds.has(player.id) ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 rounded border-2 border-current" />}
+                                </button>
+                              ) : (
                                 <Button variant="ghost" size="icon" onClick={() => deletePlayer(player.id)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
-                                )}
-                             </div>
+                              )}
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -942,18 +1070,18 @@ const PlayerManagement: React.FC = () => {
                       <tr key={player.id} className="group hover:bg-secondary/5 transition-colors">
                         <td className="px-8 py-3">
                           <div className="flex items-center gap-4">
-                             <div className="w-10 h-10 rounded-xl bg-secondary/30 overflow-hidden border-2 border-white shadow-md">
-                                <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} className="w-full h-full object-cover" />
-                             </div>
-                             <div>
-                                <p className="font-black text-sm uppercase italic tracking-tighter leading-none">{player.full_name}</p>
-                                <p className="text-[10px] font-bold text-muted-foreground mt-1 uppercase">#{player.jersey_number}</p>
-                             </div>
+                            <div className="w-10 h-10 rounded-xl bg-secondary/30 overflow-hidden border-2 border-white shadow-md">
+                              <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} className="w-full h-full object-cover" />
+                            </div>
+                            <div>
+                              <p className="font-black text-sm uppercase italic tracking-tighter leading-none">{player.full_name}</p>
+                              <p className="text-[10px] font-bold text-muted-foreground mt-1 uppercase">#{player.jersey_number}</p>
+                            </div>
                           </div>
                         </td>
                         <td className="py-3 text-xs font-bold">{player.nationality}</td>
                         <td className="py-3">
-                           <Badge variant="outline" className="text-[9px] font-black border-primary/20 text-primary uppercase">{player.position}</Badge>
+                          <Badge variant="outline" className="text-[9px] font-black border-primary/20 text-primary uppercase">{player.position}</Badge>
                         </td>
                         <td className="py-3">
                           <div className="flex items-center gap-2">
@@ -969,47 +1097,46 @@ const PlayerManagement: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-8 py-3 text-right">
-                           <div className="flex items-center justify-end gap-1.5">
-                              {selectionMode ? (
-                                <button
-                                  onClick={() => setSelectedIds(prev => { const n = new Set(prev); n.has(player.id) ? n.delete(player.id) : n.add(player.id); return n; })}
-                                  className={`h-9 w-9 rounded-xl flex items-center justify-center transition-all ${selectedIds.has(player.id) ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500'}`}
-                                >
-                                  {selectedIds.has(player.id) ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 rounded border-2 border-current" />}
-                                </button>
-                              ) : (
-                              <>
-                              <Button variant="ghost" size="icon" onClick={() => handleViewPlayer(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
-                                 <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleViewStats(player)} className="h-9 w-9 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-md transition-all" title="Statistiques">
-                                 <BarChart3 className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
-                                 <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleOpenSurclassement(player)}
-                                title={activeByPlayerId[player.id] ? 'Réintégrer' : 'Surclasser'}
-                                className={`h-9 w-9 rounded-xl transition-all ${
-                                  activeByPlayerId[player.id]
-                                    ? 'text-orange-500 bg-orange-50 hover:bg-orange-100'
-                                    : 'text-muted-foreground hover:text-orange-500 hover:bg-orange-50'
-                                }`}
+                          <div className="flex items-center justify-end gap-1.5">
+                            {selectionMode ? (
+                              <button
+                                onClick={() => setSelectedIds(prev => { const n = new Set(prev); n.has(player.id) ? n.delete(player.id) : n.add(player.id); return n; })}
+                                className={`h-9 w-9 rounded-xl flex items-center justify-center transition-all ${selectedIds.has(player.id) ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500'}`}
                               >
-                                {activeByPlayerId[player.id]
-                                  ? <RotateCcw className="w-4 h-4" />
-                                  : <ArrowUpCircle className="w-4 h-4" />
-                                }
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => deletePlayer(player.id)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
-                                 <Trash2 className="w-4 h-4" />
-                              </Button>
+                                {selectedIds.has(player.id) ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 rounded border-2 border-current" />}
+                              </button>
+                            ) : (
+                              <>
+                                <Button variant="ghost" size="icon" onClick={() => handleViewPlayer(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleViewStats(player)} className="h-9 w-9 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-md transition-all" title="Statistiques">
+                                  <BarChart3 className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleOpenSurclassement(player)}
+                                  title={activeByPlayerId[player.id] ? 'Réintégrer' : 'Surclasser'}
+                                  className={`h-9 w-9 rounded-xl transition-all ${activeByPlayerId[player.id]
+                                      ? 'text-orange-500 bg-orange-50 hover:bg-orange-100'
+                                      : 'text-muted-foreground hover:text-orange-500 hover:bg-orange-50'
+                                    }`}
+                                >
+                                  {activeByPlayerId[player.id]
+                                    ? <RotateCcw className="w-4 h-4" />
+                                    : <ArrowUpCircle className="w-4 h-4" />
+                                  }
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => deletePlayer(player.id)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
                               </>
-                              )}
-                           </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1021,22 +1148,22 @@ const PlayerManagement: React.FC = () => {
             {/* Pagination Controls */}
             {totalPages > 1 && (
               <div className="flex flex-col md:flex-row items-center justify-between gap-6 pt-6">
-                 <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
-                    Affichage {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredPlayers.length)} sur {filteredPlayers.length}
-                 </div>
-                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} className="w-9 h-9 rounded-xl bg-white border-secondary"><ChevronLeft className="w-4 h-4" /></Button>
-                    {Array.from({ length: totalPages }).map((_, i) => (
-                      <Button key={i} variant={currentPage === i + 1 ? 'default' : 'ghost'} size="sm" onClick={() => setCurrentPage(i + 1)} className={`w-9 h-9 rounded-xl font-black text-[11px] ${currentPage === i + 1 ? 'shadow-lg shadow-primary/20 bg-primary' : 'bg-white border-secondary border'}`}>{i + 1}</Button>
-                    ))}
-                    <Button variant="outline" size="icon" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} className="w-9 h-9 rounded-xl bg-white border-secondary"><ChevronRight className="w-4 h-4" /></Button>
-                 </div>
-                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase text-muted-foreground opacity-50">Par page:</span>
-                    <select value={pageSize} onChange={(e) => setPageSize(parseInt(e.target.value))} className="h-9 w-16 rounded-xl bg-white border border-secondary font-black text-xs px-2 appearance-none cursor-pointer text-center">
-                       {[10, 15, 20, 25, 50].map(v => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                 </div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-60">
+                  Affichage {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredPlayers.length)} sur {filteredPlayers.length}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} className="w-9 h-9 rounded-xl bg-white border-secondary"><ChevronLeft className="w-4 h-4" /></Button>
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <Button key={i} variant={currentPage === i + 1 ? 'default' : 'ghost'} size="sm" onClick={() => setCurrentPage(i + 1)} className={`w-9 h-9 rounded-xl font-black text-[11px] ${currentPage === i + 1 ? 'shadow-lg shadow-primary/20 bg-primary' : 'bg-white border-secondary border'}`}>{i + 1}</Button>
+                  ))}
+                  <Button variant="outline" size="icon" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} className="w-9 h-9 rounded-xl bg-white border-secondary"><ChevronRight className="w-4 h-4" /></Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase text-muted-foreground opacity-50">Par page:</span>
+                  <select value={pageSize} onChange={(e) => setPageSize(parseInt(e.target.value))} className="h-9 w-16 rounded-xl bg-white border border-secondary font-black text-xs px-2 appearance-none cursor-pointer text-center">
+                    {[10, 15, 20, 25, 50].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
               </div>
             )}
           </motion.div>
@@ -1049,177 +1176,177 @@ const PlayerManagement: React.FC = () => {
             className="max-w-4xl mx-auto"
           >
             <div className="flex items-center gap-6 mb-10">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setViewState('LIST')} 
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setViewState('LIST')}
                 className="w-14 h-14 rounded-2xl bg-white border shadow-sm hover:bg-secondary transition-all"
               >
                 <X className="w-6 h-6 rotate-90" />
               </Button>
               <div>
                 <h3 className="text-4xl font-black tracking-tight uppercase italic">
-                   {selectedPlayer ? 'Modifier le Profil' : 'Nouvelle Signature'}
+                  {selectedPlayer ? 'Modifier le Profil' : 'Nouvelle Signature'}
                 </h3>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] mt-1">Enregistrement Passeport Joueur</p>
               </div>
             </div>
 
             <Card className="border-none shadow-2xl rounded-[3.5rem] bg-white overflow-hidden">
-               <CardContent className="p-10 space-y-12">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-10 items-start">
-                    {/* Photo Upload Area */}
-                    <div className="space-y-4">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Photo Officielle</label>
-                      <div className="relative group">
-                        <input 
-                          type="file" 
-                          id="player-photo" 
-                          className="hidden" 
-                          accept="image/*"
-                          onChange={handlePhotoUpload}
-                        />
-                        <label 
-                          htmlFor="player-photo" 
-                          className="block aspect-square w-full rounded-[2.5rem] bg-secondary/30 border-2 border-dashed border-secondary hover:border-primary/50 transition-all cursor-pointer overflow-hidden group shadow-inner"
-                        >
-                          {(formData.photo_url && formData.photo_url !== 'null') ? (
-                            <img src={formData.photo_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="Preview" />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                               <Camera className={`w-10 h-10 ${isUploading ? 'animate-bounce text-primary' : 'text-muted-foreground opacity-30'}`} />
-                               <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{isUploading ? 'Transfert...' : 'Choisir une photo'}</span>
-                            </div>
-                          )}
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="md:col-span-2 space-y-8">
-                      <div className="space-y-3">
-                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Nom Complet de l'Athlète</label>
-                         <Input 
-                            value={formData.full_name}
-                            onChange={e => setFormData({...formData, full_name: e.target.value})}
-                            placeholder="ex. Cristiano Ronaldo"
-                            className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
-                          />
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-6">
-                         <div className="space-y-3">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Numéro de Dossard</label>
-                            <Input 
-                               type="number"
-                               value={formData.jersey_number}
-                               onChange={e => setFormData({...formData, jersey_number: parseInt(e.target.value) || 0})}
-                               className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
-                            />
-                         </div>
-                         <div className="space-y-3">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Catégorie d'Âge</label>
-                             <select 
-                               value={formData.category}
-                               onChange={e => setFormData({...formData, category: e.target.value as any, team_id: ''})}
-                               className="w-full h-16 rounded-2xl bg-secondary/30 border-none font-bold px-8 text-lg outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
-                             >
-                                {PLAYER_CATEGORIES.map(cat => (
-                                  <option key={cat} value={cat}>{cat}</option>
-                                ))}
-                                <option value="PRO">PRO</option>
-                             </select>
-                         </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Affectation Équipe</label>
-                      <select 
-                        value={(formData as any).team_id || ''}
-                        onChange={e => setFormData({...formData, team_id: e.target.value})}
-                        className="w-full h-16 rounded-2xl bg-primary/5 border-primary/20 text-primary font-bold px-8 outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
+              <CardContent className="p-10 space-y-12">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-10 items-start">
+                  {/* Photo Upload Area */}
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Photo Officielle</label>
+                    <div className="relative group">
+                      <input
+                        type="file"
+                        id="player-photo"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handlePhotoUpload}
+                      />
+                      <label
+                        htmlFor="player-photo"
+                        className="block aspect-square w-full rounded-[2.5rem] bg-secondary/30 border-2 border-dashed border-secondary hover:border-primary/50 transition-all cursor-pointer overflow-hidden group shadow-inner"
                       >
-                         <option value="">-- Sans Équipe (Agent Libre) --</option>
-                         {teams.filter(t => t.category === formData.category).map(t => (
-                           <option key={t.id} value={t.id}>{t.name} ({t.category})</option>
-                         ))}
-                      </select>
-                    </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Nationalité</label>
-                      <Input 
-                         value={formData.nationality}
-                         onChange={e => setFormData({...formData, nationality: e.target.value})}
-                         placeholder="ex. Maroc"
-                         className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Date de Naissance</label>
-                      <Input 
-                         type="date"
-                         value={formData.birth_date}
-                         onChange={e => setFormData({...formData, birth_date: e.target.value})}
-                         className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
-                      />
+                        {(formData.photo_url && formData.photo_url !== 'null') ? (
+                          <img src={formData.photo_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="Preview" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                            <Camera className={`w-10 h-10 ${isUploading ? 'animate-bounce text-primary' : 'text-muted-foreground opacity-30'}`} />
+                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{isUploading ? 'Transfert...' : 'Choisir une photo'}</span>
+                          </div>
+                        )}
+                      </label>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="md:col-span-2 space-y-8">
                     <div className="space-y-3">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Poste Tactique</label>
-                       <select 
-                         value={formData.position}
-                         onChange={e => setFormData({...formData, position: e.target.value as any})}
-                         className="w-full h-16 rounded-2xl bg-secondary/30 border-none font-bold px-8 outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
-                       >
-                          <option value="GK">GK - Gardien</option>
-                          <option value="DF">DF - Défenseur</option>
-                          <option value="MF">MF - Milieu</option>
-                          <option value="FW">FW - Attaquant</option>
-                       </select>
-                    </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Taille (cm)</label>
-                      <Input 
-                         type="number"
-                         value={formData.height}
-                         onChange={e => setFormData({...formData, height: parseFloat(e.target.value) || 0})}
-                         className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Nom Complet de l'Athlète</label>
+                      <Input
+                        value={formData.full_name}
+                        onChange={e => setFormData({ ...formData, full_name: e.target.value })}
+                        placeholder="ex. Cristiano Ronaldo"
+                        className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
                       />
                     </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Poids (kg)</label>
-                      <Input 
-                         type="number"
-                         value={formData.weight}
-                         onChange={e => setFormData({...formData, weight: parseFloat(e.target.value) || 0})}
-                         className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
-                      />
-                    </div>
-                    <div className="space-y-3">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Pied de Prédilection</label>
-                       <select 
-                         value={formData.preferred_foot}
-                         onChange={e => setFormData({...formData, preferred_foot: e.target.value as any})}
-                         className="w-full h-16 rounded-2xl bg-secondary/30 border-none font-bold px-8 outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
-                       >
-                          <option value="Right">Droitier</option>
-                          <option value="Left">Gaucher</option>
-                          <option value="Both">Ambidextre</option>
-                       </select>
-                    </div>
-                  </div>
 
-                  <div className="flex gap-4 pt-8 border-t border-secondary/50">
-                    <Button variant="ghost" onClick={() => setViewState('LIST')} className="flex-1 h-16 rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-secondary">Annuler</Button>
-                    <Button onClick={handleSave} className="flex-1 h-16 rounded-2xl bg-slate-900 hover:bg-black text-white font-black uppercase tracking-widest text-xs shadow-xl transition-all active:scale-95">
-                       {selectedPlayer ? 'Enregistrer les Modifications' : 'Confirmer la Signature'}
-                    </Button>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Numéro de Dossard</label>
+                        <Input
+                          type="number"
+                          value={formData.jersey_number}
+                          onChange={e => setFormData({ ...formData, jersey_number: parseInt(e.target.value) || 0 })}
+                          className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Catégorie d'Âge</label>
+                        <select
+                          value={formData.category}
+                          onChange={e => setFormData({ ...formData, category: e.target.value as any, team_id: '' })}
+                          className="w-full h-16 rounded-2xl bg-secondary/30 border-none font-bold px-8 text-lg outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
+                        >
+                          {PLAYER_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                          <option value="PRO">PRO</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
-               </CardContent>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Affectation Équipe</label>
+                    <select
+                      value={(formData as any).team_id || ''}
+                      onChange={e => setFormData({ ...formData, team_id: e.target.value })}
+                      className="w-full h-16 rounded-2xl bg-primary/5 border-primary/20 text-primary font-bold px-8 outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
+                    >
+                      <option value="">-- Sans Équipe (Agent Libre) --</option>
+                      {teams.filter(t => t.category === formData.category).map(t => (
+                        <option key={t.id} value={t.id}>{t.name} ({t.category})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Nationalité</label>
+                    <Input
+                      value={formData.nationality}
+                      onChange={e => setFormData({ ...formData, nationality: e.target.value })}
+                      placeholder="ex. Maroc"
+                      className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Date de Naissance</label>
+                    <Input
+                      type="date"
+                      value={formData.birth_date}
+                      onChange={e => setFormData({ ...formData, birth_date: e.target.value })}
+                      className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Poste Tactique</label>
+                    <select
+                      value={formData.position}
+                      onChange={e => setFormData({ ...formData, position: e.target.value as any })}
+                      className="w-full h-16 rounded-2xl bg-secondary/30 border-none font-bold px-8 outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
+                    >
+                      <option value="GK">GK - Gardien</option>
+                      <option value="DF">DF - Défenseur</option>
+                      <option value="MF">MF - Milieu</option>
+                      <option value="FW">FW - Attaquant</option>
+                    </select>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Taille (cm)</label>
+                    <Input
+                      type="number"
+                      value={formData.height}
+                      onChange={e => setFormData({ ...formData, height: parseFloat(e.target.value) || 0 })}
+                      className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Poids (kg)</label>
+                    <Input
+                      type="number"
+                      value={formData.weight}
+                      onChange={e => setFormData({ ...formData, weight: parseFloat(e.target.value) || 0 })}
+                      className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Pied de Prédilection</label>
+                    <select
+                      value={formData.preferred_foot}
+                      onChange={e => setFormData({ ...formData, preferred_foot: e.target.value as any })}
+                      className="w-full h-16 rounded-2xl bg-secondary/30 border-none font-bold px-8 outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
+                    >
+                      <option value="Right">Droitier</option>
+                      <option value="Left">Gaucher</option>
+                      <option value="Both">Ambidextre</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-8 border-t border-secondary/50">
+                  <Button variant="ghost" onClick={() => setViewState('LIST')} className="flex-1 h-16 rounded-2xl font-bold uppercase tracking-widest text-xs hover:bg-secondary">Annuler</Button>
+                  <Button onClick={handleSave} className="flex-1 h-16 rounded-2xl bg-slate-900 hover:bg-black text-white font-black uppercase tracking-widest text-xs shadow-xl transition-all active:scale-95">
+                    {selectedPlayer ? 'Enregistrer les Modifications' : 'Confirmer la Signature'}
+                  </Button>
+                </div>
+              </CardContent>
             </Card>
           </motion.div>
         ) : viewState === 'VIEW' ? (
@@ -1233,20 +1360,20 @@ const PlayerManagement: React.FC = () => {
             {selectedPlayer && (
               <div className="space-y-8">
                 <div className="flex items-center gap-4">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => setViewState('LIST')} 
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setViewState('LIST')}
                     className="w-14 h-14 rounded-2xl bg-white border shadow-sm hover:bg-secondary transition-all"
                   >
                     <X className="w-6 h-6 rotate-90" />
                   </Button>
-                  
+
                   {/* Navigation buttons */}
                   <div className="flex items-center gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={goToPreviousPlayer}
                       disabled={filteredPlayers.length <= 1}
                       className="w-12 h-12 rounded-xl bg-white border shadow-sm hover:bg-secondary transition-all disabled:opacity-40"
@@ -1254,9 +1381,9 @@ const PlayerManagement: React.FC = () => {
                     >
                       <PrevIcon className="w-5 h-5" />
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={goToNextPlayer}
                       disabled={filteredPlayers.length <= 1}
                       className="w-12 h-12 rounded-xl bg-white border shadow-sm hover:bg-secondary transition-all disabled:opacity-40"
@@ -1265,12 +1392,12 @@ const PlayerManagement: React.FC = () => {
                       <NextIcon className="w-5 h-5" />
                     </Button>
                   </div>
-                  
+
                   <div className="flex-1">
                     <h3 className="text-4xl font-black tracking-tight uppercase italic">{selectedPlayer.full_name}</h3>
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] mt-1">Détails du Profil Joueur</p>
                   </div>
-                  
+
                   <Badge variant="outline" className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest">
                     {filteredPlayers.findIndex(p => p.id === selectedPlayer.id) + 1} / {filteredPlayers.length}
                   </Badge>
@@ -1278,137 +1405,194 @@ const PlayerManagement: React.FC = () => {
 
                 <Card className="border-none shadow-2xl rounded-[4rem] bg-white overflow-hidden">
                   <div className="grid grid-cols-1 md:grid-cols-12">
-                     {/* Left Side: Photo & Hero */}
-                     <div className="md:col-span-5 bg-slate-950 p-16 text-white relative flex flex-col justify-between min-h-[600px]">
-                        <div className="absolute top-0 right-0 w-80 h-80 -mr-40 -mt-40 bg-primary/20 rounded-full blur-[100px] pointer-events-none" />
-                        
-                        {/* Club Logo + Category Badge stacked */}
-                        {mainClub?.logo_url && (
-                          <div className="absolute top-6 left-6 z-20 flex flex-col items-center gap-2">
-                            <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-md border border-white/20 p-2 shadow-xl">
-                              <img src={mainClub.logo_url} alt="Club" className="w-full h-full object-contain rounded-full" />
+                    {/* Left Side: Photo & Hero */}
+                    <div className="md:col-span-5 bg-slate-950 p-16 text-white relative flex flex-col justify-between min-h-[600px]">
+                      <div className="absolute top-0 right-0 w-80 h-80 -mr-40 -mt-40 bg-primary/20 rounded-full blur-[100px] pointer-events-none" />
+
+                      {/* Club Logo + Category Badge stacked */}
+                      {mainClub?.logo_url && (
+                        <div className="absolute top-6 left-6 z-20 flex flex-col items-center gap-2">
+                          <div className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-md border border-white/20 p-2 shadow-xl">
+                            <img src={mainClub.logo_url} alt="Club" className="w-full h-full object-contain rounded-full" />
+                          </div>
+                          <Badge className="bg-white/10 backdrop-blur-md text-white font-black uppercase px-3 py-1 border border-white/20 text-xs">
+                            {teams.find(t => t.id === selectedPlayer.team_id)?.category || 'N/A'}
+                          </Badge>
+                        </div>
+                      )}
+
+                      <div className="relative z-10 mt-20">
+                        <span className="text-9xl font-black italic opacity-20 select-none">#{selectedPlayer.jersey_number}</span>
+                        <div className="mt-6">
+                          <h2 className="text-6xl font-black tracking-tighter uppercase leading-none">
+                            {selectedPlayer.full_name.split(' ').map((n, i) => (
+                              <span key={i} className="block">{n}</span>
+                            ))}
+                          </h2>
+                          <Badge className="mt-8 bg-primary text-white font-black uppercase px-6 py-2 border-none text-sm">{selectedPlayer.position}</Badge>
+                        </div>
+                      </div>
+
+                      <div className="relative z-10 w-full aspect-square rounded-[3.5rem] bg-white/5 backdrop-blur-md border border-white/10 overflow-hidden shadow-2xl mt-12">
+                        <img src={(selectedPlayer.photo_url && selectedPlayer.photo_url !== 'null') ? selectedPlayer.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedPlayer.full_name)}&background=random&color=fff&size=256`} alt={selectedPlayer.full_name} className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+
+                    {/* Right Side: Attributes */}
+                    <div className="md:col-span-7 p-16 space-y-12 bg-white flex flex-col justify-center">
+                      <div>
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-8 flex items-center gap-3">
+                          <div className="w-8 h-px bg-primary/30" /> Passeport Technique
+                        </h4>
+
+                        <div className="grid grid-cols-2 gap-12">
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Nationalité</p>
+                            <div className="flex items-center gap-3 text-2xl font-black italic uppercase">
+                              <Globe className="w-6 h-6 text-primary" /> {selectedPlayer.nationality}
                             </div>
-                            <Badge className="bg-white/10 backdrop-blur-md text-white font-black uppercase px-3 py-1 border border-white/20 text-xs">
-                              {teams.find(t => t.id === selectedPlayer.team_id)?.category || 'N/A'}
-                            </Badge>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Âge / Date de Naissance</p>
+                            <div className="flex items-center gap-3 text-2xl font-black italic uppercase">
+                              <Calendar className="w-6 h-6 text-primary" /> {calculateAge(selectedPlayer.birth_date)} ans
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-8">
+                        <div className="p-8 rounded-[2.5rem] bg-secondary/20 space-y-3 border border-secondary/50">
+                          <Ruler className="w-6 h-6 text-primary/40" />
+                          <div>
+                            <p className="text-[10px] font-black text-muted-foreground uppercase">Taille</p>
+                            <p className="text-2xl font-black">{selectedPlayer.height} <span className="text-xs uppercase ml-1 opacity-50">cm</span></p>
+                          </div>
+                        </div>
+                        <div className="p-8 rounded-[2.5rem] bg-secondary/20 space-y-3 border border-secondary/50">
+                          <Weight className="w-6 h-6 text-primary/40" />
+                          <div>
+                            <p className="text-[10px] font-black text-muted-foreground uppercase">Poids</p>
+                            <p className="text-2xl font-black">{selectedPlayer.weight} <span className="text-xs uppercase ml-1 opacity-50">kg</span></p>
+                          </div>
+                        </div>
+                        <div className="p-8 rounded-[2.5rem] bg-secondary/20 space-y-3 border border-secondary/50">
+                          <Footprints className="w-6 h-6 text-primary/40" />
+                          <div>
+                            <p className="text-[10px] font-black text-muted-foreground uppercase">Pied</p>
+                            <p className="text-2xl font-black uppercase italic">{selectedPlayer.preferred_foot}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Player Stats Section */}
+                      <div className="pt-8 border-t border-secondary/50">
+                        <div className="flex justify-between items-center mb-6">
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-3 m-0">
+                            <BarChart3 className="w-4 h-4 text-primary" />
+                            <div className="w-8 h-px bg-primary/30" /> Statistiques Performance
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            <select
+                              value={selectedSeasonFilter}
+                              onChange={(e) => { setSelectedSeasonFilter(e.target.value); setSelectedLeagueFilter('ALL'); setSelectedMatchFilter('ALL'); }}
+                              className="h-8 rounded-lg border border-input bg-background px-3 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[120px]"
+                            >
+                              <option value="ALL">Toutes Saisons</option>
+                              {participatedSeasons.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+
+                            <select
+                              value={selectedLeagueFilter}
+                              onChange={(e) => { setSelectedLeagueFilter(e.target.value); setSelectedMatchFilter('ALL'); }}
+                              className="h-8 rounded-lg border border-input bg-background px-3 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[120px]"
+                            >
+                              <option value="ALL">Toutes Ligues</option>
+                              {participatedLeagues
+                                .filter((l: any) => selectedSeasonFilter === 'ALL' || l.season === selectedSeasonFilter)
+                                .map((league: any) => (
+                                  <option key={league.id} value={league.id}>{league.name}</option>
+                                ))
+                              }
+                            </select>
+
+                            <select
+                              value={selectedMatchFilter}
+                              onChange={(e) => setSelectedMatchFilter(e.target.value)}
+                              className="h-8 rounded-lg border border-input bg-background px-3 text-xs shadow-sm focus:outline-none focus:ring-2 focus:ring-primary max-w-[200px]"
+                            >
+                              <option value="ALL">Tous les Matchs</option>
+                              {participatedMatches
+                                .filter((m: any) => selectedLeagueFilter === 'ALL' || m.league_id === selectedLeagueFilter)
+                                .filter((m: any) => {
+                                  if (selectedSeasonFilter === 'ALL') return true;
+                                  const lg = leagues.find((l: any) => l.id === m.league_id);
+                                  return lg?.season === selectedSeasonFilter;
+                                })
+                                .map((match: any) => {
+                                  const oppName = match.clubs?.name || 'Inconnu';
+                                  const dateStr = match.match_date ? new Date(match.match_date).toLocaleDateString('fr-FR') : '';
+                                  return (
+                                    <option key={match.id} value={match.id}>vs {oppName} {dateStr ? `(${dateStr})` : ''}</option>
+                                  );
+                                })
+                              }
+                            </select>
+                          </div>
+                        </div>
+
+                        {loadingStats ? (
+                          <div className="flex items-center justify-center h-24">
+                            <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                            <div className="p-5 rounded-[1.5rem] bg-emerald-50 border border-emerald-100 text-center">
+                              <Trophy className="w-5 h-5 text-emerald-500 mx-auto mb-2" />
+                              <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Matchs</p>
+                              <p className="text-2xl font-black text-emerald-700">{displayStats?.matches || 0}</p>
+                            </div>
+                            <div className="p-5 rounded-[1.5rem] bg-blue-50 border border-blue-100 text-center">
+                              <Clock className="w-5 h-5 text-blue-500 mx-auto mb-2" />
+                              <div>
+                                <p className="text-[10px] font-black text-blue-900/60 uppercase tracking-wider mb-1">Minutes</p>
+                                <p className="text-2xl font-black text-blue-700">{displayStats?.minutes || 0}</p>
+                              </div>
+                            </div>
+                            <div className="p-5 rounded-[1.5rem] bg-indigo-50 border border-indigo-100 text-center">
+                              <Target className="w-5 h-5 text-indigo-500 mx-auto mb-2" />
+                              <div>
+                                <p className="text-[10px] font-black text-indigo-900/60 uppercase tracking-wider mb-1">Buts</p>
+                                <p className="text-2xl font-black text-indigo-700">{displayStats?.goals || 0}</p>
+                              </div>
+                            </div>
+                            <div className="p-5 rounded-[1.5rem] bg-amber-50 border border-amber-100 text-center">
+                              <div className="w-4 h-5 bg-amber-400 rounded-sm mx-auto mb-2" />
+                              <div>
+                                <p className="text-[10px] font-black text-amber-900/60 uppercase tracking-wider mb-1">Jaunes</p>
+                                <p className="text-2xl font-black text-amber-700">{displayStats?.yellowCards || 0}</p>
+                              </div>
+                            </div>
+                            <div className="p-5 rounded-[1.5rem] bg-red-50 border border-red-100 text-center">
+                              <div className="w-4 h-5 bg-red-500 rounded-sm mx-auto mb-2" />
+                              <div>
+                                <p className="text-[10px] font-black text-red-900/60 uppercase tracking-wider mb-1">Rouges</p>
+                                <p className="text-2xl font-black text-red-700">{displayStats?.redCards || 0}</p>
+                              </div>
+                            </div>
                           </div>
                         )}
-                        
-                        <div className="relative z-10 mt-20">
-                           <span className="text-9xl font-black italic opacity-20 select-none">#{selectedPlayer.jersey_number}</span>
-                           <div className="mt-6">
-                              <h2 className="text-6xl font-black tracking-tighter uppercase leading-none">
-                                 {selectedPlayer.full_name.split(' ').map((n, i) => (
-                                   <span key={i} className="block">{n}</span>
-                                 ))}
-                              </h2>
-                              <Badge className="mt-8 bg-primary text-white font-black uppercase px-6 py-2 border-none text-sm">{selectedPlayer.position}</Badge>
-                           </div>
-                        </div>
+                      </div>
 
-                        <div className="relative z-10 w-full aspect-square rounded-[3.5rem] bg-white/5 backdrop-blur-md border border-white/10 overflow-hidden shadow-2xl mt-12">
-                           <img src={(selectedPlayer.photo_url && selectedPlayer.photo_url !== 'null') ? selectedPlayer.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedPlayer.full_name)}&background=random&color=fff&size=256`} alt={selectedPlayer.full_name} className="w-full h-full object-cover" />
-                        </div>
-                     </div>
-
-                     {/* Right Side: Attributes */}
-                     <div className="md:col-span-7 p-16 space-y-12 bg-white flex flex-col justify-center">
-                        <div>
-                           <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-8 flex items-center gap-3">
-                               <div className="w-8 h-px bg-primary/30" /> Passeport Technique
-                           </h4>
-                           
-                           <div className="grid grid-cols-2 gap-12">
-                              <div className="space-y-2">
-                                 <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Nationalité</p>
-                                 <div className="flex items-center gap-3 text-2xl font-black italic uppercase">
-                                    <Globe className="w-6 h-6 text-primary" /> {selectedPlayer.nationality}
-                                  </div>
-                              </div>
-                              <div className="space-y-2">
-                                 <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Âge / Date de Naissance</p>
-                                 <div className="flex items-center gap-3 text-2xl font-black italic uppercase">
-                                    <Calendar className="w-6 h-6 text-primary" /> {calculateAge(selectedPlayer.birth_date)} ans
-                                 </div>
-                              </div>
-                           </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-8">
-                           <div className="p-8 rounded-[2.5rem] bg-secondary/20 space-y-3 border border-secondary/50">
-                              <Ruler className="w-6 h-6 text-primary/40" />
-                              <div>
-                                 <p className="text-[10px] font-black text-muted-foreground uppercase">Taille</p>
-                                 <p className="text-2xl font-black">{selectedPlayer.height} <span className="text-xs uppercase ml-1 opacity-50">cm</span></p>
-                              </div>
-                           </div>
-                           <div className="p-8 rounded-[2.5rem] bg-secondary/20 space-y-3 border border-secondary/50">
-                              <Weight className="w-6 h-6 text-primary/40" />
-                              <div>
-                                 <p className="text-[10px] font-black text-muted-foreground uppercase">Poids</p>
-                                 <p className="text-2xl font-black">{selectedPlayer.weight} <span className="text-xs uppercase ml-1 opacity-50">kg</span></p>
-                              </div>
-                           </div>
-                           <div className="p-8 rounded-[2.5rem] bg-secondary/20 space-y-3 border border-secondary/50">
-                              <Footprints className="w-6 h-6 text-primary/40" />
-                              <div>
-                                 <p className="text-[10px] font-black text-muted-foreground uppercase">Pied</p>
-                                 <p className="text-2xl font-black uppercase italic">{selectedPlayer.preferred_foot}</p>
-                              </div>
-                           </div>
-                        </div>
-
-                        {/* Player Stats Section */}
-                        <div className="pt-8 border-t border-secondary/50">
-                           <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-6 flex items-center gap-3">
-                               <BarChart3 className="w-4 h-4 text-primary" />
-                               <div className="w-8 h-px bg-primary/30" /> Statistiques Performance
-                           </h4>
-                           
-                           {loadingStats ? (
-                              <div className="flex items-center justify-center h-24">
-                                 <div className="w-8 h-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-                              </div>
-                           ) : (
-                              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                 <div className="p-5 rounded-[1.5rem] bg-emerald-50 border border-emerald-100 text-center">
-                                    <Trophy className="w-5 h-5 text-emerald-500 mx-auto mb-2" />
-                                    <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">Matchs</p>
-                                    <p className="text-2xl font-black text-emerald-700">{playerStats?.matches || 0}</p>
-                                 </div>
-                                 <div className="p-5 rounded-[1.5rem] bg-blue-50 border border-blue-100 text-center">
-                                    <Clock className="w-5 h-5 text-blue-500 mx-auto mb-2" />
-                                    <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">Minutes</p>
-                                    <p className="text-2xl font-black text-blue-700">{playerStats?.minutes || 0}</p>
-                                 </div>
-                                 <div className="p-5 rounded-[1.5rem] bg-indigo-50 border border-indigo-100 text-center">
-                                    <Target className="w-5 h-5 text-indigo-500 mx-auto mb-2" />
-                                    <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-1">Buts</p>
-                                    <p className="text-2xl font-black text-indigo-700">{playerStats?.goals || 0}</p>
-                                 </div>
-                                 <div className="p-5 rounded-[1.5rem] bg-amber-50 border border-amber-100 text-center">
-                                    <div className="w-5 h-5 rounded bg-amber-400 mx-auto mb-2" />
-                                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Jaunes</p>
-                                    <p className="text-2xl font-black text-amber-700">{playerStats?.yellowCards || 0}</p>
-                                 </div>
-                                 <div className="p-5 rounded-[1.5rem] bg-red-50 border border-red-100 text-center">
-                                    <div className="w-5 h-5 rounded bg-red-500 mx-auto mb-2" />
-                                    <p className="text-[9px] font-black text-red-600 uppercase tracking-widest mb-1">Rouges</p>
-                                    <p className="text-2xl font-black text-red-700">{playerStats?.redCards || 0}</p>
-                                 </div>
-                              </div>
-                           )}
-                        </div>
-
-                        <div className="pt-12 border-t border-secondary/50 flex gap-4">
-                           <Button onClick={() => handleOpenEdit(selectedPlayer)} className="flex-1 h-16 rounded-[1.5rem] font-black uppercase tracking-widest text-xs gap-3 shadow-xl transition-all active:scale-95 bg-primary">
-                              <Edit2 className="w-5 h-5" /> Modifier le Profil
-                           </Button>
-                           <Button variant="outline" onClick={() => setViewState('LIST')} className="h-16 rounded-[1.5rem] font-black uppercase tracking-widest text-xs px-12 hover:bg-secondary transition-all">
-                              Fermer
-                           </Button>
-                        </div>
-                     </div>
+                      <div className="pt-12 border-t border-secondary/50 flex gap-4">
+                        <Button onClick={() => handleOpenEdit(selectedPlayer)} className="flex-1 h-16 rounded-[1.5rem] font-black uppercase tracking-widest text-xs gap-3 shadow-xl transition-all active:scale-95 bg-primary">
+                          <Edit2 className="w-5 h-5" /> Modifier le Profil
+                        </Button>
+                        <Button variant="outline" onClick={() => setViewState('LIST')} className="h-16 rounded-[1.5rem] font-black uppercase tracking-widest text-xs px-12 hover:bg-secondary transition-all">
+                          Fermer
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </Card>
               </div>
@@ -1425,20 +1609,19 @@ const PlayerManagement: React.FC = () => {
             {selectedPlayer && (
               <div className="space-y-8">
                 <div className="flex items-center gap-4">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => setViewState('LIST')} 
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setViewState('LIST')}
                     className="w-14 h-14 rounded-2xl bg-white border shadow-sm hover:bg-secondary transition-all"
                   >
                     <X className="w-6 h-6 rotate-90" />
                   </Button>
-                  
-                  {/* Navigation buttons */}
+
                   <div className="flex items-center gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={goToPreviousPlayer}
                       disabled={filteredPlayers.length <= 1}
                       className="w-12 h-12 rounded-xl bg-white border shadow-sm hover:bg-secondary transition-all disabled:opacity-40"
@@ -1446,9 +1629,9 @@ const PlayerManagement: React.FC = () => {
                     >
                       <PrevIcon className="w-5 h-5" />
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={goToNextPlayer}
                       disabled={filteredPlayers.length <= 1}
                       className="w-12 h-12 rounded-xl bg-white border shadow-sm hover:bg-secondary transition-all disabled:opacity-40"
@@ -1457,13 +1640,64 @@ const PlayerManagement: React.FC = () => {
                       <NextIcon className="w-5 h-5" />
                     </Button>
                   </div>
-                  
+
                   <div className="flex-1">
-                    <h3 className="text-3xl font-black tracking-tight uppercase italic">Statistiques</h3>
-                    <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest mt-1">{selectedPlayer.full_name}</p>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div>
+                        <h3 className="text-3xl font-black tracking-tight uppercase italic">Statistiques</h3>
+                        <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest mt-1">{selectedPlayer.full_name}</p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <select
+                          value={selectedSeasonFilter}
+                          onChange={(e) => { setSelectedSeasonFilter(e.target.value); setSelectedLeagueFilter('ALL'); setSelectedMatchFilter('ALL'); }}
+                          className="h-10 rounded-xl border border-input bg-background px-4 text-sm font-medium shadow-sm w-full sm:w-40 focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="ALL">Toutes Saisons</option>
+                          {participatedSeasons.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+
+                        <select
+                          value={selectedLeagueFilter}
+                          onChange={(e) => { setSelectedLeagueFilter(e.target.value); setSelectedMatchFilter('ALL'); }}
+                          className="h-10 rounded-xl border border-input bg-background px-4 text-sm font-medium shadow-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="ALL">Toutes Ligues</option>
+                          {participatedLeagues
+                            .filter((l: any) => selectedSeasonFilter === 'ALL' || l.season === selectedSeasonFilter)
+                            .map((league: any) => (
+                              <option key={league.id} value={league.id}>{league.name}</option>
+                            ))
+                          }
+                        </select>
+
+                        <select
+                          value={selectedMatchFilter}
+                          onChange={(e) => setSelectedMatchFilter(e.target.value)}
+                          className="h-10 rounded-xl border border-input bg-background px-4 text-sm font-medium shadow-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="ALL">Tous les Matchs</option>
+                          {participatedMatches
+                            .filter((m: any) => selectedLeagueFilter === 'ALL' || m.league_id === selectedLeagueFilter)
+                            .filter((m: any) => {
+                              if (selectedSeasonFilter === 'ALL') return true;
+                              const lg = leagues.find((l: any) => l.id === m.league_id);
+                              return lg?.season === selectedSeasonFilter;
+                            })
+                            .map((match: any) => {
+                              const oppName = match.clubs?.name || 'Inconnu';
+                              const dateStr = match.match_date ? new Date(match.match_date).toLocaleDateString('fr-FR') : '';
+                              return (
+                                <option key={match.id} value={match.id}>vs {oppName} {dateStr ? `(${dateStr})` : ''}</option>
+                              );
+                            })
+                          }
+                        </select>
+                      </div>
+                    </div>
                   </div>
-                  
-                  <Badge variant="outline" className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest">
+
+                  <Badge variant="outline" className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest hidden md:inline-flex items-center">
                     {filteredPlayers.findIndex(p => p.id === selectedPlayer.id) + 1} / {filteredPlayers.length}
                   </Badge>
                 </div>
@@ -1478,41 +1712,46 @@ const PlayerManagement: React.FC = () => {
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                         <div className="p-8 rounded-[2rem] bg-emerald-50 border border-emerald-100 text-center">
                           <Trophy className="w-8 h-8 text-emerald-500 mx-auto mb-3" />
-                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Matchs Joués</p>
-                          <p className="text-4xl font-black text-emerald-700">{playerStats?.matches || 0}</p>
+                          <p className="text-xs font-black text-emerald-900/60 uppercase tracking-widest mb-1">Matchs</p>
+                          <p className="text-4xl font-black text-emerald-700">{displayStats?.matches || 0}</p>
                         </div>
+
                         <div className="p-8 rounded-[2rem] bg-blue-50 border border-blue-100 text-center">
                           <Target className="w-8 h-8 text-blue-500 mx-auto mb-3" />
-                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Buts Marqués</p>
-                          <p className="text-4xl font-black text-blue-700">{playerStats?.goals || 0}</p>
+                          <p className="text-xs font-black text-blue-900/60 uppercase tracking-widest mb-1">Buts</p>
+                          <p className="text-4xl font-black text-blue-700">{displayStats?.goals || 0}</p>
                         </div>
+
                         <div className="p-8 rounded-[2rem] bg-indigo-50 border border-indigo-100 text-center">
                           <Users className="w-8 h-8 text-indigo-500 mx-auto mb-3" />
-                          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Passes Décisives</p>
-                          <p className="text-4xl font-black text-indigo-700">{playerStats?.assists || 0}</p>
+                          <p className="text-xs font-black text-indigo-900/60 uppercase tracking-widest mb-1">Passes</p>
+                          <p className="text-4xl font-black text-indigo-700">{displayStats?.assists || 0}</p>
                         </div>
+
                         <div className="p-8 rounded-[2rem] bg-amber-50 border border-amber-100 text-center">
-                          <div className="w-8 h-8 rounded bg-amber-400 mx-auto mb-3" />
-                          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">Cartons Jaunes</p>
-                          <p className="text-4xl font-black text-amber-700">{playerStats?.yellowCards || 0}</p>
+                          <div className="w-6 h-8 bg-amber-400 rounded mx-auto mb-3" />
+                          <p className="text-xs font-black text-amber-900/60 uppercase tracking-widest mb-1">Jaunes</p>
+                          <p className="text-4xl font-black text-amber-700">{displayStats?.yellowCards || 0}</p>
                         </div>
+
                         <div className="p-8 rounded-[2rem] bg-red-50 border border-red-100 text-center">
-                          <div className="w-8 h-8 rounded bg-red-500 mx-auto mb-3" />
-                          <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2">Cartons Rouges</p>
-                          <p className="text-4xl font-black text-red-700">{playerStats?.redCards || 0}</p>
+                          <div className="w-6 h-8 bg-red-500 rounded mx-auto mb-3" />
+                          <p className="text-xs font-black text-red-900/60 uppercase tracking-widest mb-1">Rouges</p>
+                          <p className="text-4xl font-black text-red-700">{displayStats?.redCards || 0}</p>
                         </div>
-                        <div className="p-8 rounded-[2rem] bg-slate-50 border border-slate-100 text-center">
+
+                        <div className="p-8 rounded-[2rem] bg-slate-50 border border-slate-200 text-center">
                           <Clock className="w-8 h-8 text-slate-500 mx-auto mb-3" />
-                          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-2">Minutes Jouées</p>
-                          <p className="text-4xl font-black text-slate-700">{playerStats?.minutes || 0}</p>
+                          <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Minutes</p>
+                          <p className="text-4xl font-black text-slate-700">{displayStats?.minutes || 0}</p>
                         </div>
                       </div>
                     )}
 
                     <div className="flex justify-center mt-8">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setViewState('LIST')} 
+                      <Button
+                        variant="outline"
+                        onClick={() => setViewState('LIST')}
                         className="h-14 px-12 rounded-2xl font-black uppercase tracking-widest text-xs"
                       >
                         Fermer
@@ -1746,7 +1985,7 @@ const PlayerManagement: React.FC = () => {
             <div className="flex items-center gap-4 p-5 bg-white border rounded-[2rem] shadow-sm">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground shrink-0">Appliquer à tous :</p>
               <div className="flex items-center gap-3 flex-wrap">
-                {(['U7','U9','U11','U13','U15','U16','U17','U19','U21','U23','SENIOR'] as const).map(cat => (
+                {(['U7', 'U9', 'U11', 'U13', 'U15', 'U16', 'U17', 'U19', 'U21', 'U23', 'SENIOR'] as const).map(cat => (
                   <button key={cat} onClick={() => setBulkRows(prev => prev.map(r => ({ ...r, category: cat })))}
                     className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase bg-secondary/30 hover:bg-primary hover:text-white transition-all">
                     {cat}
@@ -1825,7 +2064,7 @@ const PlayerManagement: React.FC = () => {
                           onChange={e => updateBulkRow(row.id, 'position', e.target.value)}
                           className="h-9 w-full px-2 rounded-xl text-[11px] font-bold bg-secondary/20 border-transparent outline-none focus:bg-white"
                         >
-                          {['GK','CB','LB','RB','DM','CM','AM','LW','RW','SS','FW'].map(p => <option key={p} value={p}>{p}</option>)}
+                          {['GK', 'CB', 'LB', 'RB', 'DM', 'CM', 'AM', 'LW', 'RW', 'SS', 'FW'].map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
                       </td>
                       <td className="px-4 py-2">
@@ -1834,7 +2073,7 @@ const PlayerManagement: React.FC = () => {
                           onChange={e => updateBulkRow(row.id, 'category', e.target.value)}
                           className="h-9 w-full px-2 rounded-xl text-[11px] font-bold bg-secondary/20 border-transparent outline-none focus:bg-white"
                         >
-                          {['U7','U9','U11','U13','U15','U16','U17','U19','U21','U23','SENIOR'].map(c => <option key={c} value={c}>{c}</option>)}
+                          {['U7', 'U9', 'U11', 'U13', 'U15', 'U16', 'U17', 'U19', 'U21', 'U23', 'SENIOR'].map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </td>
                       <td className="px-4 py-2">
@@ -1946,11 +2185,10 @@ const PlayerManagement: React.FC = () => {
                             <button
                               key={opt.value}
                               onClick={() => updateModalForm(player.id, 'attendance', opt.value)}
-                              className={`h-11 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all border-2 ${
-                                form.attendance === opt.value
+                              className={`h-11 rounded-xl text-[10px] font-black uppercase tracking-wide transition-all border-2 ${form.attendance === opt.value
                                   ? `${ATTENDANCE_BG[opt.value]} text-white border-transparent shadow-lg scale-[1.03]`
                                   : 'bg-white border-secondary hover:border-primary/20 text-muted-foreground'
-                              }`}
+                                }`}
                             >
                               {opt.label}
                             </button>
@@ -1968,11 +2206,10 @@ const PlayerManagement: React.FC = () => {
                             <button
                               key={n}
                               onClick={() => updateModalForm(player.id, 'rating', n === form.rating ? 0 : n)}
-                              className={`flex-1 h-10 rounded-xl text-[11px] font-black transition-all border-2 ${
-                                n <= form.rating
+                              className={`flex-1 h-10 rounded-xl text-[11px] font-black transition-all border-2 ${n <= form.rating
                                   ? 'bg-primary text-white border-primary shadow-md'
                                   : 'bg-white border-secondary text-muted-foreground hover:border-primary/30'
-                              }`}
+                                }`}
                             >
                               {n}
                             </button>

@@ -5,7 +5,7 @@
 
 -- 1. BASE TABLES: USERS, ROLES, PERMISSIONS
 ---------------------------------------------------------
-CREATE TABLE public.user_profiles (
+CREATE TABLE IF NOT EXISTS public.user_profiles (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
   staff_id UUID UNIQUE NULL, -- Lien avec la table staff
   default_club_id UUID,
@@ -13,14 +13,14 @@ CREATE TABLE public.user_profiles (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE public.roles (
+CREATE TABLE IF NOT EXISTS public.roles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(50) UNIQUE NOT NULL, 
   description TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE public.permissions (
+CREATE TABLE IF NOT EXISTS public.permissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   resource VARCHAR(50) NOT NULL,
   action VARCHAR(50) NOT NULL,
@@ -28,19 +28,19 @@ CREATE TABLE public.permissions (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE public.role_permissions (
+CREATE TABLE IF NOT EXISTS public.role_permissions (
   role_id UUID REFERENCES public.roles(id) ON DELETE CASCADE,
   permission_id UUID REFERENCES public.permissions(id) ON DELETE CASCADE,
   PRIMARY KEY (role_id, permission_id)
 );
 
-CREATE TABLE public.user_roles (
+CREATE TABLE IF NOT EXISTS public.user_roles (
   user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
   role_id UUID REFERENCES public.roles(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, role_id)
 );
 
-CREATE TABLE public.user_permissions_overrides (
+CREATE TABLE IF NOT EXISTS public.user_permissions_overrides (
   user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
   permission_id UUID REFERENCES public.permissions(id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, permission_id)
@@ -49,7 +49,7 @@ CREATE TABLE public.user_permissions_overrides (
 
 -- 2. SCOPE / ASSIGNMENT TABLES (PBAC)
 ---------------------------------------------------------
-CREATE TABLE public.user_team_assignments (
+CREATE TABLE IF NOT EXISTS public.user_team_assignments (
   user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
   team_id UUID, -- Modifiez si vous avez une table 'teams' (ex: REFERENCES teams(id))
   role_id UUID REFERENCES public.roles(id),
@@ -57,7 +57,7 @@ CREATE TABLE public.user_team_assignments (
   PRIMARY KEY (user_id, team_id)
 );
 
-CREATE TABLE public.user_category_assignments (
+CREATE TABLE IF NOT EXISTS public.user_category_assignments (
   user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
   category VARCHAR(50) NOT NULL,
   club_id UUID, 
@@ -65,7 +65,7 @@ CREATE TABLE public.user_category_assignments (
   PRIMARY KEY (user_id, category, club_id)
 );
 
-CREATE TABLE public.user_match_assignments (
+CREATE TABLE IF NOT EXISTS public.user_match_assignments (
   user_id UUID REFERENCES public.user_profiles(id) ON DELETE CASCADE,
   match_id UUID, -- Modifiez si FK (REFERENCES matches(id))
   assignment_type VARCHAR(50) DEFAULT 'tracker',
@@ -108,7 +108,8 @@ INSERT INTO public.roles (name, description) VALUES
 ('assistant_coach', 'Assistant sécurisé, pas de fonctions destructives'),
 ('match_operator', 'Opérateur live streaming / events uniquement'),
 ('staff', 'Membre spécialisé médical, vidéo, sans droit de gestion d_équipes'),
-('viewer', 'Lecteur en mode consultatif');
+('viewer', 'Lecteur en mode consultatif')
+ON CONFLICT (name) DO NOTHING;
 
 
 -- 5. AUTOMATIC PROFILE CREATION TRIGGER

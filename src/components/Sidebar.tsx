@@ -25,7 +25,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose, collapsed = false, onToggleCollapse }) => {
-  const { can, logout } = usePermissions();
+  const { logout, can } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
@@ -50,20 +50,19 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose, collapsed 
     {
       title: 'Compétition',
       items: [
-        { path: '/matches',   label: 'Calendrier',   icon: Calendar,  hide: !can('view_matches') && !can('edit_matches') },
-        { path: '/leagues',   label: 'Compétitions', icon: Trophy,    hide: !can('manage_teams') },
-        { path: '/matchday',  label: 'Match Day',    icon: Swords,    hide: !can('track_live_match') && !can('edit_matches') },
-        { path: '/opponents', label: 'Adversaires',  icon: Target,    hide: !can('manage_teams') },
-        { path: '/stadiums',  label: 'Stades',       icon: Building2, hide: !can('manage_teams') },
+        { path: '/matches',   label: 'Calendrier',   icon: Calendar },
+        { path: '/leagues',   label: 'Compétitions', icon: Trophy },
+        { path: '/matchday',  label: 'Match Day',    icon: Swords },
+        { path: '/opponents', label: 'Adversaires',  icon: Target },
+        { path: '/stadiums',  label: 'Stades',       icon: Building2 },
       ],
     },
     {
       title: 'Effectif',
       items: [
-        { path: '/players', label: 'Joueurs',          icon: Users,       hide: !can('manage_convocations') },
-        { path: '/teams',   label: 'Équipes',          icon: Shield,      hide: !can('manage_teams') },
-        { path: '/staff',   label: 'Staff Technique',  icon: UserCog,     hide: !can('manage_roles') },
-        { path: '/users',   label: 'Utilisateurs App', icon: Smartphone,  hide: !can('manage_roles') },
+        { path: '/players', label: 'Joueurs',          icon: Users },
+        { path: '/teams',   label: 'Équipes',          icon: Shield },
+        { path: '/staff',   label: 'Staff Technique',  icon: UserCog },
       ],
     },
     {
@@ -71,6 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose, collapsed 
       items: [
         { path: '/blog',     label: 'Blog',          icon: FileText },
         { path: '/store',    label: 'Store',         icon: LayoutTemplate },
+        ...(can('manage_users') ? [{ path: '/users', label: 'Utilisateurs', icon: Shield }] : []),
       ],
     },
   ];
@@ -110,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose, collapsed 
               {group.title}
             </h3>
             <nav className="space-y-1">
-              {group.items.filter(item => !item.hide).map((item) => {
+              {group.items.map((item) => {
                 const Icon = item.icon;
                 return (
                   <NavLink
@@ -224,7 +224,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onMobileClose, collapsed 
               {group.title}
             </h3>
             <nav className="space-y-1">
-              {group.items.filter(item => !item.hide).map((item) => {
+              {group.items.map((item) => {
                 const Icon = item.icon;
                 return (
                   <NavLink

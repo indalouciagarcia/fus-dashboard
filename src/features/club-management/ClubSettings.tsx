@@ -8,11 +8,10 @@ import { Camera, Save, Globe, Building2, Palette, Sparkles, Settings2, ShieldAle
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageService } from '../../services/storageService';
 import { Skeleton } from '../../components/ui/skeleton';
-import AccessCenter from '../people-management/AccessCenter';
 
 const ClubSettings: React.FC = () => {
   const { mainClub, updateMainClub, resetDatabase, isLoading } = useClubData();
-  const [activeTab, setActiveTab] = useState<'registry' | 'system' | 'access'>('registry');
+  const [activeTab, setActiveTab] = useState<'registry' | 'system'>('registry');
 
   const [formData, setFormData] = useState({
     club_name: '',
@@ -134,14 +133,6 @@ const ClubSettings: React.FC = () => {
           <Settings2 className="w-4 h-4 mr-2" />
           Configuration Système
         </Button>
-        <Button 
-          variant={activeTab === 'access' ? 'default' : 'ghost'} 
-          onClick={() => setActiveTab('access')}
-          className="rounded-xl px-6 font-black uppercase tracking-widest text-[10px]"
-        >
-          <KeySquare className="w-4 h-4 mr-2" />
-          Centre d'Accès
-        </Button>
       </div>
 
       <AnimatePresence mode="wait">
@@ -242,7 +233,7 @@ const ClubSettings: React.FC = () => {
               </Card>
             </div>
           </motion.div>
-        ) : activeTab === 'system' ? (
+        ) : (
           <motion.div 
             key="system"
             initial={{ opacity: 0, y: 10 }}
@@ -337,17 +328,6 @@ const ClubSettings: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
-        ) : (
-          <motion.div 
-            key="access"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-          >
-            <div className="-mt-8">
-               <AccessCenter />
-            </div>
           </motion.div>
         )}
       </AnimatePresence>

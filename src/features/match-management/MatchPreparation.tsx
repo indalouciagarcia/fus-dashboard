@@ -121,6 +121,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
         startingXI: m?.lineup?.startingXI || Array(11).fill(''),
         substitutes: m?.lineup?.substitutes || [],
         formation,
+        jerseyOverrides: m?.lineup?.jerseyOverrides || {},
       },
       formation,
       staff_ids: m?.staff_ids || [],
@@ -596,7 +597,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                                const surclassement = isSurclasse
                                  ? surclassements.find(s => s.player_id === player.id && s.status === 'active')
                                  : null;
-                               const displayJersey = surclassement?.target_jersey_number ?? player.jersey_number;
+                               const displayJersey = formData.lineup?.jerseyOverrides?.[player.id] ?? surclassement?.target_jersey_number ?? player.jersey_number;
                                return (
                                  <motion.div
                                     key={player.id}
@@ -633,15 +634,19 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                                              draggable={false}
                                              value={editingJerseyValue}
                                              onChange={e => setEditingJerseyValue(e.target.value)}
-                                             onBlur={async () => {
+                                             onBlur={() => {
                                                const n = parseInt(editingJerseyValue, 10);
-                                               if (!isNaN(n) && n > 0 && n !== player.jersey_number) {
-                                                 try {
-                                                   await updatePlayer({ id: player.id, data: { jersey_number: n } as any });
-                                                 } catch {
-                                                   setEditingJerseyValue(String(player.jersey_number ?? ''));
-                                                   return;
-                                                 }
+                                               if (!isNaN(n) && n > 0) {
+                                                 setFormData((prev: any) => ({
+                                                   ...prev,
+                                                   lineup: {
+                                                     ...prev.lineup,
+                                                     jerseyOverrides: {
+                                                       ...prev.lineup?.jerseyOverrides,
+                                                       [player.id]: n,
+                                                     },
+                                                   },
+                                                 }));
                                                }
                                                setEditingJerseyId(null);
                                              }}
@@ -659,7 +664,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                                                e.stopPropagation();
                                                e.preventDefault();
                                                setEditingJerseyId(player.id);
-                                               setEditingJerseyValue(String(player.jersey_number ?? ''));
+                                               setEditingJerseyValue(String(formData.lineup?.jerseyOverrides?.[player.id] ?? surclassement?.target_jersey_number ?? player.jersey_number ?? ''));
                                              }}
                                              className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 bg-white hover:border-primary hover:text-primary text-muted-foreground transition-all text-[9px] font-black uppercase cursor-pointer"
                                              title="Modifier le numéro de maillot"
@@ -669,7 +674,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                                            </button>
                                          )}
                                          <span className="text-[9px] font-bold text-muted-foreground uppercase">• {player.position}</span>
-                                         {surclassement?.target_jersey_number != null && surclassement.target_jersey_number !== player.jersey_number && (
+                                         {displayJersey != null && displayJersey !== player.jersey_number && (
                                            <span className="text-[8px] text-orange-400 font-black">(#{player.jersey_number} orig.)</span>
                                          )}
                                        </div>

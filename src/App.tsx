@@ -19,6 +19,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './features/auth/LoginPage';
 import ForgotPasswordPage from './features/auth/ForgotPasswordPage';
 import ResetPasswordPage from './features/auth/ResetPasswordPage';
+import ForcePasswordChange from './features/auth/ForcePasswordChange';
 
 // Pages protégées
 import MatchManagementPage from './features/match-management/MatchManagementPage';
@@ -32,7 +33,7 @@ import TeamManagement from './features/squad-management/TeamManagement';
 import StadiumManagement from './features/club-management/StadiumManagement';
 import BlogManagement from './features/blog-management/BlogManagement';
 import StoreManagement from './features/store-management/StoreManagement';
-import UserManagement from './features/people-management/UserManagement';
+import UserManagement from './features/user-management/UserManagement';
 
 const pageTitles: Record<string, string> = {
   '/matches':    'Centre de Matchs',
@@ -46,7 +47,7 @@ const pageTitles: Record<string, string> = {
   '/settings':   'Paramètres Club',
   '/blog':       'Blog & Actus',
   '/store':      'Store & Marketing',
-  '/users':      'Utilisateurs App',
+  '/users':      'Gestion des Utilisateurs',
 };
 
 // -------------------------------------------------------
@@ -125,7 +126,7 @@ const AppContent: React.FC = () => {
                 <Route path="/blog"      element={<BlogManagement />} />
                 <Route path="/store"     element={<StoreManagement />} />
                 <Route path="/users"     element={
-                  <ProtectedRoute requiredPermission="manage_roles">
+                  <ProtectedRoute requiredPermission="manage_users">
                     <UserManagement />
                   </ProtectedRoute>
                 } />
@@ -172,6 +173,7 @@ function App() {
             <Route path="/login"            element={<LoginPage />} />
             <Route path="/forgot-password"  element={<ForgotPasswordPage />} />
             <Route path="/reset-password"   element={<ResetPasswordPage />} />
+            <Route path="/force-password-change" element={<ForcePasswordChange />} />
 
             {/* Toutes les autres routes sont protégées */}
             <Route path="/*" element={

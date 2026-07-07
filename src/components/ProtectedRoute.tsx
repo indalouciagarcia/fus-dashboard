@@ -13,10 +13,8 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
-  requiredPermission,
-  fallback = '/',
 }) => {
-  const { authState, can } = usePermissions();
+  const { authState } = usePermissions();
   const location = useLocation();
 
   // Chargement initial de la session
@@ -39,10 +37,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Permission insuffisante → tableau de bord
-  if (requiredPermission && !can(requiredPermission)) {
-    return <Navigate to={fallback} replace />;
-  }
 
   return <>{children}</>;
 };

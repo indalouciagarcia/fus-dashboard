@@ -27,7 +27,6 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import type { StaffMember } from '../types';
 import { storageService } from '../../services/storageService';
-import { getAllStaffAccessProfiles } from '../../services/accessService';
 import ImageCropperModal from '../../components/ImageCropperModal';
 import { Skeleton } from '../../components/ui/skeleton';
 
@@ -47,7 +46,6 @@ const StaffManagement: React.FC = () => {
   
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [selectedFileUrl, setSelectedFileUrl] = useState<string | null>(null);
-  const [accessProfiles, setAccessProfiles] = useState<Record<string, {roles: string[], teams: string[]}>>({});
 
   // Settings sync
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>(mainClub?.preferred_view_mode || 'list');
@@ -59,17 +57,6 @@ const StaffManagement: React.FC = () => {
     if (mainClub?.pagination_limit) setPageSize(mainClub.pagination_limit);
   }, [mainClub]);
 
-  useEffect(() => {
-    const fetchAccess = async () => {
-       try {
-         const mapping = await getAllStaffAccessProfiles();
-         setAccessProfiles(mapping);
-       } catch(e) {
-         console.error('Error fetching staff access profiles', e);
-       }
-    };
-    fetchAccess();
-  }, [staff]);
 
   const STAFF_ROLES = [
     { value: 'coach', label: 'Entraîneur Principal' },
@@ -371,16 +358,7 @@ const StaffManagement: React.FC = () => {
                                    </div>
                                  ) : null}
 
-                                 {accessProfiles[person.id] && (accessProfiles[person.id].roles.length > 0 || accessProfiles[person.id].teams.length > 0) && (
-                                      <div className="pt-4 border-t border-secondary/50 mt-4">
-                                         <div className="text-[9px] font-black uppercase text-muted-foreground mb-2 flex items-center gap-1.5"><ShieldAlert className="w-3 h-3"/> Accès</div>
-                                         <div className="flex flex-wrap gap-1">
-                                            {accessProfiles[person.id].roles.map(r => (
-                                              <Badge key={r} className="bg-primary hover:bg-primary text-white text-[8px] uppercase tracking-widest leading-none py-1">{r}</Badge>
-                                            ))}
-                                         </div>
-                                      </div>
-                                 )}
+
                               </div>
                            </div>
                         </CardContent>

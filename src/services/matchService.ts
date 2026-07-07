@@ -146,13 +146,27 @@ export const matchService = {
   },
 
   async deleteMatch(id: string): Promise<void> {
-    await supabase.from('player_match_stats').delete().eq('match_id', id);
-    await supabase.from('match_stats').delete().eq('match_id', id);
-    await supabase.from('match_players').delete().eq('match_id', id);
-    await supabase.from('match_staff').delete().eq('match_id', id);
-    await supabase.from('match_events').delete().eq('match_id', id);
+    const d2 = await supabase.from('player_match_stats').delete().eq('match_id', id);
+    if (d2.error && d2.error.code !== 'PGRST205') console.error('Error deleting player_match_stats:', d2.error);
+    
+    const d3 = await supabase.from('match_stats').delete().eq('match_id', id);
+    if (d3.error && d3.error.code !== 'PGRST205') console.error('Error deleting match_stats:', d3.error);
+    
+    const d4 = await supabase.from('match_players').delete().eq('match_id', id);
+    if (d4.error && d4.error.code !== 'PGRST205') console.error('Error deleting match_players:', d4.error);
+    
+    const d5 = await supabase.from('match_staff').delete().eq('match_id', id);
+    if (d5.error && d5.error.code !== 'PGRST205') console.error('Error deleting match_staff:', d5.error);
+
+    
+    const d6 = await supabase.from('match_events').delete().eq('match_id', id);
+    if (d6.error && d6.error.code !== 'PGRST205') console.error('Error deleting match_events:', d6.error);
+    
     const { error } = await supabase.from('matches').delete().eq('id', id);
-    if (error) throw error;
+    if (error) {
+      console.error('Error deleting match:', error);
+      throw error;
+    }
   },
 
   // -------------------------------------------------------
@@ -163,7 +177,7 @@ export const matchService = {
     await supabase.from('match_players').delete().eq('match_id', matchId);
 
     // Build rows with position_index for starters to preserve their position in the array
-    const rows = [
+    const rawRows = [
       ...startingXI.map((pid, index) => ({ 
         match_id: matchId, 
         player_id: pid, 
@@ -177,6 +191,15 @@ export const matchService = {
         position_index: null, // substitutes don't have a position index
       })),
     ];
+
+    // Deduplicate by player_id (keep first occurrence, which favors startingXI)
+    const uniqueRowsMap = new Map();
+    rawRows.forEach(r => {
+      if (!uniqueRowsMap.has(r.player_id)) {
+        uniqueRowsMap.set(r.player_id, r);
+      }
+    });
+    const rows = Array.from(uniqueRowsMap.values());
 
     if (rows.length) {
       const { error } = await supabase.from('match_players').insert(rows);

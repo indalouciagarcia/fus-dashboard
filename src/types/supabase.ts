@@ -102,6 +102,7 @@ export interface Database {
           name: string;
           season: string;
           logo_url: string | null;
+          category: AgeCategory | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -112,6 +113,7 @@ export interface Database {
           name: string;
           season: string;
           logo_url?: string | null;
+          category?: AgeCategory | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -536,6 +538,8 @@ export interface Database {
           staff_id: string | null;
           default_club_id: string | null;
           is_active: boolean;
+          force_password_change: boolean;
+          system_role: string;
           created_at: string;
           updated_at: string;
         };
@@ -544,6 +548,8 @@ export interface Database {
           staff_id?: string | null;
           default_club_id?: string | null;
           is_active?: boolean;
+          force_password_change?: boolean;
+          system_role?: string;
           created_at?: string;
           updated_at?: string;
         };

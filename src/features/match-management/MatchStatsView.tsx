@@ -292,12 +292,18 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
     substitutions: events.filter(e => e.type === 'substitution').length,
   };
 
-  // Résolution du numéro de maillot porté lors de ce match (surclassement pris en compte)
+  // Résolution du numéro de maillot porté lors de ce match
+  // Priorité : override spécifique au match > surclassement actif à la date du match > jersey global
   const jerseyWornMap = useMemo(() => {
     const matchDate = currentMatch?.match_date ?? '';
     const t = matchDate ? new Date(matchDate).getTime() : 0;
+    const overrides: Record<string, number> = (currentMatch as any)?.lineup?.jerseyOverrides ?? {};
     const map: Record<string, number | null> = {};
     players.forEach(p => {
+      if (overrides[p.id] != null) {
+        map[p.id] = overrides[p.id];
+        return;
+      }
       const s = surclassements.find(sr => {
         const promoted = new Date(sr.promoted_at).getTime();
         const reverted = sr.reverted_at ? new Date(sr.reverted_at).getTime() : null;
@@ -306,7 +312,7 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
       map[p.id] = (s as any)?.target_jersey_number ?? p.jersey_number ?? null;
     });
     return map;
-  }, [players, surclassements, currentMatch?.match_date]);
+  }, [players, surclassements, currentMatch?.match_date, (currentMatch as any)?.lineup?.jerseyOverrides]);
 
   // Stats par joueur
   const playerStats = players

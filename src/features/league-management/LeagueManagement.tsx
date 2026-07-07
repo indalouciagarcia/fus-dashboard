@@ -22,11 +22,14 @@ import {
   LayoutGrid,
   List as ListIcon,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { League } from '../../types';
+import type { League, AgeCategory } from '../../types';
+import { PLAYER_CATEGORIES } from '../../constants';
 import { Skeleton } from '../../components/ui/skeleton';
+import LeagueOverviewPanel from './LeagueOverviewPanel';
 
 const LeagueManagement: React.FC = () => {
   const { leagues, isLoading: leaguesLoading, addLeague, updateLeague, deleteLeague } = useCompetitions();
@@ -35,6 +38,7 @@ const LeagueManagement: React.FC = () => {
 
   const [showForm, setShowForm] = useState(false);
   const [editingLeague, setEditingLeague] = useState<League | null>(null);
+  const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [uploading, setUploading] = useState(false);
 
@@ -52,12 +56,13 @@ const LeagueManagement: React.FC = () => {
   const [formData, setFormData] = useState<Partial<League>>({
     name: '',
     logo_url: '',
-    season: '2024/25'
+    season: '2024/25',
+    category: null
   });
 
   const handleOpenAdd = () => {
     setEditingLeague(null);
-    setFormData({ name: '', logo_url: '', season: '2024/25' });
+    setFormData({ name: '', logo_url: '', season: '2024/25', category: null });
     setShowForm(true);
   };
 
@@ -90,14 +95,16 @@ const LeagueManagement: React.FC = () => {
           data: {
             name: formData.name, 
             logo_url: formData.logo_url, 
-            season: formData.season 
+            season: formData.season,
+            category: formData.category
           }
         });
       } else {
         await addLeague({
           name: formData.name!,
           logo_url: formData.logo_url!,
-          season: formData.season!
+          season: formData.season!,
+          category: formData.category || null
         });
       }
       setShowForm(false);
@@ -200,7 +207,9 @@ const LeagueManagement: React.FC = () => {
             </div>
 
             {/* Content Area */}
-            {displayMode === 'grid' ? (
+            {selectedLeague ? (
+              <LeagueOverviewPanel league={selectedLeague} onBack={() => setSelectedLeague(null)} />
+            ) : displayMode === 'grid' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <AnimatePresence mode="popLayout">
                   {paginatedLeagues.map(league => (
@@ -217,6 +226,9 @@ const LeagueManagement: React.FC = () => {
                                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
                                       <h3 className="text-3xl font-black uppercase tracking-tighter italic leading-none">{league.name}</h3>
                                       <Badge className="bg-primary/5 text-primary border-primary/20 font-black uppercase italic text-[10px] px-5 py-1.5 rounded-xl">Season {league.season}</Badge>
+                                      {league.category && (
+                                        <Badge variant="outline" className="text-muted-foreground border-secondary font-black uppercase text-[10px] px-4 py-1.5 rounded-xl">{league.category}</Badge>
+                                      )}
                                    </div>
                                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mt-3 flex items-center justify-center md:justify-start gap-2 opacity-50">
                                       <Globe className="w-3.5 h-3.5" /> COMPETITION REGISTRY • {league.id.substr(0, 8)}
@@ -224,8 +236,11 @@ const LeagueManagement: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center justify-center md:justify-start gap-3">
-                                   <Button onClick={() => handleOpenEdit(league)} className="h-12 px-6 rounded-2xl bg-secondary hover:bg-primary hover:text-white text-foreground transition-all font-black uppercase tracking-widest text-[10px] gap-3">
-                                      <Edit2 className="w-4 h-4" /> Edit
+                                   <Button onClick={() => setSelectedLeague(league)} className="h-12 px-6 rounded-2xl bg-red-50 hover:bg-red-600 text-red-600 hover:text-white transition-all font-black uppercase tracking-widest text-[10px] gap-3 border border-red-100">
+                                      <Eye className="w-4 h-4" /> Détails
+                                   </Button>
+                                   <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(league)} className="w-12 h-12 rounded-2xl bg-secondary/50 hover:bg-secondary transition-all">
+                                      <Edit2 className="w-4 h-4" />
                                    </Button>
                                    <Button variant="ghost" size="icon" onClick={() => deleteLeague(league.id)} className="w-12 h-12 rounded-2xl bg-secondary/50 hover:bg-destructive hover:text-white transition-all">
                                       <Trash2 className="w-5 h-5" />
@@ -261,12 +276,20 @@ const LeagueManagement: React.FC = () => {
                               <span className="font-black text-base uppercase italic tracking-tighter">{l.name}</span>
                            </div>
                         </td>
-                        <td className="py-4 font-black italic text-primary/70">{l.season}</td>
+                        <td className="py-4">
+                           <div className="flex items-center gap-2">
+                             <span className="font-black italic text-primary/70">{l.season}</span>
+                             {l.category && <Badge variant="outline" className="text-[9px] font-black">{l.category}</Badge>}
+                           </div>
+                        </td>
                         <td className="py-4">
                            <code className="text-[10px] font-black opacity-30 uppercase tracking-widest">{l.id.substr(0, 12)}</code>
                         </td>
                         <td className="px-10 py-4 text-right">
                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" onClick={() => setSelectedLeague(l)} className="h-10 w-10 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all">
+                                 <Eye className="w-4 h-4" />
+                              </Button>
                               <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} className="h-10 w-10 rounded-xl hover:bg-white hover:shadow-md transition-all">
                                  <Edit2 className="w-4 h-4" />
                               </Button>
@@ -374,7 +397,21 @@ const LeagueManagement: React.FC = () => {
                      </select>
                    </div>
 
-                   <div className="md:col-span-2 space-y-4">
+                   <div className="space-y-4">
+                     <label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-3">Catégorie Associée</label>
+                     <select 
+                       value={formData.category || ''} 
+                       onChange={e => setFormData({...formData, category: e.target.value ? e.target.value as AgeCategory : null})} 
+                       className="w-full h-18 px-10 rounded-3xl bg-secondary/20 border-none font-black text-xl focus:ring-4 ring-primary/10 transition-all appearance-none cursor-pointer"
+                     >
+                       <option value="">-- Aucune (Toutes) --</option>
+                       {PLAYER_CATEGORIES.map(c => (
+                         <option key={c} value={c}>{c}</option>
+                       ))}
+                     </select>
+                   </div>
+
+                   <div className="md:col-span-1 space-y-4">
                      <label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-3">Direct Logo Resource (CDN)</label>
                      <Input 
                        value={formData.logo_url} 

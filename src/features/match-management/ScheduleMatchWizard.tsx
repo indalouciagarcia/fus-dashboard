@@ -140,6 +140,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
 
   // Step 1
   const [setup, setSetup] = useState({
+    match_type: 'amical' as 'amical' | 'league',
     opponent_id: '',
     league_id: '',
     stadium_id: '',
@@ -174,13 +175,25 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
   useEffect(() => {
     if (currentStep === 'setup' && setup.category) {
       const matchingTeams = teams.filter(t => t.category === setup.category);
-      if (matchingTeams.length === 1 && setup.team_id !== matchingTeams[0].id) {
+      if (matchingTeams.length > 0) {
+        // Auto-select the first team that belongs to this category
         setSetup(prev => ({ ...prev, team_id: matchingTeams[0].id }));
-      } else if (matchingTeams.length === 0 && setup.team_id !== '') {
+      } else {
         setSetup(prev => ({ ...prev, team_id: '' }));
       }
+
+      // If current league is set but not valid for the new category, reset it
+      setSetup(prev => {
+        if (prev.league_id) {
+          const currentLeague = leagues.find(l => l.id === prev.league_id);
+          if (currentLeague && currentLeague.category && currentLeague.category !== setup.category) {
+            return { ...prev, league_id: '' };
+          }
+        }
+        return prev;
+      });
     }
-  }, [setup.category, teams, currentStep]);
+  }, [setup.category, teams, leagues, currentStep]);
 
   const stepIndex = STEPS.findIndex(s => s.key === currentStep);
 
@@ -412,10 +425,10 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
     }
     setSaving(true);
     try {
-      const { qualif_status, match_phase: _mp, ...setupBase } = setup;
+      const { qualif_status, match_phase: _mp, match_type, ...setupBase } = setup;
       const matchPayload: any = {
         ...setupBase,
-        league_id: setup.league_id === '' ? null : setup.league_id,
+        league_id: match_type === 'amical' || setup.league_id === '' ? null : setup.league_id,
         stadium_id: setup.stadium_id === '' ? null : setup.stadium_id,
         match_time: setup.match_time,
         category: setup.category,
@@ -624,27 +637,39 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                         </select>
                      </div>
                      <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Trophy className="inline w-3.5 h-3.5 mr-2 text-primary" /> Compétition</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Trophy className="inline w-3.5 h-3.5 mr-2 text-primary" /> Type de Match</label>
                         <select className="w-full h-16 rounded-2xl bg-white border border-transparent px-8 font-black text-lg outline-none focus:ring-4 ring-primary/20 appearance-none shadow-sm transition-all"
-                           value={setup.league_id} onChange={e => setSetup({ ...setup, league_id: e.target.value })}>
-                           <option value="">Sélectionner...</option>
-                           {leagues.map(l => <option key={l.id} value={l.id}>{l.name} — {l.season}</option>)}
+                           value={setup.match_type} onChange={e => setSetup({ ...setup, match_type: e.target.value as 'amical' | 'league', league_id: e.target.value === 'amical' ? '' : setup.league_id, match_phase: e.target.value === 'amical' ? '' : setup.match_phase })}>
+                           <option value="amical">Match Amical</option>
+                           <option value="league">Match Officiel (Compétition)</option>
                         </select>
                      </div>
-                     <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Gamepad2 className="inline w-3.5 h-3.5 mr-2 text-primary" /> Phase / Tour de Compétition</label>
-                        <select className="w-full h-16 rounded-2xl bg-white border border-transparent px-8 font-black text-lg outline-none focus:ring-4 ring-primary/20 appearance-none shadow-sm transition-all"
-                           value={setup.match_phase} onChange={e => setSetup({ ...setup, match_phase: e.target.value as MatchPhase | '', qualif_status: '' })}>
-                           <option value="">— Sélectionner la phase —</option>
-                           <option value="league">Phase de Ligue / Championnat</option>
-                           <option value="round_of_32">32èmes de Finale</option>
-                           <option value="round_of_16">16èmes de Finale</option>
-                           <option value="quarter_final">Quart de Finale (1/4)</option>
-                           <option value="semi_final">Demi-Finale (1/2)</option>
-                           <option value="third_place">Match pour la 3ème Place</option>
-                           <option value="final">Finale</option>
-                        </select>
-                     </div>
+                     {setup.match_type === 'league' && (
+                       <div className="space-y-3">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Trophy className="inline w-3.5 h-3.5 mr-2 text-primary" /> Compétition / Saison</label>
+                          <select className="w-full h-16 rounded-2xl bg-white border border-transparent px-8 font-black text-lg outline-none focus:ring-4 ring-primary/20 appearance-none shadow-sm transition-all"
+                             value={setup.league_id} onChange={e => setSetup({ ...setup, league_id: e.target.value })}>
+                             <option value="">Sélectionner la compétition...</option>
+                             {leagues.filter(l => !l.category || l.category === setup.category).map(l => <option key={l.id} value={l.id}>{l.name} — {l.season}</option>)}
+                          </select>
+                       </div>
+                     )}
+                     {setup.match_type === 'league' && (
+                       <div className="space-y-3">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Gamepad2 className="inline w-3.5 h-3.5 mr-2 text-primary" /> Phase / Tour de Compétition</label>
+                          <select className="w-full h-16 rounded-2xl bg-white border border-transparent px-8 font-black text-lg outline-none focus:ring-4 ring-primary/20 appearance-none shadow-sm transition-all"
+                             value={setup.match_phase} onChange={e => setSetup({ ...setup, match_phase: e.target.value as MatchPhase | '', qualif_status: '' })}>
+                             <option value="">— Sélectionner la phase —</option>
+                             <option value="league">Phase de Ligue / Championnat</option>
+                             <option value="round_of_32">32èmes de Finale</option>
+                             <option value="round_of_16">16èmes de Finale</option>
+                             <option value="quarter_final">Quart de Finale (1/4)</option>
+                             <option value="semi_final">Demi-Finale (1/2)</option>
+                             <option value="third_place">Match pour la 3ème Place</option>
+                             <option value="final">Finale</option>
+                          </select>
+                       </div>
+                     )}
                      <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><MapPin className="inline w-3.5 h-3.5 mr-2 text-primary" /> Lieu du Match</label>
                         <select className="w-full h-16 rounded-2xl bg-white border border-transparent px-8 font-black text-lg outline-none focus:ring-4 ring-primary/20 appearance-none shadow-sm transition-all"
@@ -720,66 +745,116 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                         </div>
                      </div>
 
-                     <div className="flex-1 flex flex-col min-h-0 bg-white border-2 border-secondary/20 rounded-[3rem] p-6 shadow-sm overflow-hidden">
-                        {/* Auto-position button */}
-                        <button
-                          onClick={autoPositionPlayers}
-                          className="mb-4 w-full h-12 rounded-2xl bg-gradient-to-r from-primary to-blue-600 text-white font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-                        >
-                          <Users className="w-4 h-4" />
-                          Positionnement Auto
-                        </button>
+                      <div className="flex-1 flex flex-col min-h-0 bg-white border-2 border-secondary/20 rounded-[3rem] p-6 shadow-sm overflow-hidden">
 
-                        <div className="relative mb-4">
-                           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground opacity-30" />
-                           <input 
-                             type="text" 
-                             placeholder="Chercher joueur..." 
-                             value={searchQuery}
-                             onChange={(e) => setSearchQuery(e.target.value)}
-                             className="w-full h-11 pl-12 pr-4 rounded-2xl bg-secondary/10 border-none font-bold text-xs"
-                           />
-                        </div>
+                         {/* Team Selector — shown only if multiple teams for this category */}
+                         {teams.filter(t => t.category === setup.category).length > 1 && (
+                           <div className="mb-4">
+                             <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                               <Layout className="w-3 h-3 text-primary" /> Équipe
+                             </p>
+                             <div className="flex flex-wrap gap-2">
+                               {teams.filter(t => t.category === setup.category).map(team => (
+                                 <button
+                                   key={team.id}
+                                   type="button"
+                                   onClick={() => setSetup(prev => ({ ...prev, team_id: team.id }))}
+                                   className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider border-2 transition-all ${setup.team_id === team.id ? 'bg-primary text-white border-primary shadow-md' : 'bg-white text-slate-500 border-secondary hover:border-primary/40'}`}
+                                 >
+                                   {team.name}
+                                 </button>
+                               ))}
+                             </div>
+                           </div>
+                         )}
 
-                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8 max-h-[450px]">
-                           {groupedPlayers.map(group => (
-                              <div key={group.label} className="space-y-3">
+                         {/* Generate 22 Button */}
+                         <button
+                           onClick={autoPositionPlayers}
+                           className="mb-3 w-full h-14 rounded-2xl bg-gradient-to-r from-primary to-blue-600 text-white font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 relative overflow-hidden"
+                         >
+                           <Users className="w-4 h-4" />
+                           ⚡ Générer 22 joueurs
+                           <span className="ml-1 bg-white/20 px-2 py-0.5 rounded-lg text-[8px] font-black">
+                             11 + {Math.min(Math.max(matchPlayers.length - 11, 0), 11)} remplaçants
+                           </span>
+                         </button>
+
+                         {/* Reset Button */}
+                         {(startingXI.some(id => id !== '') || substitutes.length > 0) && (
+                           <button
+                             onClick={() => { setStartingXI(Array(11).fill('')); setSubstitutes([]); }}
+                             className="mb-3 w-full h-9 rounded-xl bg-red-50 text-red-500 border-2 border-red-100 hover:bg-red-100 font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+                           >
+                             <Trash2 className="w-3.5 h-3.5" /> Réinitialiser la sélection
+                           </button>
+                         )}
+
+                         <div className="relative mb-4">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground opacity-30" />
+                            <input
+                              type="text"
+                              placeholder="Chercher joueur..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="w-full h-11 pl-12 pr-4 rounded-2xl bg-secondary/10 border-none font-bold text-xs"
+                            />
+                         </div>
+
+                         {matchPlayers.length === 0 ? (
+                           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center py-8">
+                             <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center">
+                               <Users className="w-7 h-7 text-slate-300" />
+                             </div>
+                             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Aucun joueur trouvé</p>
+                             <p className="text-[10px] text-slate-300 font-medium">Sélectionnez une équipe ou ajoutez des joueurs</p>
+                           </div>
+                         ) : (
+                           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8 max-h-[450px]">
+                             {groupedPlayers.map(group => (
+                               <div key={group.label} className="space-y-3">
                                  <div className="flex items-center gap-3 px-3">
-                                    <div className={`w-3 h-3 rounded-full bg-gradient-to-br ${group.color}`} />
-                                    <h5 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{group.label}</h5>
-                                    <div className="flex-1 h-px bg-secondary" />
+                                   <div className={`w-3 h-3 rounded-full bg-gradient-to-br ${group.color}`} />
+                                   <h5 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{group.label}</h5>
+                                   <Badge className={`bg-gradient-to-br ${group.color} text-white border-none text-[8px] font-black rounded-lg px-2`}>{group.players.length}</Badge>
+                                   <div className="flex-1 h-px bg-secondary" />
                                  </div>
                                  <div className="space-y-2">
                                    {group.players.map(p => {
-                                      const isStarter = startingXI.includes(p.id);
-                                      const isSub = substitutes.includes(p.id);
-                                      const positionColor = getPositionColor(p.position);
-                                      return (
-                                         <motion.div 
-                                           key={p.id} 
-                                           layout
-                                           draggable 
-                                           onDragStart={(e) => { e.dataTransfer.setData('playerId', p.id); }}
-                                           className={`p-3 rounded-[1.8rem] border-2 transition-all flex items-center gap-4 cursor-grab active:cursor-grabbing hover:bg-black/5 ${isStarter ? `border-transparent bg-gradient-to-r ${positionColor} text-white shadow-md` : isSub ? 'border-emerald-400 bg-emerald-50/20' : 'border-secondary bg-white'}`}
-                                         >
-                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs overflow-hidden border-2 border-white ${isStarter ? 'bg-white/20' : 'bg-secondary'}`}>
-                                              <img src={(p.photo_url && p.photo_url !== 'null') ? p.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name)}&background=random&color=fff&size=200`} className="w-full h-full object-cover" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                               <p className={`font-black text-[11px] uppercase ${isStarter ? 'text-white' : ''} truncate`}>{p.full_name}</p>
-                                               <p className={`text-[8px] font-bold opacity-60 ${isStarter ? 'text-white/80' : 'text-muted-foreground'}`}>#{p.jersey_number} • {p.position}</p>
-                                            </div>
-                                            <button onClick={() => toggleLineupPlayer(p)} className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${ (isStarter || isSub) ? 'bg-white text-primary shadow-lg' : 'bg-secondary text-muted-foreground hover:bg-primary/20'}`}>
-                                               {(isStarter || isSub) ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border-2 border-current" />}
-                                            </button>
-                                         </motion.div>
-                                      );
+                                     const isStarter = startingXI.includes(p.id);
+                                     const isSub = substitutes.includes(p.id);
+                                     const positionColor = getPositionColor(p.position);
+                                     return (
+                                       <motion.div
+                                         key={p.id}
+                                         layout
+                                         draggable
+                                         onDragStart={(e) => { e.dataTransfer.setData('playerId', p.id); }}
+                                         className={`p-3 rounded-[1.8rem] border-2 transition-all flex items-center gap-4 cursor-grab active:cursor-grabbing hover:bg-black/5 ${isStarter ? `border-transparent bg-gradient-to-r ${positionColor} text-white shadow-md` : isSub ? 'border-emerald-400 bg-emerald-50/20' : 'border-secondary bg-white'}`}
+                                       >
+                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs overflow-hidden border-2 border-white ${isStarter ? 'bg-white/20' : 'bg-secondary'}`}>
+                                           <img src={(p.photo_url && p.photo_url !== 'null') ? p.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(p.full_name)}&background=random&color=fff&size=200`} className="w-full h-full object-cover" />
+                                         </div>
+                                         <div className="flex-1 min-w-0">
+                                           <p className={`font-black text-[11px] uppercase ${isStarter ? 'text-white' : ''} truncate`}>{p.full_name}</p>
+                                           <p className={`text-[8px] font-bold opacity-60 ${isStarter ? 'text-white/80' : 'text-muted-foreground'}`}>#{p.jersey_number} • {p.position}</p>
+                                         </div>
+                                         <div className="flex items-center gap-1.5 shrink-0">
+                                           {isStarter && <span className="text-[8px] font-black bg-white/20 px-1.5 py-0.5 rounded-lg">TIT</span>}
+                                           {isSub && <span className="text-[8px] font-black bg-emerald-500 text-white px-1.5 py-0.5 rounded-lg">SUB</span>}
+                                           <button onClick={() => toggleLineupPlayer(p)} className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${(isStarter || isSub) ? 'bg-white text-primary shadow-lg' : 'bg-secondary text-muted-foreground hover:bg-primary/20'}`}>
+                                             {(isStarter || isSub) ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border-2 border-current" />}
+                                           </button>
+                                         </div>
+                                       </motion.div>
+                                     );
                                    })}
                                  </div>
-                              </div>
-                           ))}
-                        </div>
-                     </div>
+                               </div>
+                             ))}
+                           </div>
+                         )}
+                      </div>
                   </div>
                   <div className="lg:col-span-8 flex flex-col items-center">
                      <div className="w-full flex justify-between items-center mb-6 px-10">

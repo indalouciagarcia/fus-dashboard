@@ -30,13 +30,17 @@ import {
    X,
    Clock,
    Radio,
-   Save
+   Save,
+   Table,
+   List,
+   LayoutGrid
 } from 'lucide-react';
 import { Input } from '../../components/ui/input';
 import MatchPreparation from './MatchPreparation';
 import LiveTracking from './LiveTracking';
 import ScheduleMatchWizard from './ScheduleMatchWizard';
 import MatchStatsView from './MatchStatsView';
+import MatchOverviewPanel from './MatchOverviewPanel';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PLAYER_CATEGORIES } from '../../constants';
 import type { Match } from '../../types';
@@ -49,12 +53,13 @@ interface MatchListItemProps {
    onDelete: (e: React.MouseEvent) => void;
    onStartLive?: (e: React.MouseEvent) => void;
    opponentClubs: any[];
+   mainClub?: any;
    getOpponentName: (clubId: string) => string;
    variant: 'live' | 'upcoming' | 'past';
 }
 
 const MatchListItem: React.FC<MatchListItemProps> = ({ 
-   match, isSelected, onSelect, onDelete, onStartLive, opponentClubs, getOpponentName, variant 
+   match, isSelected, onSelect, onDelete, onStartLive, opponentClubs, mainClub, getOpponentName, variant 
 }) => {
    const getVariantStyles = () => {
       switch (variant) {
@@ -77,11 +82,23 @@ const MatchListItem: React.FC<MatchListItemProps> = ({
       if (match.status !== 'finished') return null;
       const fusScore = match.is_home ? match.score_home : match.score_away;
       const oppScore = match.is_home ? match.score_away : match.score_home;
+      
+      const hasPenalties = (match.penalty_score_home ?? 0) > 0 || (match.penalty_score_away ?? 0) > 0;
+      const fusPenScore = match.is_home ? match.penalty_score_home : match.penalty_score_away;
+      const oppPenScore = match.is_home ? match.penalty_score_away : match.penalty_score_home;
+
       return (
-         <div className="flex items-center gap-1 text-sm font-black tabular-nums">
-            <span>{fusScore || 0}</span>
-            <span className="text-muted-foreground">-</span>
-            <span>{oppScore || 0}</span>
+         <div className="flex flex-col items-center">
+            <div className="flex items-center gap-1 text-sm font-black tabular-nums">
+               <span>{fusScore || 0}</span>
+               <span className="text-muted-foreground">-</span>
+               <span>{oppScore || 0}</span>
+            </div>
+            {hasPenalties && (
+               <div className="mt-1 bg-purple-50 text-purple-700 text-[8px] font-black uppercase px-2 py-0.5 rounded border border-purple-200 shadow-sm">
+                  ({fusPenScore} - {oppPenScore} TAB)
+               </div>
+            )}
          </div>
       );
    };
@@ -92,32 +109,51 @@ const MatchListItem: React.FC<MatchListItemProps> = ({
          onClick={onSelect}
          whileHover={{ scale: 1.02 }}
          whileTap={{ scale: 0.98 }}
-         className={`w-full p-4 rounded-2xl border-2 transition-all flex items-center justify-between group cursor-pointer relative overflow-hidden ${getVariantStyles()}`}
+         className={`w-full p-4 rounded-2xl border-2 transition-all flex flex-col group cursor-pointer relative overflow-hidden ${getVariantStyles()}`}
       >
-         <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-xl bg-white border flex items-center justify-center p-1.5 shadow-sm transition-all ${isSelected ? 'ring-2 ring-primary/20' : ''}`}>
-               <img 
-                  src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`} 
-                  alt="" 
-                  className="w-full h-full object-contain" 
-               />
+         <div className="flex items-center justify-between w-full">
+            <div className="flex flex-col items-center gap-1 w-1/3">
+               <div className={`w-12 h-12 rounded-xl bg-white border flex items-center justify-center p-1.5 shadow-sm transition-all ${isSelected ? 'ring-2 ring-primary/20' : ''}`}>
+                  {mainClub?.logo_url ? <img src={mainClub.logo_url} className="w-full h-full object-contain" /> : <div className="bg-yellow-500 w-full h-full text-white font-black text-[12px] flex items-center justify-center rounded-lg">FUS</div>}
+               </div>
+               <span className="text-[10px] font-black uppercase tracking-tight text-foreground truncate max-w-full text-center">
+                  {mainClub?.club_name || 'FUS'}
+               </span>
             </div>
-            <div>
-               <h5 className="text-[12px] font-black uppercase tracking-tight text-foreground leading-none">
-                  {getOpponentName(match.opponent_id)}
-               </h5>
-               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1 opacity-60">
-                  {match.match_date} • {match.category}
+
+            <div className="flex flex-col items-center justify-center w-1/3 text-center">
+               {getScoreBadge()}
+               {match.status !== 'finished' && (
+                  <span className="text-xl font-black text-slate-300">-</span>
+               )}
+               <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-2 opacity-80 whitespace-nowrap">
+                  {match.match_date}
+               </p>
+               <p className="text-[8px] font-black text-primary/70 uppercase tracking-widest mt-0.5 whitespace-nowrap">
+                  {match.category}
                </p>
                {match.status === 'live' && (
-                  <Badge className="mt-1 bg-red-500 text-white text-[8px] font-black px-2 py-0 rounded-full">
+                  <Badge className="mt-1 bg-red-500 text-white text-[8px] font-black px-2 py-0 rounded-full animate-pulse shadow-sm shadow-red-500/20">
                      LIVE
                   </Badge>
                )}
             </div>
+
+            <div className="flex flex-col items-center gap-1 w-1/3">
+               <div className={`w-12 h-12 rounded-xl bg-white border flex items-center justify-center p-1.5 shadow-sm transition-all ${isSelected ? 'ring-2 ring-primary/20' : ''}`}>
+                  <img 
+                     src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`} 
+                     alt="" 
+                     className="w-full h-full object-contain" 
+                  />
+               </div>
+               <span className="text-[10px] font-black uppercase tracking-tight text-foreground truncate max-w-full text-center">
+                  {getOpponentName(match.opponent_id)}
+               </span>
+            </div>
          </div>
          
-         <div className="flex items-center gap-3">
+         <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-slate-100 w-full">
             {match.match_phase === 'won' && (
                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700">✅ Gagné</span>
             )}
@@ -129,7 +165,6 @@ const MatchListItem: React.FC<MatchListItemProps> = ({
                   <Video className="w-4 h-4" />
                </div>
             )}
-            {getScoreBadge()}
             {/* Live en cours button for scheduled matches */}
             {variant === 'upcoming' && onStartLive && (
                <Button
@@ -176,15 +211,18 @@ const MatchManagementPage: React.FC = () => {
    
    const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
    const [activeTab, setActiveTab] = useState<'details' | 'preparation' | 'live' | 'wizard' | 'stats'>('details');
-   const [listFilter, setListFilter] = useState<'scheduled' | 'finished' | 'today'>('scheduled');
+   const [listFilter, setListFilter] = useState<'all' | 'scheduled' | 'finished' | 'today'>('all');
    const [deletingId, setDeletingId] = useState<string | null>(null);
    const [categoryFilter, setCategoryFilter] = useState<string>('All');
    const [leagueFilter, setLeagueFilter] = useState<string>('All');
    const [dateFilter, setDateFilter] = useState<string>('');
    const [editingVideoUrl, setEditingVideoUrl] = useState<string>('');
    const [showVideoInput, setShowVideoInput] = useState(false);
-   const [viewMode, setViewMode] = useState<'list' | 'planning'>('list');
+   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'planning'>('grid');
    const [currentMonth, setCurrentMonth] = useState(new Date());
+   const [calendarSelectedDate, setCalendarSelectedDate] = useState<string | null>(null);
+   
+
 
    const monthNames = [
       'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -375,6 +413,8 @@ const MatchManagementPage: React.FC = () => {
             return m.match_date === dateFilter;
          }
 
+         if (listFilter === 'all') return true;
+
          const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
          if (listFilter === 'today') {
             return m.match_date === todayStr;
@@ -425,20 +465,51 @@ const MatchManagementPage: React.FC = () => {
                               <p className="text-white/40 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.4em] mt-2 sm:mt-3">Gestion des rencontres & analyses</p>
                            </div>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
-                           <Button 
-                              onClick={() => setViewMode(v => v === 'list' ? 'planning' : 'list')} 
-                              className="bg-white/10 hover:bg-white/20 text-white h-11 sm:h-14 lg:h-16 px-4 sm:px-6 lg:px-8 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] gap-2 sm:gap-3 border border-white/20 shadow-2xl transition-all hover:scale-105 active:scale-95 shrink-0"
-                           >
-                              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
-                              <span className="hidden sm:inline">{viewMode === 'list' ? 'Planning' : 'Liste'}</span>
-                              <span className="sm:hidden">{viewMode === 'list' ? 'Plan' : 'List'}</span>
-                           </Button>
-                           <Button onClick={() => setActiveTab('wizard')} className="bg-white hover:bg-white/90 text-blue-900 h-11 sm:h-14 lg:h-16 px-4 sm:px-6 lg:px-10 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] gap-2 sm:gap-4 shadow-2xl transition-all hover:scale-105 active:scale-95 group shrink-0">
-                              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:rotate-90 transition-transform duration-500" /> 
-                              <span className="hidden sm:inline">Planifier un Match</span>
-                              <span className="sm:hidden">Planifier</span>
-                           </Button>
+                        <div className="flex items-center gap-2">
+                             <div className="flex items-center bg-white/10 p-1 rounded-xl sm:rounded-2xl border border-white/20 shadow-2xl shrink-0">
+                               {listFilter === 'scheduled' && (
+                                  <button
+                                     onClick={() => setViewMode('planning')}
+                                     className={`h-9 sm:h-12 px-3 sm:px-5 rounded-lg sm:rounded-xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] flex items-center gap-2 transition-all ${
+                                        viewMode === 'planning' 
+                                           ? 'bg-white text-blue-950 shadow-lg' 
+                                           : 'text-white/60 hover:text-white hover:bg-white/5'
+                                     }`}
+                                  >
+                                     <Calendar className="w-3.5 h-3.5 shrink-0" />
+                                     <span className="hidden md:inline">Calendrier</span>
+                                  </button>
+                               )}
+                               <button
+                                  onClick={() => setViewMode('grid')}
+                                  className={`h-9 sm:h-12 px-3 sm:px-5 rounded-lg sm:rounded-xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] flex items-center gap-2 transition-all ${
+                                     viewMode === 'grid' 
+                                        ? 'bg-white text-blue-955 shadow-lg' 
+                                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                                  }`}
+                               >
+                                  <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="hidden md:inline">Grille</span>
+                               </button>
+                               <button
+                                  onClick={() => setViewMode('table')}
+                                  className={`h-9 sm:h-12 px-3 sm:px-5 rounded-lg sm:rounded-xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] flex items-center gap-2 transition-all ${
+                                     viewMode === 'table' 
+                                        ? 'bg-white text-blue-955 shadow-lg' 
+                                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                                  }`}
+                               >
+                                  <Table className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="hidden md:inline">Tableau</span>
+                               </button>
+                            </div>
+                           {can('create_match') && (
+                             <Button onClick={() => setActiveTab('wizard')} className="bg-white hover:bg-white/90 text-blue-900 h-11 sm:h-14 lg:h-16 px-4 sm:px-6 lg:px-10 rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] gap-2 sm:gap-4 shadow-2xl transition-all hover:scale-105 active:scale-95 group shrink-0">
+                                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:rotate-90 transition-transform duration-500" /> 
+                                <span className="hidden sm:inline">Planifier un Match</span>
+                                <span className="sm:hidden">Planifier</span>
+                             </Button>
+                           )}
                         </div>
                      </div>
                   </div>
@@ -469,13 +540,22 @@ const MatchManagementPage: React.FC = () => {
                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
                         <div className="bg-secondary/40 p-1 sm:p-1.5 rounded-xl sm:rounded-[1.5rem] flex border shadow-inner overflow-x-auto">
                            {[
+                              { id: 'all', label: 'Tout', icon: LayoutGrid, shortLabel: 'All' },
                               { id: 'scheduled', label: 'Calendrier', icon: Calendar, shortLabel: 'Cal' },
                               { id: 'today', label: 'Aujourd\'hui', icon: Timer, shortLabel: 'Auj' },
                               { id: 'finished', label: 'Passé', icon: History, shortLabel: 'Passé' }
                            ].map(f => (
                               <button
                                  key={f.id}
-                                 onClick={() => setListFilter(f.id as any)}
+                                 onClick={() => {
+                                    const nextFilter = f.id as 'all' | 'scheduled' | 'finished' | 'today';
+                                    setListFilter(nextFilter);
+                                    if (nextFilter === 'scheduled') {
+                                       setViewMode('planning');
+                                    } else if (viewMode === 'planning') {
+                                       setViewMode('grid');
+                                    }
+                                 }}
                                  className={`flex-1 sm:flex-none px-3 sm:px-4 lg:px-6 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-[9px] font-black uppercase tracking-widest transition-all gap-1.5 sm:gap-2 flex items-center justify-center shrink-0 ${listFilter === f.id ? 'bg-primary text-white shadow-lg' : 'text-muted-foreground hover:bg-white/50'}`}
                               >
                                  <f.icon className="w-3.5 h-3.5 shrink-0" /> 
@@ -535,561 +615,446 @@ const MatchManagementPage: React.FC = () => {
                   </div>
 
                   {viewMode === 'planning' ? (
+                      <motion.div 
+                         initial={{ opacity: 0, y: 15 }} 
+                         animate={{ opacity: 1, y: 0 }}
+                         exit={{ opacity: 0, y: -15 }}
+                         className="space-y-4 sm:space-y-5"
+                      >
+                        {/* Calendar Card */}
+                        <div className="bg-white border rounded-2xl sm:rounded-[2.5rem] p-4 sm:p-6 shadow-xl overflow-x-auto">
+                         {/* Month Navigation Header */}
+                         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 sm:pb-5 gap-4 mb-4 sm:mb-5">
+                            <div className="flex items-center gap-3 sm:gap-4">
+                               <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-slate-800">
+                                  {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                               </h2>
+                               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border">
+                                  <button 
+                                     onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+                                     className="p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-500"
+                                  >
+                                     <ChevronRight className="w-4 h-4 rotate-180" />
+                                  </button>
+                                  <button 
+                                     onClick={() => setCurrentMonth(new Date())}
+                                     className="px-3 py-1 bg-white text-[10px] font-black uppercase tracking-wider rounded-lg text-slate-700 hover:text-primary shadow-sm transition-all"
+                                  >
+                                     Aujourd'hui
+                                  </button>
+                                  <button 
+                                     onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+                                     className="p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-500"
+                                  >
+                                     <ChevronRight className="w-4 h-4" />
+                                  </button>
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-3 text-[9px] font-black text-muted-foreground uppercase tracking-wider">
+                               <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red-500" /><span>Live</span></div>
+                               <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /><span>Prévu</span></div>
+                               <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400" /><span>Terminé</span></div>
+                            </div>
+                         </div>
+
+                         {/* Weekdays Header */}
+                         <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center mb-2">
+                            {daysOfWeek.map(day => (
+                               <div key={day} className="text-[9px] font-black uppercase tracking-widest text-slate-400 py-1">{day}</div>
+                            ))}
+                         </div>
+
+                         {/* Calendar Grid */}
+                         <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                            {calendarDays.map(({ date, isCurrentMonth, formattedDate }, idx) => {
+                               const dayMatches = matches.filter(m => {
+                                  if (m.match_date !== formattedDate) return false;
+                                  if (categoryFilter !== 'All' && m.category !== categoryFilter) return false;
+                                  if (leagueFilter !== 'All' && m.league_id !== leagueFilter) return false;
+                                  return true;
+                               });
+                               const isToday = new Date().toLocaleDateString('en-CA') === formattedDate;
+                               const isSelected = calendarSelectedDate === formattedDate;
+                               const hasMatches = dayMatches.length > 0;
+
+                               return (
+                                  <div
+                                     key={idx}
+                                     onDragOver={handleDragOver}
+                                     onDrop={(e) => handleDrop(e, formattedDate)}
+                                     onClick={() => {
+                                       if (hasMatches) setCalendarSelectedDate(isSelected ? null : formattedDate);
+                                     }}
+                                     className={`relative min-h-[64px] sm:min-h-[80px] p-1 sm:p-1.5 rounded-xl border-2 transition-all flex flex-col group ${
+                                        !isCurrentMonth ? 'opacity-30 border-transparent' :
+                                        isSelected ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10' :
+                                        isToday ? 'border-primary/50 bg-blue-50/50' :
+                                        hasMatches ? 'border-slate-200 bg-white hover:border-primary/40 hover:shadow-md cursor-pointer' :
+                                        'border-slate-100 bg-slate-50/30'
+                                     }`}
+                                  >
+                                     {/* Day number */}
+                                     <div className="flex items-center justify-between mb-1">
+                                        <span className={`text-[10px] sm:text-xs font-black ${
+                                           isToday ? 'bg-primary text-white w-5 h-5 rounded-full flex items-center justify-center' :
+                                           isSelected ? 'text-primary' : 'text-slate-600'
+                                        }`}>{date.getDate()}</span>
+                                        {can('create_match') && (
+                                           <button
+                                              onClick={(e) => { e.stopPropagation(); setDateFilter(formattedDate); setActiveTab('wizard'); }}
+                                              className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-primary transition-all"
+                                              title="Planifier un match"
+                                           ><Plus className="w-2.5 h-2.5 sm:w-3 sm:h-3" /></button>
+                                        )}
+                                     </div>
+                                     {/* Match logos in cells */}
+                                     <div className="flex flex-wrap gap-0.5 justify-center">
+                                        {dayMatches.slice(0, 3).map(match => {
+                                           const oppClub = opponentClubs.find(c => c.id === match.opponent_id);
+                                           return (
+                                              <div key={match.id} className="flex flex-col items-center gap-0.5">
+                                                 <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 bg-white flex items-center justify-center overflow-hidden shadow-sm ${
+                                                    match.status === 'live' ? 'border-red-400' :
+                                                    match.status === 'scheduled' ? 'border-emerald-400' : 'border-slate-200'
+                                                 }`}>
+                                                    <img src={oppClub?.logo_url && oppClub.logo_url !== 'null' ? oppClub.logo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random&color=fff&size=64`} alt="" className="w-full h-full object-contain p-0.5" />
+                                                 </div>
+                                                 {/* Status dot */}
+                                                 <div className={`w-1 h-1 rounded-full ${match.status === 'live' ? 'bg-red-500' : match.status === 'scheduled' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                              </div>
+                                           );
+                                        })}
+                                        {dayMatches.length > 3 && (
+                                           <span className="text-[8px] font-black text-slate-400 self-center">+{dayMatches.length - 3}</span>
+                                        )}
+                                     </div>
+                                  </div>
+                               );
+                            })}
+                         </div>
+                        </div>
+
+                        {/* Selected Date Match Panel — like the mobile app */}
+                        <AnimatePresence>
+                        {calendarSelectedDate && (() => {
+                           const panelMatches = matches.filter(m => {
+                              if (m.match_date !== calendarSelectedDate) return false;
+                              if (categoryFilter !== 'All' && m.category !== categoryFilter) return false;
+                              if (leagueFilter !== 'All' && m.league_id !== leagueFilter) return false;
+                              return true;
+                           });
+                           if (panelMatches.length === 0) return null;
+                           const selDate = new Date(calendarSelectedDate + 'T00:00:00');
+                           const dayLabel = selDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
+                           return (
+                              <motion.div
+                                 key={calendarSelectedDate}
+                                 initial={{ opacity: 0, y: 20 }}
+                                 animate={{ opacity: 1, y: 0 }}
+                                 exit={{ opacity: 0, y: 20 }}
+                                 className="space-y-3"
+                              >
+                                 {/* Date header */}
+                                 <div className="flex items-center justify-between px-1">
+                                    <div className="flex items-center gap-2">
+                                       <div className="w-1.5 h-5 bg-primary rounded-full" />
+                                       <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">{dayLabel}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                       <span className="bg-primary text-white text-[9px] font-black px-2.5 py-1 rounded-full">{panelMatches.length} match{panelMatches.length > 1 ? 's' : ''}</span>
+                                       <button onClick={() => setCalendarSelectedDate(null)} className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-all">
+                                          <X className="w-3.5 h-3.5 text-slate-500" />
+                                       </button>
+                                    </div>
+                                 </div>
+
+                                 {/* Match cards — dark style like the app */}
+                                 {panelMatches.map(match => {
+                                    const oppClub = opponentClubs.find(c => c.id === match.opponent_id);
+                                    const fusScore = match.is_home ? match.score_home : match.score_away;
+                                    const oppScore = match.is_home ? match.score_away : match.score_home;
+                                    const hasScore = match.status === 'finished' || match.status === 'live';
+                                    const league = leagues.find(l => l.id === match.league_id);
+                                    const resultLabel = hasScore ? ((fusScore ?? 0) > (oppScore ?? 0) ? 'V' : (fusScore ?? 0) < (oppScore ?? 0) ? 'D' : 'N') : null;
+                                    const resultColor = resultLabel === 'V' ? 'bg-emerald-500' : resultLabel === 'D' ? 'bg-red-500' : 'bg-amber-500';
+                                    const mainClubName = (mainClub as any)?.club_name || (mainClub as any)?.name || 'Mon Club';
+                                    const mainClubLogo = mainClub?.logo_url && mainClub.logo_url !== 'null' ? mainClub.logo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(mainClubName)}&background=1a1a2e&color=fff&size=128`;
+                                    const oppLogo = oppClub?.logo_url && oppClub.logo_url !== 'null' ? oppClub.logo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random&color=fff&size=128`;
+
+                                    return (
+                                       <motion.div
+                                          key={match.id}
+                                          whileHover={{ scale: 1.005 }}
+                                          onClick={() => { setSelectedMatchId(match.id); setActiveTab('overview'); }}
+                                          className="bg-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden cursor-pointer shadow-xl border border-slate-700/50"
+                                       >
+                                          {/* Top info bar */}
+                                          <div className="flex items-center justify-between px-4 sm:px-6 pt-4 pb-2">
+                                             <div className="flex flex-col gap-0.5">
+                                                <span className="text-[10px] font-black text-white uppercase tracking-widest">
+                                                   {selDate.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}
+                                                </span>
+                                                {league && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{league.name}</span>}
+                                             </div>
+                                             <div className="flex items-center gap-2">
+                                                {match.status === 'live' && (
+                                                   <span className="flex items-center gap-1 bg-red-500 text-white text-[9px] font-black px-2.5 py-1 rounded-full animate-pulse">
+                                                      <Radio className="w-2.5 h-2.5" /> LIVE
+                                                   </span>
+                                                )}
+                                                <span className={`text-[9px] font-black text-white px-2.5 py-1 rounded-full border border-white/20 flex items-center gap-1`}>
+                                                   <span>{match.is_home ? '🏠' : '✈️'}</span>
+                                                   <span>{match.is_home ? 'DOMICILE' : 'EXTÉRIEUR'}</span>
+                                                </span>
+                                                {resultLabel && (
+                                                   <span className={`text-[10px] font-black text-white w-7 h-7 rounded-full flex items-center justify-center ${resultColor}`}>
+                                                      {resultLabel}
+                                                   </span>
+                                                )}
+                                             </div>
+                                          </div>
+
+                                          {/* Main match content */}
+                                          <div className="flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 gap-4">
+                                             {/* Our Club */}
+                                             <div className="flex flex-col items-center gap-2 flex-1">
+                                                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-800 border border-slate-600 flex items-center justify-center overflow-hidden p-2 shadow-lg">
+                                                   <img src={mainClubLogo} alt={mainClubName} className="w-full h-full object-contain drop-shadow-lg" />
+                                                </div>
+                                                <span className="text-[10px] font-black text-white uppercase tracking-tight text-center max-w-[80px] leading-tight">{mainClubName}</span>
+                                                {match.category && <span className="text-[8px] font-black bg-white/10 text-white/70 px-2 py-0.5 rounded-full uppercase">{match.category}</span>}
+                                             </div>
+
+                                             {/* Score / VS */}
+                                             <div className="flex flex-col items-center gap-2 shrink-0">
+                                                {match.match_time && (
+                                                   <span className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                                                      <Clock className="w-2.5 h-2.5" /> {match.match_time.slice(0, 5)}
+                                                   </span>
+                                                )}
+                                                {hasScore ? (
+                                                   <div className="flex items-center gap-2">
+                                                      <div className="bg-primary rounded-xl px-4 py-2.5 shadow-lg shadow-primary/30 min-w-[48px] flex items-center justify-center">
+                                                         <span className="text-2xl sm:text-3xl font-black text-white tabular-nums">{fusScore ?? 0}</span>
+                                                      </div>
+                                                      <span className="text-slate-500 font-black text-lg">-</span>
+                                                      <div className="bg-primary rounded-xl px-4 py-2.5 shadow-lg shadow-primary/30 min-w-[48px] flex items-center justify-center">
+                                                         <span className="text-2xl sm:text-3xl font-black text-white tabular-nums">{oppScore ?? 0}</span>
+                                                      </div>
+                                                   </div>
+                                                ) : (
+                                                   <div className="bg-white/10 border border-white/20 rounded-2xl px-5 py-3">
+                                                      <span className="text-lg font-black text-white/50 italic tracking-widest">VS</span>
+                                                   </div>
+                                                )}
+                                                {hasScore && <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Score Final</span>}
+                                             </div>
+
+                                             {/* Opponent */}
+                                             <div className="flex flex-col items-center gap-2 flex-1">
+                                                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-800 border border-slate-600 flex items-center justify-center overflow-hidden p-2 shadow-lg">
+                                                   <img src={oppLogo} alt={getOpponentName(match.opponent_id)} className="w-full h-full object-contain drop-shadow-lg" />
+                                                </div>
+                                                <span className="text-[10px] font-black text-white uppercase tracking-tight text-center max-w-[80px] leading-tight">{getOpponentName(match.opponent_id)}</span>
+                                                {match.formation && <span className="text-[8px] font-black bg-white/10 text-white/70 px-2 py-0.5 rounded-full uppercase">{match.formation}</span>}
+                                             </div>
+                                          </div>
+
+                                          {/* Bottom action bar */}
+                                          <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-t border-slate-700/50 bg-slate-800/40">
+                                             <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1.5">
+                                                <MapPin className="w-3 h-3" />
+                                                {match.match_date}
+                                             </span>
+                                             <div className="flex items-center gap-2">
+                                                {match.status === 'scheduled' && (
+                                                   <button
+                                                      onClick={async (e) => { e.stopPropagation(); await handleStartLive(match.id); }}
+                                                      className="flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white text-[9px] font-black px-3 py-1.5 rounded-xl transition-all"
+                                                   >
+                                                      <Radio className="w-3 h-3 animate-pulse" /> Démarrer Live
+                                                   </button>
+                                                )}
+                                                <button
+                                                   onClick={(e) => { e.stopPropagation(); setSelectedMatchId(match.id); setActiveTab('overview'); }}
+                                                   className="flex items-center gap-1 text-slate-400 hover:text-white text-[9px] font-black transition-all"
+                                                >
+                                                   Détails <ChevronRight className="w-3.5 h-3.5" />
+                                                </button>
+                                             </div>
+                                          </div>
+                                       </motion.div>
+                                    );
+                                 })}
+                              </motion.div>
+                           );
+                        })()}
+                        </AnimatePresence>
+
+                        {/* Empty state when no date selected */}
+                        {!calendarSelectedDate && (
+                           <div className="flex items-center justify-center gap-2 py-4 text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                              <Calendar className="w-4 h-4" />
+                              Cliquez sur un jour avec des matches pour voir les détails
+                           </div>
+                        )}
+                      </motion.div>
+
+                  ) : viewMode === 'table' ? (
                      <motion.div 
                         initial={{ opacity: 0, y: 15 }} 
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -15 }}
-                        className="bg-white border rounded-2xl sm:rounded-[3rem] p-4 sm:p-6 lg:p-8 shadow-2xl space-y-4 sm:space-y-6 overflow-x-auto"
+                        className="bg-white border rounded-[2rem] p-4 sm:p-6 shadow-xl overflow-hidden"
                      >
-                        {/* Month Navigation Header */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 sm:pb-6 gap-4">
-                           <div className="flex items-center gap-3 sm:gap-4">
-                              <h2 className="text-xl sm:text-2xl lg:text-3xl font-black uppercase tracking-tight text-slate-800">
-                                 {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-                              </h2>
-                              <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-100 p-1 sm:p-1.5 rounded-lg sm:rounded-xl border">
-                                 <button 
-                                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-                                    className="p-1 sm:p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-500"
-                                 >
-                                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 rotate-180" />
-                                 </button>
-                                 <button 
-                                    onClick={() => setCurrentMonth(new Date())}
-                                    className="px-2 sm:px-4 py-1 sm:py-1.5 bg-white text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-lg text-slate-700 hover:text-primary shadow-sm transition-all"
-                                 >
-                                    Aujourd'hui
-                                 </button>
-                                 <button 
-                                    onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
-                                    className="p-1 sm:p-1.5 hover:bg-white hover:text-primary rounded-lg transition-all text-slate-500"
-                                 >
-                                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                 </button>
-                              </div>
-                           </div>
-
-                           {/* Calendar legend / info */}
-                           <div className="flex items-center gap-2 sm:gap-4 text-[9px] sm:text-[10px] font-black text-muted-foreground uppercase tracking-wider flex-wrap">
-                              {categoryFilter !== 'All' && (() => {
-                                 const monthMatchCount = matches.filter(m => {
-                                    const d = new Date(m.match_date);
-                                    return d.getFullYear() === year && d.getMonth() === month && m.category === categoryFilter;
-                                 }).length;
-                                 return (
-                                    <span className={`px-2 sm:px-3 py-1 rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${monthMatchCount === 0 ? 'bg-red-50 text-red-500 border border-red-200' : 'bg-primary/10 text-primary border border-primary/20'}`}>
-                                       {monthMatchCount === 0 ? `Aucun match ${categoryFilter}` : `${monthMatchCount} match${monthMatchCount > 1 ? 's' : ''} ${categoryFilter}`}
-                                    </span>
-                                 );
-                              })()}
-                              <div className="flex items-center gap-1 sm:gap-1.5">
-                                 <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-500" />
-                                 <span>Live</span>
-                              </div>
-                              <div className="flex items-center gap-1 sm:gap-1.5">
-                                 <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500" />
-                                 <span>Planifié</span>
-                              </div>
-                              <div className="flex items-center gap-1 sm:gap-1.5">
-                                 <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-400" />
-                                 <span>Terminé</span>
-                              </div>
-                           </div>
-                        </div>
-
-                        {/* Weekdays Header - Hide on very small screens */}
-                        <div className="hidden sm:grid grid-cols-7 gap-2 sm:gap-3 text-center">
-                           {daysOfWeek.map(day => (
-                              <div key={day} className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 py-2">
-                                 {day}
-                              </div>
-                           ))}
-                        </div>
-
-                        {/* Mobile: List view of days with matches */}
-                        <div className="sm:hidden space-y-3">
-                           {calendarDays
-                              .filter(({ formattedDate }) => {
-                                 const dayMatches = matches.filter(m => {
-                                    const matchesDate = m.match_date === formattedDate;
-                                    const matchesCategory = categoryFilter === 'All' || m.category === categoryFilter;
-                                    const matchesLeague = leagueFilter === 'All' || m.league_id === leagueFilter;
-                                    return matchesDate && matchesCategory && matchesLeague;
-                                 });
-                                 return dayMatches.length > 0 || new Date().toLocaleDateString('en-CA') === formattedDate;
-                              })
-                              .map(({ date, isCurrentMonth, formattedDate }) => {
-                                 const dayMatches = matches.filter(m => {
-                                    const matchesDate = m.match_date === formattedDate;
-                                    const matchesCategory = categoryFilter === 'All' || m.category === categoryFilter;
-                                    const matchesLeague = leagueFilter === 'All' || m.league_id === leagueFilter;
-                                    return matchesDate && matchesCategory && matchesLeague;
-                                 });
-                                 const isToday = new Date().toLocaleDateString('en-CA') === formattedDate;
-                                 
-                                 return (
-                                    <div
-                                       key={formattedDate}
-                                       className={`p-3 sm:p-4 rounded-xl border-2 ${
-                                          isToday 
-                                             ? 'bg-blue-50/30 border-primary' 
-                                             : 'bg-slate-50/30 border-slate-100'
-                                       }`}
-                                    >
-                                       <div className="flex items-center justify-between mb-3">
-                                          <span className={`text-sm font-black ${isToday ? 'text-primary' : 'text-slate-700'}`}>
-                                             {date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}
-                                          </span>
-                                          {isToday && <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full font-black">AUJ</span>}
-                                       </div>
-                                       <div className="space-y-2">
-                                          {dayMatches.map(match => (
-                                             <div
-                                                key={match.id}
-                                                onClick={() => {
-                                                   setSelectedMatchId(match.id);
-                                                   setViewMode('list');
-                                                }}
-                                                className={`p-2.5 rounded-lg text-xs font-black uppercase flex items-center justify-between border cursor-pointer ${
-                                                   match.status === 'live' 
-                                                      ? 'bg-red-50 border-red-200 text-red-700' 
-                                                      : match.status === 'scheduled' 
-                                                         ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                                                         : 'bg-slate-50 border-slate-200 text-slate-700'
-                                                }`}
-                                             >
-                                                <div className="flex items-center gap-2">
-                                                   <div className="w-6 h-6 rounded bg-white flex items-center justify-center border shrink-0">
-                                                      <img 
-                                                         src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`} 
-                                                         alt="" 
-                                                         className="w-full h-full object-contain p-0.5" 
-                                                      />
-                                                   </div>
-                                                   <span className="truncate">{getOpponentName(match.opponent_id)}</span>
-                                                </div>
-                                                <span className="font-mono text-[10px] opacity-75">{match.match_time?.slice(0, 5)}</span>
-                                             </div>
-                                          ))}
-                                          {dayMatches.length === 0 && (
-                                             <p className="text-xs text-muted-foreground text-center py-2">Aucun match</p>
-                                          )}
-                                       </div>
-                                    </div>
-                                 );
-                              })}
-                        </div>
-
-                        {/* Tablet/Desktop Calendar Grid cells */}
-                        <div className="hidden sm:grid grid-cols-7 gap-1.5 sm:gap-2 md:gap-3">
-                           {calendarDays.map(({ date, isCurrentMonth, formattedDate }, idx) => {
-                              const dayMatches = matches.filter(m => {
-                                 // Filter match_date
-                                 const matchesDate = m.match_date === formattedDate;
-                                 if (!matchesDate) return false;
-
-                                 // Filter category
-                                 const matchesCategory = categoryFilter === 'All' || m.category === categoryFilter;
-                                 if (!matchesCategory) return false;
-
-                                 // Filter league
-                                 const matchesLeague = leagueFilter === 'All' || m.league_id === leagueFilter;
-                                 if (!matchesLeague) return false;
-
-                                 return true;
-                              });
-
-                              const isToday = new Date().toLocaleDateString('en-CA') === formattedDate;
-
-                              return (
-                                 <div
-                                    key={idx}
-                                    onDragOver={handleDragOver}
-                                    onDrop={(e) => handleDrop(e, formattedDate)}
-                                    className={`min-h-[90px] sm:min-h-[120px] md:min-h-[150px] p-1.5 sm:p-2 md:p-3 rounded-xl sm:rounded-2xl border-2 transition-all flex flex-col justify-between group ${
-                                       isCurrentMonth 
-                                          ? isToday 
-                                             ? 'bg-blue-50/30 border-primary shadow-lg shadow-primary/5' 
-                                             : 'bg-slate-50/30 border-slate-100 hover:border-slate-300 hover:bg-slate-50/50' 
-                                          : 'bg-slate-100/10 border-slate-100 opacity-40'
-                                    }`}
-                                 >
-                                    {/* Cell Day Header */}
-                                    <div className="flex items-center justify-between mb-1 sm:mb-2">
-                                       <span className={`text-[10px] sm:text-[11px] font-black tracking-tight ${
-                                          isToday 
-                                             ? 'bg-primary text-white w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center' 
-                                             : 'text-slate-600'
-                                       }`}>
-                                          {date.getDate()}
-                                       </span>
-                                       
-                                       <button
-                                          onClick={() => {
-                                             setDateFilter(formattedDate);
-                                             setActiveTab('wizard');
-                                          }}
-                                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-primary transition-all"
-                                          title="Planifier un match ce jour"
-                                       >
-                                          <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                                       </button>
-                                    </div>
-
-                                    {/* Matches List inside this Day */}
-                                    <div className="flex-1 space-y-1 sm:space-y-1.5 overflow-y-auto max-h-[80px] sm:max-h-[110px] md:max-h-[140px] scrollbar-hide">
-                                       {dayMatches.map(match => (
-                                          <div
-                                             key={match.id}
-                                             draggable={match.status !== 'finished'}
-                                             onDragStart={(e) => handleDragStart(e, match.id)}
-                                             onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedMatchId(match.id);
-                                                setViewMode('list');
-                                             }}
-                                             className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-tight flex items-center justify-between border cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-95 transition-all ${
-                                                match.status === 'live' 
-                                                   ? 'bg-red-50 border-red-200 text-red-700 shadow-md shadow-red-500/5' 
-                                                   : match.status === 'scheduled' 
-                                                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-md shadow-emerald-500/5' 
-                                                      : 'bg-slate-50 border-slate-200 text-slate-700'
-                                             }`}
-                                          >
-                                             <div className="flex items-center gap-1.5 sm:gap-2 truncate">
-                                                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-md bg-white flex items-center justify-center border shrink-0 shadow-sm">
-                                                   <img
-                                                      src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`}
-                                                      alt=""
-                                                      className="w-full h-full object-contain p-0.5"
-                                                   />
-                                                </div>
-                                                <span className="truncate hidden md:inline">{getOpponentName(match.opponent_id)}</span>
-                                             </div>
-                                             <span className="shrink-0 font-mono text-[7px] sm:text-[8px] opacity-75">{match.match_time?.slice(0, 5)}</span>
+                        <div className="overflow-x-auto">
+                           <table className="w-full text-left border-collapse">
+                              <thead>
+                                 <tr className="border-b-2 border-slate-100">
+                                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Date & Heure</th>
+                                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Adversaire</th>
+                                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Catégorie</th>
+                                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Statut</th>
+                                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Score</th>
+                                    <th className="py-4 px-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Actions</th>
+                                 </tr>
+                              </thead>
+                              <tbody>
+                                 {filteredMatches.map(match => (
+                                    <tr key={match.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
+                                       <td className="py-4 px-4 whitespace-nowrap">
+                                          <div className="flex items-center gap-2">
+                                             <Calendar className="w-4 h-4 text-slate-400" />
+                                             <span className="text-xs font-bold text-slate-700">{match.match_date}</span>
+                                             <span className="text-xs text-slate-500">{match.match_time?.substring(0, 5)}</span>
                                           </div>
-                                       ))}
-                                    </div>
-                                 </div>
-                              );
-                           })}
-                        </div>
-                     </motion.div>
-                  ) : (
-                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 lg:gap-8">
-                        {/* Left Column: Match Details Card */}
-                        <div className="md:col-span-8 space-y-6">
-                           <AnimatePresence mode="wait">
-                              {selectedMatch ? (
-                                 <motion.div key={selectedMatch.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
-                                    <Card className="border shadow-2xl rounded-[4rem] overflow-hidden bg-white relative group min-h-[500px]">
-                                       <div className="absolute top-0 right-0 w-96 h-96 -mr-48 -mt-48 bg-primary/5 rounded-full blur-[100px] pointer-events-none group-hover:bg-primary/10 transition-all duration-1000" />
-                                       <CardContent className="p-0 flex flex-col h-full">
-                                          <div className="p-4 md:p-8 lg:p-16 border-b border-secondary/50 flex-1">
-                                             <div className="flex flex-wrap justify-between items-start gap-3 mb-6 md:mb-10 lg:mb-16">
-                                                <div className="flex items-center gap-3">
-                                                   <Badge className={`border-none font-black uppercase italic text-[10px] tracking-widest px-6 py-2.5 rounded-xl shadow-sm ${selectedMatch.status === 'finished' ? 'bg-slate-900 text-white' : 'bg-primary/10 text-primary border-primary/20'}`}>
-                                                      {selectedMatch.status === 'scheduled' ? 'Prochain Match' : selectedMatch.status === 'finished' ? 'Terminé' : 'En cours'}
-                                                   </Badge>
-                                                   {isSameAsMainClub(selectedMatch.opponent_id) && (
-                                                      <Badge className="border-none font-black uppercase text-[10px] tracking-widest px-5 py-2.5 rounded-xl shadow-sm bg-amber-400 text-white">
-                                                         ⚠️ Adversaire identique au club
-                                                      </Badge>
-                                                   )}
-                                                   {selectedMatch.match_phase === 'won' && (
-                                                      <Badge className="border-none font-black uppercase text-[10px] tracking-widest px-5 py-2.5 rounded-xl shadow-sm bg-emerald-500 text-white">
-                                                         ✅ Gagné
-                                                      </Badge>
-                                                   )}
-                                                   {selectedMatch.match_phase === 'lost' && (
-                                                      <Badge className="border-none font-black uppercase text-[10px] tracking-widest px-5 py-2.5 rounded-xl shadow-sm bg-red-500 text-white">
-                                                         ❌ Perdu
-                                                      </Badge>
-                                                   )}
-                                                   {selectedMatch.match_phase && !['won', 'lost'].includes(selectedMatch.match_phase) && (
-                                                      <Badge className="border-none font-black uppercase text-[10px] tracking-widest px-5 py-2.5 rounded-xl shadow-sm bg-blue-500/10 text-blue-700 border border-blue-200">
-                                                         {({
-                                                            league: 'Ligue',
-                                                            round_of_32: '32èmes',
-                                                            round_of_16: '16èmes',
-                                                            quarter_final: 'Quart de Finale',
-                                                            semi_final: 'Demi-Finale',
-                                                            third_place: '3ème Place',
-                                                            final: 'Finale',
-                                                         } as Record<string, string>)[selectedMatch.match_phase] || selectedMatch.match_phase}
-                                                      </Badge>
-                                                   )}
-                                                </div>
-                                                <div className="flex items-center gap-4 text-muted-foreground px-6 py-3 rounded-2xl bg-secondary/30 border-2 border-dashed border-secondary">
-                                                   <Calendar className="w-4.5 h-4.5 text-primary" />
-                                                   <span className="text-[11px] font-black uppercase tracking-widest">{selectedMatch.match_date} @ {selectedMatch.match_time}</span>
-                                                </div>
+                                       </td>
+                                       <td className="py-4 px-4">
+                                          <div className="flex items-center gap-3">
+                                             <div className="w-8 h-8 rounded-lg bg-white border flex items-center justify-center p-1">
+                                                <img 
+                                                   src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`} 
+                                                   alt="" 
+                                                   className="w-full h-full object-contain" 
+                                                />
                                              </div>
-
-                                             <div className={`flex items-center justify-between gap-4 md:gap-8 lg:gap-12 ${!selectedMatch.is_home ? 'flex-row-reverse' : ''}`}>
-                                                {/* Home Team */}
-                                                <div className="flex flex-col items-center gap-4 md:gap-6 lg:gap-8 group/home relative flex-1">
-                                                   <div className="w-20 h-20 md:w-28 md:h-28 lg:w-40 lg:h-40 rounded-[1.5rem] md:rounded-[2rem] lg:rounded-[3rem] bg-white flex items-center justify-center shadow-2xl border-4 border-white transition-all group-hover/home:scale-110 group-hover/home:-rotate-6 overflow-hidden relative">
-                                                      {mainClub?.logo_url ? (
-                                                         <img src={mainClub.logo_url} alt={mainClub.club_name} className="w-full h-full object-contain p-6" />
-                                                      ) : (
-                                                         <Shield className="w-20 h-20 text-primary/10" />
-                                                      )}
-                                                   </div>
-                                                   <div className="absolute top-0 right-0 -translate-y-4 translate-x-4 bg-primary text-white text-[10px] font-black px-5 py-2 rounded-xl shadow-xl border-4 border-white z-10 rotate-12">
-                                                      {selectedMatch.category}
-                                                   </div>
-                                                   <div className="text-center">
-                                                      <h4 className="text-xl md:text-2xl lg:text-3xl font-black tracking-tighter uppercase italic text-foreground leading-none">
-                                                         {mainClub?.club_name || 'My Club'}
-                                                      </h4>
-                                                      <p className="text-[10px] font-black text-muted-foreground opacity-40 uppercase tracking-widest mt-2">{selectedMatch.is_home ? 'Domicile' : 'Extérieur'}</p>
-                                                   </div>
-                                                </div>
-
-                                                {/* VS Divider */}
-                                                <div className="flex flex-col items-center gap-3 md:gap-4 lg:gap-6">
-                                                   {selectedMatch.status === 'finished' ? (
-                                                      <div className="text-center">
-                                                         <div className="flex items-center gap-3 md:gap-5 lg:gap-8 mb-4">
-                                                            <span className="text-4xl md:text-5xl lg:text-7xl font-black tabular-nums tracking-tighter">{selectedMatch.score_home}</span>
-                                                            <span className="text-xl md:text-2xl lg:text-3xl font-black text-muted-foreground opacity-10 italic">/</span>
-                                                            <span className="text-4xl md:text-5xl lg:text-7xl font-black tabular-nums tracking-tighter">{selectedMatch.score_away}</span>
-                                                         </div>
-                                                         <Badge variant="outline" className="font-black text-[10px] uppercase tracking-widest text-emerald-500 bg-emerald-500/5 border-emerald-500/20 px-4 py-1.5">Score Officiel</Badge>
-                                                      </div>
-                                                   ) : (
-                                                      <>
-                                                         <div className="w-20 h-20 rounded-[2rem] bg-secondary/50 border-2 border-white flex flex-col items-center justify-center gap-1 shadow-inner relative overflow-hidden">
-                                                            <div className="absolute inset-0 bg-primary/5 animate-pulse" />
-                                                            <span className="text-[11px] font-black text-primary uppercase tracking-[0.3em] relative z-10 italic">VS</span>
-                                                         </div>
-                                                         <div className="h-px w-32 bg-gradient-to-r from-transparent via-secondary to-transparent" />
-                                                      </>
-                                                   )}
-                                                </div>
-
-                                                {/* Away Team */}
-                                                <div className="flex flex-col items-center gap-4 md:gap-6 lg:gap-8 group/away relative flex-1">
-                                                   <div className="w-20 h-20 md:w-28 md:h-28 lg:w-40 lg:h-40 rounded-[1.5rem] md:rounded-[2rem] lg:rounded-[3rem] bg-white flex items-center justify-center shadow-2xl border-4 border-white transition-all group-hover/away:scale-110 group-hover/away:rotate-6 overflow-hidden relative">
-                                                      {opponentClubs.find(c => c.id === selectedMatch.opponent_id)?.logo_url ? (
-                                                         <img 
-                                                            src={opponentClubs.find(c => c.id === selectedMatch.opponent_id)?.logo_url} 
-                                                            alt={getOpponentName(selectedMatch.opponent_id)} 
-                                                            className="w-full h-full object-contain p-6" 
-                                                      />
-                                                      ) : (
-                                                         <Target className="w-20 h-20 text-muted-foreground/10" />
-                                                      )}
-                                                   </div>
-                                                   <div className="text-center">
-                                                      <h4 className="text-xl md:text-2xl lg:text-3xl font-black tracking-tighter uppercase italic text-muted-foreground/40 leading-none">{getOpponentName(selectedMatch.opponent_id)}</h4>
-                                                      <p className="text-[10px] font-black text-muted-foreground opacity-20 uppercase tracking-widest mt-2">{!selectedMatch.is_home ? 'Domicile' : 'Extérieur'}</p>
-                                                   </div>
-                                                </div>
-                                             </div>
+                                             <span className="text-xs font-black uppercase tracking-tight text-slate-800">{getOpponentName(match.opponent_id)}</span>
                                           </div>
-
-                                          {/* Video Section */}
-                                          <div className="mx-4 md:mx-8 lg:mx-12 mb-6 space-y-3">
-                                             {selectedMatch.video_url && !showVideoInput ? (() => {
-                                                const embedUrl = getYouTubeEmbedUrl(selectedMatch.video_url);
-                                                return (
-                                                   <div className="space-y-3">
-                                                      {embedUrl ? (
-                                                         <div className="relative w-full rounded-[2rem] overflow-hidden border-4 border-slate-100 shadow-xl bg-black" style={{ paddingBottom: '56.25%' }}>
-                                                            <iframe
-                                                               src={embedUrl}
-                                                               className="absolute inset-0 w-full h-full"
-                                                               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-                                                               allowFullScreen
-                                                               title="Vidéo du match"
-                                                            />
-                                                         </div>
-                                                      ) : (
-                                                         <a
-                                                            href={selectedMatch.video_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="flex items-center gap-4 p-5 rounded-2xl bg-blue-50 border-2 border-blue-100 hover:border-blue-300 transition-all group"
-                                                         >
-                                                            <div className="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center shrink-0">
-                                                               <Video className="w-5 h-5 text-white" />
-                                                            </div>
-                                                            <div className="overflow-hidden">
-                                                               <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Vidéo du match</p>
-                                                               <p className="text-xs font-mono text-slate-500 truncate">{selectedMatch.video_url}</p>
-                                                            </div>
-                                                         </a>
-                                                      )}
-                                                      <button
-                                                         onClick={() => { setEditingVideoUrl(selectedMatch.video_url || ''); setShowVideoInput(true); }}
-                                                         className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-primary transition-colors flex items-center gap-2"
-                                                      >
-                                                         <Video className="w-3.5 h-3.5" /> Modifier le lien vidéo
-                                                      </button>
-                                                   </div>
-                                                );
-                                             })() : showVideoInput ? (
-                                                <div className="flex items-center gap-3">
-                                                   <Input
-                                                      value={editingVideoUrl}
-                                                      onChange={e => setEditingVideoUrl(e.target.value)}
-                                                      placeholder="https://youtube.com/watch?v=..."
-                                                      className="flex-1 h-12 rounded-2xl border-2 font-mono text-sm"
-                                                      autoFocus
-                                                   />
-                                                   <Button
-                                                      onClick={async () => {
-                                                         await updateMatch({ id: selectedMatch.id, data: { video_url: editingVideoUrl || null } });
-                                                         setShowVideoInput(false);
-                                                         refetch?.();
-                                                      }}
-                                                      className="h-12 px-6 rounded-2xl bg-slate-900 text-white font-black uppercase text-[10px] shrink-0"
-                                                   >
-                                                      <Save className="w-4 h-4 mr-2" /> Sauvegarder
-                                                   </Button>
-                                                   <Button
-                                                      onClick={() => setShowVideoInput(false)}
-                                                      variant="outline"
-                                                      className="h-12 px-4 rounded-2xl shrink-0"
-                                                   >
-                                                      <X className="w-4 h-4" />
-                                                   </Button>
-                                                </div>
-                                             ) : (
-                                                <button
-                                                   onClick={() => { setEditingVideoUrl(''); setShowVideoInput(true); }}
-                                                   className="w-full h-14 rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center gap-3 text-slate-400 hover:border-primary hover:text-primary transition-all"
+                                       </td>
+                                       <td className="py-4 px-4 whitespace-nowrap">
+                                          <Badge className="bg-slate-100 text-slate-700 border-none text-[9px] font-bold">{match.category}</Badge>
+                                       </td>
+                                       <td className="py-4 px-4 text-center whitespace-nowrap">
+                                          <Badge className={`border-none text-[9px] font-black uppercase ${match.status === 'finished' ? 'bg-slate-800 text-white' : match.status === 'live' ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                             {match.status === 'finished' ? 'Terminé' : match.status === 'live' ? 'En cours' : 'À venir'}
+                                          </Badge>
+                                       </td>
+                                       <td className="py-4 px-4 text-center whitespace-nowrap text-sm font-black tabular-nums">
+                                          {match.status === 'finished' ? `${match.is_home ? match.score_home : match.score_away} - ${match.is_home ? match.score_away : match.score_home}` : '-'}
+                                       </td>
+                                       <td className="py-4 px-4 text-right whitespace-nowrap">
+                                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                             {match.status === 'scheduled' && (
+                                                <Button 
+                                                   variant="ghost" 
+                                                   size="sm" 
+                                                   onClick={async (e) => { e.stopPropagation(); await handleStartLive(match.id); }}
+                                                   className="h-8 px-2.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition-all flex items-center gap-1"
+                                                   title="Démarrer Live"
                                                 >
-                                                   <Video className="w-4 h-4" />
-                                                   <span className="text-[10px] font-black uppercase tracking-widest">Ajouter une vidéo replay</span>
-                                                </button>
+                                                   <Radio className="w-3.5 h-3.5 animate-pulse" />
+                                                   <span className="text-[9px] font-black uppercase">Live</span>
+                                                </Button>
                                              )}
-                                          </div>
-
-                                          <div className="p-4 md:p-8 lg:p-12 bg-secondary/20 flex flex-wrap items-center justify-center gap-4 md:gap-6">
-                                             <Button onClick={() => setActiveTab('preparation')} className="h-12 md:h-14 lg:h-16 px-6 md:px-10 lg:px-12 rounded-[1.5rem] md:rounded-[2rem] bg-white hover:bg-secondary text-foreground border shadow-xl font-black uppercase tracking-widest text-xs gap-3 md:gap-4 transition-all hover:scale-105 group">
-                                                <LayoutPanelLeft className="w-4 h-4 md:w-5 md:h-5 text-primary group-hover:scale-110 transition-transform" />
-                                                {selectedMatch.status === 'finished' ? 'Consulter la Compo' : 'Orchestrer le Match'}
+                                             <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                onClick={() => { setSelectedMatchId(match.id); setActiveTab('overview'); }}
+                                                className="h-8 w-8 rounded-lg text-blue-600 hover:bg-blue-50 p-0 flex items-center justify-center"
+                                                title="Voir les détails"
+                                             >
+                                                <Activity className="w-4 h-4" />
                                              </Button>
-                                             {selectedMatch.status === 'finished' && (
-                                                <Button onClick={() => setActiveTab('stats')} className="h-12 md:h-14 lg:h-16 px-6 md:px-10 lg:px-12 rounded-[1.5rem] md:rounded-[2rem] bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/20 font-black uppercase tracking-widest text-xs gap-3 md:gap-4 transition-all hover:scale-105 group">
-                                                   <BarChart3 className="w-4 h-4 md:w-5 md:h-5 group-hover:scale-110 transition-transform" />
-                                                   Voir les Stats
+                                             {can('manage_matches') && (
+                                                <Button 
+                                                   variant="ghost" 
+                                                   size="sm"
+                                                   onClick={async () => {
+                                                      if (window.confirm('Voulez-vous vraiment supprimer ce match ?')) {
+                                                         await deleteMatch(match.id);
+                                                         if (selectedMatchId === match.id) setSelectedMatchId(null);
+                                                      }
+                                                   }}
+                                                   className="h-8 w-8 rounded-lg text-red-600 hover:bg-red-50 p-0"
+                                                   title="Supprimer"
+                                                >
+                                                   <Trash2 className="w-4 h-4" />
                                                 </Button>
                                              )}
                                           </div>
-                                       </CardContent>
-                                    </Card>
-                                 </motion.div>
-                              ) : (
-                                 <div className="h-[500px] rounded-[4rem] border-4 border-dashed border-secondary/50 flex flex-col items-center justify-center text-muted-foreground gap-8 bg-white/30 backdrop-blur-sm">
-                                    <div className="w-24 h-24 rounded-[2.5rem] bg-secondary flex items-center justify-center text-muted-foreground/30 animate-bounce duration-[2000ms]">
-                                       <Trophy className="w-12 h-12" />
-                                    </div>
-                                    <div className="text-center space-y-2">
-                                       <p className="text-2xl font-black uppercase tracking-tighter italic">Aucun match sélectionné</p>
-                                       <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Planifiez une nouvelle rencontre pour commencer</p>
-                                    </div>
-                                 </div>
-                              )}
-                           </AnimatePresence>
+                                       </td>
+                                    </tr>
+                                 ))}
+                                 {filteredMatches.length === 0 && (
+                                    <tr>
+                                       <td colSpan={6} className="py-12 text-center text-slate-400 text-sm font-medium">
+                                          Aucun match trouvé pour ces filtres.
+                                       </td>
+                                    </tr>
+                                 )}
+                              </tbody>
+                           </table>
                         </div>
-
-                        {/* Right Column: Organized Match List */}
-                        <div className="md:col-span-4 space-y-6">
-                           <div className="flex items-center justify-between px-3 md:px-6">
-                              <h4 className="text-[11px] font-black tracking-[0.2em] uppercase text-muted-foreground">Registre des Rencontres</h4>
-                              <Badge className="bg-secondary text-foreground rounded-lg font-black text-[9px]">{filteredMatches.length}</Badge>
+                     </motion.div>
+                  ) : viewMode === 'grid' ? (
+                     <motion.div 
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -15 }}
+                        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6"
+                     >
+                        {filteredMatches.map(match => (
+                           <MatchListItem 
+                              key={match.id}
+                              match={match}
+                              isSelected={false}
+                              onSelect={() => {
+                                 setSelectedMatchId(match.id);
+                                 setActiveTab('overview');
+                              }}
+                              onDelete={async (e) => { 
+                                 e.stopPropagation(); 
+                                 if (window.confirm('Voulez-vous vraiment supprimer ce match ?')) {
+                                    await deleteMatch(match.id); 
+                                 }
+                              }}
+                              opponentClubs={opponentClubs}
+                              mainClub={mainClub}
+                              getOpponentName={getOpponentName}
+                              variant={match.status === 'live' ? 'live' : match.status === 'scheduled' ? 'upcoming' : 'past'}
+                           />
+                        ))}
+                        {filteredMatches.length === 0 && (
+                           <div className="col-span-full py-12 text-center text-slate-400 text-sm font-medium">
+                              Aucun match trouvé pour ces filtres.
                            </div>
+                        )}
+                     </motion.div>
+                  ) : null}
+               </motion.div>
+            )}
 
-                           <div className="flex flex-col gap-4 md:gap-6 max-h-[400px] md:max-h-[520px] lg:max-h-[600px] overflow-y-auto pr-2 scrollbar-hide pb-10">
-                              {/* LIVE MATCHES */}
-                              {filteredMatches.filter(m => m.status === 'live').length > 0 && (
-                                 <div className="space-y-3">
-                                    <div className="flex items-center gap-3 px-2">
-                                       <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                       <h4 className="text-[10px] font-black tracking-[0.15em] uppercase text-red-500">En Direct</h4>
-                                       <div className="flex-1 h-px bg-red-200" />
-                                    </div>
-                                    <AnimatePresence mode="popLayout">
-                                       {filteredMatches.filter(m => m.status === 'live').map(m => (
-                                          <MatchListItem 
-                                             key={m.id} 
-                                             match={m} 
-                                             isSelected={selectedMatchId === m.id}
-                                             onSelect={() => setSelectedMatchId(m.id)}
-                                             onDelete={(e) => { e.stopPropagation(); if (confirm(`Annuler définitivement le match vs ${getOpponentName(m.opponent_id)} du ${m.match_date} ?`)) deleteMatch(m.id); }}
-                                             opponentClubs={opponentClubs}
-                                             getOpponentName={getOpponentName}
-                                             variant="live"
-                                          />
-                                       ))}
-                                    </AnimatePresence>
-                                 </div>
-                              )}
-
-                              {/* UPCOMING MATCHES */}
-                              {filteredMatches.filter(m => m.status === 'scheduled').length > 0 && (
-                                 <div className="space-y-3">
-                                    <div className="flex items-center gap-3 px-2">
-                                       <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                                       <h4 className="text-[10px] font-black tracking-[0.15em] uppercase text-emerald-600">Prochains Matchs</h4>
-                                       <div className="flex-1 h-px bg-emerald-200" />
-                                    </div>
-                                    <AnimatePresence mode="popLayout">
-                                       {filteredMatches
-                                          .filter(m => m.status === 'scheduled')
-                                          .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime())
-                                          .map(m => (
-                                          <MatchListItem 
-                                             key={m.id} 
-                                             match={m} 
-                                             isSelected={selectedMatchId === m.id}
-                                             onSelect={() => setSelectedMatchId(m.id)}
-                                             onDelete={(e) => { e.stopPropagation(); if (confirm(`Annuler définitivement le match vs ${getOpponentName(m.opponent_id)} du ${m.match_date} ?`)) deleteMatch(m.id); }}
-                                             onStartLive={(e) => { e.stopPropagation(); handleStartLive(m.id); }}
-                                             opponentClubs={opponentClubs}
-                                             getOpponentName={getOpponentName}
-                                             variant="upcoming"
-                                          />
-                                       ))}
-                                    </AnimatePresence>
-                                 </div>
-                              )}
-
-                              {/* PAST MATCHES */}
-                              {filteredMatches.filter(m => m.status === 'finished').length > 0 && (
-                                 <div className="space-y-3">
-                                    <div className="flex items-center gap-3 px-2">
-                                       <div className="w-2 h-2 rounded-full bg-slate-400" />
-                                       <h4 className="text-[10px] font-black tracking-[0.15em] uppercase text-slate-500">Matchs Terminés</h4>
-                                       <div className="flex-1 h-px bg-slate-200" />
-                                    </div>
-                                    <AnimatePresence mode="popLayout">
-                                       {filteredMatches
-                                          .filter(m => m.status === 'finished')
-                                          .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime())
-                                          .map(m => (
-                                          <MatchListItem 
-                                             key={m.id} 
-                                             match={m} 
-                                             isSelected={selectedMatchId === m.id}
-                                             onSelect={() => setSelectedMatchId(m.id)}
-                                             onDelete={(e) => { e.stopPropagation(); deleteMatch(m.id); }}
-                                             opponentClubs={opponentClubs}
-                                             getOpponentName={getOpponentName}
-                                             variant="past"
-                                          />
-                                       ))}
-                                    </AnimatePresence>
-                                 </div>
-                              )}
-                           </div>
-                        </div>
-                     </div>
-                  )}
+            {activeTab === 'overview' && selectedMatchId && selectedMatch && (
+               <motion.div key="overview" initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -50 }}>
+                  <MatchOverviewPanel
+                     match={selectedMatch}
+                     mainClub={mainClub}
+                     opponentClubs={opponentClubs}
+                     getOpponentName={getOpponentName}
+                     onOrchestrate={() => setActiveTab('preparation')}
+                     onStats={() => setActiveTab('stats')}
+                     onBack={() => setActiveTab('details')}
+                  />
                </motion.div>
             )}
 

@@ -478,10 +478,15 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
   const validStarters = (match.lineup?.startingXI || []).filter(id => id && id.trim() !== '');
   const validSubs = (match.lineup?.substitutes || []).filter(id => id && id.trim() !== '');
   const hasValidLineup = validStarters.length > 0 || validSubs.length > 0;
-  
+
   const currentLineup = hasValidLineup ? players.filter(p => validStarters.includes(p.id)) : players;
   const bench = hasValidLineup ? players.filter(p => validSubs.includes(p.id)) : [];
   const opponent = opponentClubs.find(c => c.id === match.opponent_id);
+
+  // Résolution jersey porté pour ce match spécifique (override > jersey global)
+  const matchJerseyOverrides: Record<string, number> = (match as any).lineup?.jerseyOverrides ?? {};
+  const getJersey = (p: { id: string; jersey_number?: number | null }) =>
+    matchJerseyOverrides[p.id] ?? p.jersey_number;
 
   return (
     <div className="min-h-screen bg-white">
@@ -692,10 +697,10 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
                                            <>
                                               #{player?.jersey_number || '?'} {player?.full_name.split(' ').pop()} 
                                               <span className="mx-2 text-white/50">→</span> 
-                                              #{players.find(p => p.id === e.extra.player_in_id)?.jersey_number || '?'} {players.find(p => p.id === e.extra.player_in_id)?.full_name.split(' ').pop()}
+                                              #{getJersey(players.find(p => p.id === e.extra.player_in_id) ?? { id: '', jersey_number: null }) || '?'} {players.find(p => p.id === e.extra.player_in_id)?.full_name.split(' ').pop()}
                                            </>
                                         ) : e.player_id ? (
-                                           player ? `#${player.jersey_number || '?'} ${player.full_name}` : 'Joueur'
+                                           player ? `#${getJersey(player) || '?'} ${player.full_name}` : 'Joueur'
                                         ) : (
                                            e.extra?.opponent_ref ? `Jersey n°${e.extra.opponent_ref.split('-')[1]}` : 'Adversaire'
                                         )}
@@ -743,12 +748,12 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
                                      <span className="uppercase text-slate-300">
                                         {e.type === 'substitution' && e.player_id && e.extra?.player_in_id ? (
                                            <>
-                                              #{player?.jersey_number || '?'} {player?.full_name.split(' ').pop()} 
-                                              <span className="mx-2 text-white/50">→</span> 
-                                              #{players.find(p => p.id === e.extra.player_in_id)?.jersey_number || '?'} {players.find(p => p.id === e.extra.player_in_id)?.full_name.split(' ').pop()}
+                                              #{player ? getJersey(player) || '?' : '?'} {player?.full_name.split(' ').pop()}
+                                              <span className="mx-2 text-white/50">→</span>
+                                              #{getJersey(players.find(p => p.id === e.extra.player_in_id) ?? { id: '', jersey_number: null }) || '?'} {players.find(p => p.id === e.extra.player_in_id)?.full_name.split(' ').pop()}
                                            </>
                                         ) : e.player_id ? (
-                                           player ? `#${player.jersey_number || '?'} ${player.full_name}` : 'Joueur'
+                                           player ? `#${getJersey(player) || '?'} ${player.full_name}` : 'Joueur'
                                         ) : (
                                            e.extra?.opponent_ref ? `Jersey n°${e.extra.opponent_ref.split('-')[1]}` : 'Adversaire'
                                         )}
@@ -1042,17 +1047,17 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
                             {currentLineup.length > 0 || bench.length > 0 ? (
                               <>
                                 <optgroup label="Titulaires">
-                                   {currentLineup.map(p => <option key={p.id} value={p.id}>#{p.jersey_number || '?'} - {p.full_name}</option>)}
+                                   {currentLineup.map(p => <option key={p.id} value={p.id}>#{getJersey(p) || '?'} - {p.full_name}</option>)}
                                 </optgroup>
                                 {bench.length > 0 && (
                                   <optgroup label="Remplaçants">
-                                     {bench.map(p => <option key={p.id} value={p.id}>#{p.jersey_number || '?'} - {p.full_name}</option>)}
+                                     {bench.map(p => <option key={p.id} value={p.id}>#{getJersey(p) || '?'} - {p.full_name}</option>)}
                                   </optgroup>
                                 )}
                               </>
                             ) : (
                               <optgroup label="Tous les Joueurs (Attente Compo)">
-                                 {players.map(p => <option key={p.id} value={p.id}>#{p.jersey_number || '?'} - {p.full_name}</option>)}
+                                 {players.map(p => <option key={p.id} value={p.id}>#{getJersey(p) || '?'} - {p.full_name}</option>)}
                               </optgroup>
                             )}
                          </select>
@@ -1094,7 +1099,7 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
                         <select value={selectedPlayerId} onChange={e => setSelectedPlayerId(e.target.value)} className="w-full h-16 px-6 rounded-[2rem] bg-red-50 border-2 border-red-100 font-black text-sm outline-none focus:border-red-500 transition-all">
                            <option value="">Sélectionner le joueur sortant...</option>
                            <optgroup label="Sur le terrain">
-                              {currentLineup.filter(p => !sentOffPlayerIds.has(p.id)).map(p => <option key={p.id} value={p.id}>#{p.jersey_number || '?'} - {p.full_name}</option>)}
+                              {currentLineup.filter(p => !sentOffPlayerIds.has(p.id)).map(p => <option key={p.id} value={p.id}>#{getJersey(p) || '?'} - {p.full_name}</option>)}
                            </optgroup>
                         </select>
                      </div>
@@ -1110,7 +1115,7 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
                         <select value={selectedPlayerInId} onChange={e => setSelectedPlayerInId(e.target.value)} className="w-full h-16 px-6 rounded-[2rem] bg-emerald-50 border-2 border-emerald-100 font-black text-sm outline-none focus:border-emerald-500 transition-all">
                            <option value="">Sélectionner le joueur entrant...</option>
                            <optgroup label="Banc de touche">
-                              {bench.filter(p => !sentOffPlayerIds.has(p.id)).map(p => <option key={p.id} value={p.id}>#{p.jersey_number || '?'} - {p.full_name}</option>)}
+                              {bench.filter(p => !sentOffPlayerIds.has(p.id)).map(p => <option key={p.id} value={p.id}>#{getJersey(p) || '?'} - {p.full_name}</option>)}
                            </optgroup>
                         </select>
                      </div>

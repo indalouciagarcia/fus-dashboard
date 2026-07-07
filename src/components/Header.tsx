@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '../lib/utils';
-import { usePermissions, ROLE_LABELS, getPrimaryRole } from '../context/PermissionsContext';
+import { usePermissions } from '../context/PermissionsContext';
 import { useMatches } from '../hooks/useMatches';
 import { useClubData } from '../hooks/useClubData';
 import { MobileMenuButton } from './Sidebar';
@@ -17,15 +17,7 @@ interface HeaderProps {
   sidebarCollapsed?: boolean;
 }
 
-const ROLE_BADGE_COLORS: Record<string, string> = {
-  super_admin:        'text-red-600 bg-red-50 border-red-200',
-  club_admin:         'text-purple-600 bg-purple-50 border-purple-200',
-  technical_director: 'text-blue-600 bg-blue-50 border-blue-200',
-  coach:              'text-green-600 bg-green-50 border-green-200',
-  assistant_coach:    'text-teal-600 bg-teal-50 border-teal-200',
-  match_operator:     'text-orange-600 bg-orange-50 border-orange-200',
-  viewer:             'text-slate-600 bg-slate-50 border-slate-200',
-};
+
 
 const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollapsed = false }) => {
   const { authState, logout } = usePermissions();
@@ -63,11 +55,11 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
 
   // Données affichées
   const email       = authState.email ?? '';
-  const displayName = email.split('@')[0] ?? 'Utilisateur';
-  const primaryRole = getPrimaryRole(authState.roles);
-  const roleLabel   = ROLE_LABELS[primaryRole] ?? primaryRole;
-  const roleBadge   = ROLE_BADGE_COLORS[primaryRole] ?? ROLE_BADGE_COLORS.viewer;
-  const avatarUrl   = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1d4ed8&color=fff&size=100`;
+  const displayName = authState.user?.full_name || email.split('@')[0] || 'Utilisateur';
+  const roleLabel   = authState.user?.system_role === 'super_admin' ? 'Super Admin' : (authState.user?.system_role || 'Membre');
+  const roleBadge   = 'text-slate-600 bg-slate-50 border-slate-200';
+  const defaultAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1d4ed8&color=fff&size=100`;
+  const avatarUrl   = authState.user?.avatar_url || defaultAvatarUrl;
 
   const { matches } = useMatches();
   const { opponentClubs } = useClubData();
@@ -200,10 +192,7 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
                 <p className="text-sm font-semibold text-foreground truncate">{email}</p>
                 <div className="flex items-center gap-1.5 mt-1">
                   <Shield className="w-3 h-3 text-muted-foreground" />
-                  <span className={cn(
-                    "text-[10px] font-bold uppercase tracking-wider",
-                    ROLE_BADGE_COLORS[primaryRole]?.split(' ')[0] ?? 'text-slate-600',
-                  )}>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
                     {roleLabel}
                   </span>
                 </div>
