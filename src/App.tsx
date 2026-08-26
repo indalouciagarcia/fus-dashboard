@@ -9,6 +9,7 @@ import './index.css';
 import { queryClient } from './lib/queryClient';
 import { ClubProvider } from './context/ClubContext';
 import { PermissionsProvider } from './context/PermissionsContext';
+import { MatchReminderProvider } from './context/MatchReminderContext';
 import { syncQueue } from './services/offlineQueue';
 
 import Sidebar from './components/Sidebar';
@@ -22,6 +23,7 @@ import ResetPasswordPage from './features/auth/ResetPasswordPage';
 import ForcePasswordChange from './features/auth/ForcePasswordChange';
 
 // Pages protégées
+import DashboardPage from './features/dashboard/DashboardPage';
 import MatchManagementPage from './features/match-management/MatchManagementPage';
 import MatchDayPage from './features/match-management/MatchDayPage';
 import PlayerManagement from './features/people-management/PlayerManagement';
@@ -34,20 +36,29 @@ import StadiumManagement from './features/club-management/StadiumManagement';
 import BlogManagement from './features/blog-management/BlogManagement';
 import StoreManagement from './features/store-management/StoreManagement';
 import UserManagement from './features/user-management/UserManagement';
+import ArbitresPage from './features/people-management/ArbitresPage';
+import AuditLogsPage from './features/audit-logs/AuditLogsPage';
+import RecruitmentPage from './features/recruitment/RecruitmentPage';
 
 const pageTitles: Record<string, string> = {
-  '/matches':    'Centre de Matchs',
-  '/matchday':   'Jour de Match',
-  '/players':    'Effectif Joueurs',
-  '/teams':      'Unités d\'Équipe',
-  '/staff':      'Staff Technique',
-  '/leagues':    'Compétitions',
-  '/opponents':  'Base Adversaires',
-  '/stadiums':   'Gestion Stades',
-  '/settings':   'Paramètres Club',
-  '/blog':       'Blog & Actus',
-  '/store':      'Store & Marketing',
-  '/users':      'Gestion des Utilisateurs',
+  '/': 'Tableau de Bord',
+  '/dashboard': 'Tableau de Bord',
+  '/matches': 'Calendrier des Matchs',
+  '/matchday': 'Match Day',
+  '/players': 'Gestion de l\'Effectif',
+  '/teams': 'Unités d\'Équipe',
+  '/staff': 'Staff Technique',
+  '/arbitres': 'Rubrique Arbitres',
+  '/recruitment': 'Cellule Détection & Recrutement',
+  '/recruitment/*': 'Cellule Détection & Recrutement',
+  '/leagues': 'Gestion des Compétitions',
+  '/opponents': 'Clubs Adversaires',
+  '/stadiums': 'Gestion des Stades',
+  '/settings': 'Paramètres du Club',
+  '/blog': 'Gestion du Blog',
+  '/store': 'Gestion du Store',
+  '/users': 'Gestion des Utilisateurs',
+  '/logs': 'Administration — Logs & Audit',
 };
 
 // -------------------------------------------------------
@@ -85,7 +96,8 @@ const AppContent: React.FC = () => {
               transition={{ duration: 0.3 }}
             >
               <Routes location={location}>
-                <Route path="/"          element={<Navigate to="/matches" replace />} />
+                <Route path="/"          element={<DashboardPage />} />
+                <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/matches"   element={<MatchManagementPage />} />
                 <Route path="/matchday"  element={
                   <ProtectedRoute requiredPermission="track_live_match">
@@ -103,7 +115,10 @@ const AppContent: React.FC = () => {
                     <StaffManagement />
                   </ProtectedRoute>
                 } />
-                <Route path="/leagues"   element={
+                <Route path="/arbitres"      element={<ArbitresPage />} />
+                <Route path="/recruitment"   element={<RecruitmentPage />} />
+                <Route path="/recruitment/*" element={<RecruitmentPage />} />
+                <Route path="/leagues"       element={
                   <ProtectedRoute requiredPermission="manage_teams">
                     <LeagueManagement />
                   </ProtectedRoute>
@@ -130,6 +145,7 @@ const AppContent: React.FC = () => {
                     <UserManagement />
                   </ProtectedRoute>
                 } />
+                <Route path="/logs"      element={<AuditLogsPage />} />
 
                 {/* 404 */}
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -179,7 +195,9 @@ function App() {
             <Route path="/*" element={
               <ProtectedRoute>
                 <ClubProvider>
-                  <AppContent />
+                  <MatchReminderProvider>
+                    <AppContent />
+                  </MatchReminderProvider>
                 </ClubProvider>
               </ProtectedRoute>
             } />

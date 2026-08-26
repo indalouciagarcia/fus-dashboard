@@ -6,6 +6,8 @@ import { usePermissions } from '../../context/PermissionsContext';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 
+import { AuditLogger } from '../../services/auditLogger';
+
 const LoginPage: React.FC = () => {
   const { authState } = usePermissions();
   const location = useLocation();
@@ -27,7 +29,7 @@ const LoginPage: React.FC = () => {
     setError(null);
     setLoading(true);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (signInError) {
       const msg = signInError.message === 'Invalid login credentials'
@@ -35,8 +37,18 @@ const LoginPage: React.FC = () => {
         : signInError.message;
       setError(msg);
       setLoading(false);
+
+      // Log Login Failure
+      await AuditLogger.log({
+        action: 'LOGIN_FAILED',
+        module: 'AUTH',
+        description: `Échec de connexion pour ${email} : ${msg}`,
+        status: 'FAILED'
+      });
+    } else if (signInData?.user) {
+      // Start unique audit session for user
+      await AuditLogger.startSession(signInData.user.id, signInData.user.email ?? email, 'super_admin');
     }
-    // Succès : onAuthStateChange dans PermissionsContext déclenche le re-render → Navigate ci-dessus
   };
 
   return (

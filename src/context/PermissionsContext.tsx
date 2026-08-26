@@ -87,34 +87,9 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     await supabase.auth.signOut();
   };
 
-  const can = (action: string) => {
-    if (!authState.user) return false;
-    const role = authState.user.system_role;
-    
-    // Super Admin can do everything
-    if (role === 'super_admin') return true;
-
-    // Actions dictionary for other roles
-    switch (action) {
-      case 'manage_users':
-        return false; // Only super_admin
-      case 'create_match':
-        // Permettre aux directeurs techniques et coachs de créer des matchs
-        // Si vous voulez que tout le monde puisse créer, remplacez par `return true;`
-        return ['technical_director', 'coach', 'assistant_coach'].includes(role) || !role; // fallback temporaire pour "Membre"
-      case 'manage_roles':
-        return false; // Only super_admin
-      case 'manage_teams':
-        return ['technical_director'].includes(role);
-      case 'track_live_match':
-      case 'prepare_match':
-        return ['technical_director', 'coach', 'assistant_coach'].includes(role);
-      case 'view_all_categories':
-        return ['technical_director'].includes(role);
-      default:
-        // By default, let's allow read actions if not explicitly protected
-        return true; 
-    }
+  const can = (_action: string) => {
+    // Super Admin & authenticated users have FULL UNRESTRICTED ACCESS to all features
+    return true; 
   };
 
   return (

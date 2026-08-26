@@ -1,31 +1,36 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useMatches } from '../../hooks/useMatches';
 import { usePlayers } from '../../hooks/usePlayers';
 import { Skeleton } from '../../components/ui/skeleton';
 
 import MiniStatRow from '../../components/MiniStatRow';
+import PlayerTickerCarousel from '../../components/PlayerTickerCarousel';
+import TopScorers from '../../components/TopScorers';
+import MatchTeamPerformanceCharts from '../../components/MatchTeamPerformanceCharts';
 import MatchCalendarWidget from '../../components/MatchCalendarWidget';
 import MatchesPerMonthChart from '../../components/MatchesPerMonthChart';
-import TopScorers from '../../components/TopScorers';
-
+import PlayerPersonalSportDetailModal from '../../components/PlayerPersonalSportDetailModal';
 import ErrorEmptyState from '../../components/ErrorEmptyState';
+import type { Player } from '../../types';
 
 const DashboardPage: React.FC = () => {
   const { isLoading: matchesLoading, isError: matchesError, matches } = useMatches();
   const { isLoading: playersLoading, isError: playersError, players } = usePlayers();
+
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
 
   const isLoading = matchesLoading || playersLoading;
   const isError = matchesError || playersError;
 
   if (isLoading) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-8 animate-pulse">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 rounded-3xl" />)}
         </div>
-        <Skeleton className="h-[340px] rounded-[2rem]" />
-        <Skeleton className="h-[400px] rounded-[3rem]" />
-        <Skeleton className="h-[300px] rounded-[3rem]" />
+        <Skeleton className="h-36 rounded-3xl" />
+        <Skeleton className="h-[380px] rounded-3xl" />
+        <Skeleton className="h-[400px] rounded-3xl" />
       </div>
     );
   }
@@ -49,31 +54,47 @@ const DashboardPage: React.FC = () => {
         <ErrorEmptyState 
           type="empty"
           title="Club sans données" 
-          message="Bienvenue dans votre dashboard ! Commencez par ajouter des joueurs ou planifier des matchs pour voir vos statistiques."
+          message="Bienvenue dans votre tableau de bord ! Commencez par ajouter des joueurs ou planifier des matchs pour voir vos statistiques complètes."
         />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      {/* Row 1: Key Performance Indicators */}
+    <div className="space-y-8 pb-12">
+      
+      {/* Row 1: Key Performance Indicators Summary */}
       <MiniStatRow />
 
-      {/* Row 2: Match Calendar */}
-      <MatchCalendarWidget />
+      {/* Row 2: Player Showcase Ticker Ribbon (Photos, Jersey Numbers, Names) */}
+      <PlayerTickerCarousel
+        players={players}
+        onSelectPlayer={(p) => setSelectedPlayer(p)}
+      />
 
-      {/* Row 3: Charts */}
+      {/* Row 3: Top Scorers Showcase (Hero Golden Boot Card + Leaderboard) */}
+      <TopScorers
+        onSelectPlayer={(p) => setSelectedPlayer(p)}
+      />
+
+      {/* Row 4: Team & Match Performance Dynamics (Goals curves, points trajectory & breakdown) */}
+      <MatchTeamPerformanceCharts />
+
+      {/* Row 5: Match Volume per Month & Match Calendar */}
       <div className="grid grid-cols-1 gap-6">
         <MatchesPerMonthChart />
       </div>
 
-      {/* Row 4: Top Scorers & Detailed Stats */}
       <div className="grid grid-cols-1 gap-6">
-        <TopScorers />
+        <MatchCalendarWidget />
       </div>
 
-
+      {/* Modal: Full Personal & Sporting Details Aligned with Recruitment Module */}
+      <PlayerPersonalSportDetailModal
+        player={selectedPlayer}
+        isOpen={!!selectedPlayer}
+        onClose={() => setSelectedPlayer(null)}
+      />
     </div>
   );
 };

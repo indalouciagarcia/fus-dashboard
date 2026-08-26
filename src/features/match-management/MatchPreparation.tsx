@@ -7,6 +7,7 @@ import { useCompetitions } from '../../hooks/useCompetitions';
 import { usePermissions } from '../../context/PermissionsContext';
 import { useSurclassements } from '../../hooks/useSurclassements';
 import { useTouchDragAndDrop } from '../../hooks/useTouchDragAndDrop';
+import { useArbitres } from '../../hooks/useArbitres';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -14,7 +15,7 @@ import { Badge } from '../../components/ui/badge';
 import {
   ChevronRight, ChevronLeft, Check,
   Briefcase, Users, Target, Shield, Star, Save, Gamepad2, Settings, Clock, MapPin,
-  Calendar, Search, Filter, Loader2, UserPlus, X, Trophy, CheckCircle2, Edit2
+  Calendar, Search, Filter, Loader2, UserPlus, X, Trophy, CheckCircle2, Edit2, UserCheck
 } from 'lucide-react';
 import type { Match, Player, MatchPhase } from '../../types';
 
@@ -23,10 +24,11 @@ interface MatchPreparationProps {
   onBack: () => void;
 }
 
-type PrepStep = 'setup' | 'staff' | 'lineup' | 'opponent';
+type PrepStep = 'setup' | 'arbitres' | 'staff' | 'lineup' | 'opponent';
 
 const STEPS: { key: PrepStep; label: string; icon: React.ElementType }[] = [
   { key: 'setup',    label: 'Logistique',    icon: Settings },
+  { key: 'arbitres', label: 'Arbitres',      icon: UserCheck },
   { key: 'staff',    label: 'Staff',         icon: Briefcase },
   { key: 'lineup',   label: 'Compo',         icon: Users },
   { key: 'opponent', label: 'Adversaire',    icon: Target },
@@ -99,6 +101,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
   const { opponentClubs } = useClubData();
   const { stadiums, leagues } = useCompetitions();
   const { surclassements } = useSurclassements();
+  const { arbitres } = useArbitres();
 
   const match = matches.find(m => m.id === matchId);
 
@@ -125,6 +128,10 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
       },
       formation,
       staff_ids: m?.staff_ids || [],
+      referee_central_id: m?.referee_central_id ?? m?.referees_assigned?.central_id ?? null,
+      referee_assistant1_id: m?.referee_assistant1_id ?? m?.referees_assigned?.assistant1_id ?? null,
+      referee_assistant2_id: m?.referee_assistant2_id ?? m?.referees_assigned?.assistant2_id ?? null,
+      referee_fourth_id: m?.referee_fourth_id ?? m?.referees_assigned?.fourth_id ?? null,
       opponent_formation: m?.opponent_formation || '4-4-2',
       opponent_lineup: m?.opponent_lineup || Array(11).fill(''),
       opponent_subs: m?.opponent_subs || [],
@@ -540,6 +547,73 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                      </div>
                   </div>
                </div>
+            </motion.div>
+          )}
+
+          {currentStep === 'arbitres' && (
+            <motion.div key="arbitres" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="p-10 space-y-10 flex-1">
+              <SectionTitle icon={<UserCheck className="w-6 h-6 text-primary" />} title="Corps d'Arbitrage" subtitle="Désignez et modifiez les arbitres affectés à cette rencontre" />
+              <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 bg-secondary/10 p-10 rounded-[3.5rem] border-2 border-dashed border-secondary">
+                {/* Arbitre Central */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Arbitre Central</label>
+                  <select
+                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
+                    value={formData.referee_central_id || ''}
+                    onChange={e => updateField('referee_central_id', e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">Non assigné / À désigner</option>
+                    {arbitres.filter(a => a.statut === 'actif').map(a => (
+                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade} • {a.role_principal})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Assistant 1 */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Arbitre Assistant 1</label>
+                  <select
+                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
+                    value={formData.referee_assistant1_id || ''}
+                    onChange={e => updateField('referee_assistant1_id', e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">Non assigné</option>
+                    {arbitres.filter(a => a.statut === 'actif').map(a => (
+                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Assistant 2 */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Arbitre Assistant 2</label>
+                  <select
+                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
+                    value={formData.referee_assistant2_id || ''}
+                    onChange={e => updateField('referee_assistant2_id', e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">Non assigné</option>
+                    {arbitres.filter(a => a.statut === 'actif').map(a => (
+                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 4ème Arbitre */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">4ème Arbitre / VAR</label>
+                  <select
+                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
+                    value={formData.referee_fourth_id || ''}
+                    onChange={e => updateField('referee_fourth_id', e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">Non assigné</option>
+                    {arbitres.filter(a => a.statut === 'actif').map(a => (
+                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </motion.div>
           )}
 

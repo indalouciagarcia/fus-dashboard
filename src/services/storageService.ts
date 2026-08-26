@@ -15,7 +15,7 @@ export const storageService = {
     }
   },
 
-  async uploadFile(file: File, type: 'leagues' | 'clubs' | 'players' | 'staff' | 'stadiums' | 'blog' | 'banners'): Promise<string> {
+  async uploadFile(file: File, type: 'leagues' | 'clubs' | 'players' | 'staff' | 'stadiums' | 'blog' | 'banners' | 'arbitres'): Promise<string> {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
     
@@ -25,9 +25,9 @@ export const storageService = {
     if (type === 'players') {
       bucketName = 'players';
       filePath = fileName; 
-    } else if (type === 'staff') {
+    } else if (type === 'staff' || type === 'arbitres') {
       bucketName = 'staff';
-      filePath = fileName; 
+      filePath = `${type}/${fileName}`; 
     } else if (type === 'stadiums') {
       bucketName = 'logos';
       filePath = `stadiums/${fileName}`;

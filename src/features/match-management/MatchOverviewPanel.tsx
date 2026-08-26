@@ -21,12 +21,15 @@ import {
   Flag,
   MapPin,
   Video,
+  UserCheck,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { useMatchEvents } from '../../hooks/useMatchEvents';
 import { usePlayers } from '../../hooks/usePlayers';
+import { useArbitres } from '../../hooks/useArbitres';
 import { matchService } from '../../services/matchService';
+import { supabase } from '../../lib/supabase';
 import type { Match } from '../../types';
 
 interface MatchOverviewPanelProps {
@@ -143,10 +146,23 @@ const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
 }) => {
   const { events } = useMatchEvents(match.id);
   const { players } = usePlayers();
+  const { arbitres } = useArbitres();
   const [matchStats, setMatchStats] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'live' | 'stats' | 'lineup' | 'video'>('live');
   const [statsSubTab, setStatsSubTab] = useState<'equipe' | 'joueurs'>('equipe');
   const [lineupViewMode, setLineupViewMode] = useState<'mine' | 'opponent' | 'both'>('mine');
+  const [reactionCounts, setReactionCounts] = useState<{fire: number, thumbsup: number, thumbsdown: number}>({ fire: 0, thumbsup: 0, thumbsdown: 0 });
+
+  const getRefereeName = (id?: number | string | null) => {
+    if (!id) return null;
+    const found = arbitres.find(a => String(a.id) === String(id));
+    return found ? `${found.prenom} ${found.nom}` : null;
+  };
+
+  const centralRefName = getRefereeName((match as any).referee_central_id || (match as any).referees_assigned?.central_id);
+  const assistant1RefName = getRefereeName((match as any).referee_assistant1_id || (match as any).referees_assigned?.assistant1_id);
+  const assistant2RefName = getRefereeName((match as any).referee_assistant2_id || (match as any).referees_assigned?.assistant2_id);
+  const fourthRefName = getRefereeName((match as any).referee_fourth_id || (match as any).referees_assigned?.fourth_id);
 
   const opponent = opponentClubs.find(c => c.id === match.opponent_id);
   const opponentName = getOpponentName(match.opponent_id);
@@ -244,6 +260,22 @@ const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
   useEffect(() => {
     if (match.id) {
       matchService.getMatchStats(match.id).then(setMatchStats).catch(() => setMatchStats(null));
+      
+      // Fetch reactions
+      supabase.from('match_reactions').select('reaction').eq('match_id', match.id).then(({ data }) => {
+        const counts = { fire: 0, thumbsup: 0, thumbsdown: 0 };
+        data?.forEach((r: any) => { if (r.reaction in counts) (counts as any)[r.reaction]++; });
+        setReactionCounts(counts);
+      });
+      
+      const ch = supabase.channel(`rx_${match.id}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'match_reactions', filter: `match_id=eq.${match.id}` }, (payload) => {
+          const r = payload.new.reaction;
+          if (r === 'fire' || r === 'thumbsup' || r === 'thumbsdown') {
+            setReactionCounts(prev => ({ ...prev, [r]: prev[r] + 1 }));
+          }
+        }).subscribe();
+      return () => { supabase.removeChannel(ch); };
     }
   }, [match.id]);
 
@@ -403,6 +435,19 @@ const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
                   </Button>
                 )}
               </div>
+
+              {/* Referee Team Banner */}
+              {(centralRefName || assistant1RefName || assistant2RefName || fourthRefName) && (
+                <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-center gap-4 flex-wrap text-[10px] text-white/80 font-medium">
+                  <span className="flex items-center gap-1 font-bold text-amber-300">
+                    <UserCheck className="w-3.5 h-3.5 text-amber-400" /> Corps d'Arbitrage :
+                  </span>
+                  {centralRefName && <span>Central : <strong className="text-white">{centralRefName}</strong></span>}
+                  {assistant1RefName && <span>A1 : <strong className="text-white">{assistant1RefName}</strong></span>}
+                  {assistant2RefName && <span>A2 : <strong className="text-white">{assistant2RefName}</strong></span>}
+                  {fourthRefName && <span>4ème : <strong className="text-white">{fourthRefName}</strong></span>}
+                </div>
+              )}
             </div>
           </div>
 
@@ -906,6 +951,41 @@ const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
                   </div>
                 )
               )}
+            </div>
+            
+            {/* Reactions */}
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 mt-4">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-white mb-3 text-center">
+                Réactions des Fans
+              </h4>
+              <div className="flex items-center justify-center gap-8">
+                {(() => {
+                  const total = reactionCounts.fire + reactionCounts.thumbsup + reactionCounts.thumbsdown;
+                  const firePct = total > 0 ? Math.round((reactionCounts.fire / total) * 100) : 0;
+                  const upPct = total > 0 ? Math.round((reactionCounts.thumbsup / total) * 100) : 0;
+                  const downPct = total > 0 ? Math.round((reactionCounts.thumbsdown / total) * 100) : 0;
+                  
+                  return (
+                    <>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-2xl drop-shadow-lg">🔥</span>
+                        <span className="text-white font-black text-sm">{firePct}%</span>
+                        <span className="text-white/50 text-[9px] uppercase tracking-wider">{reactionCounts.fire} votes</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-2xl drop-shadow-lg">👍</span>
+                        <span className="text-white font-black text-sm">{upPct}%</span>
+                        <span className="text-white/50 text-[9px] uppercase tracking-wider">{reactionCounts.thumbsup} votes</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-2xl drop-shadow-lg">👎</span>
+                        <span className="text-white font-black text-sm">{downPct}%</span>
+                        <span className="text-white/50 text-[9px] uppercase tracking-wider">{reactionCounts.thumbsdown} votes</span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
             
           </div>

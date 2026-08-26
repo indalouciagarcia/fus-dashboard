@@ -8,6 +8,8 @@ import { Camera, Save, Globe, Building2, Palette, Sparkles, Settings2, ShieldAle
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageService } from '../../services/storageService';
 import { Skeleton } from '../../components/ui/skeleton';
+import { useMatchReminder } from '../../context/MatchReminderContext';
+import { AlarmClock } from 'lucide-react';
 
 const ClubSettings: React.FC = () => {
   const { mainClub, updateMainClub, resetDatabase, isLoading } = useClubData();
@@ -285,9 +287,41 @@ const ClubSettings: React.FC = () => {
                          {[5, 10, 15, 20, 25, 50].map(v => <option key={v} value={v}>{v} par page</option>)}
                       </select>
                    </div>
-                </div>
+                 </div>
 
-                <div className="flex justify-end">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12 border-b border-secondary pb-12">
+                   <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <AlarmClock className="w-5 h-5 text-primary" />
+                        <h4 className="text-sm font-black uppercase tracking-tight">Rappels de Match (Intervalle)</h4>
+                      </div>
+                      <p className="text-xs font-medium text-muted-foreground">Temps entre chaque rappel (en minutes).</p>
+                      <select 
+                        value={reminderInterval}
+                        onChange={(e) => setReminderInterval(parseInt(e.target.value))}
+                        className="h-12 w-48 rounded-xl bg-secondary/30 border-secondary font-black text-sm px-4 focus:ring-2 ring-primary/20 appearance-none cursor-pointer"
+                      >
+                         {[1, 2, 5, 10, 15].map(v => <option key={v} value={v}>{v} minutes</option>)}
+                      </select>
+                   </div>
+
+                   <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <AlarmClock className="w-5 h-5 text-primary" />
+                        <h4 className="text-sm font-black uppercase tracking-tight">Rappels Max</h4>
+                      </div>
+                      <p className="text-xs font-medium text-muted-foreground">Nombre maximum de rappels avant annulation.</p>
+                      <select 
+                        value={maxReminders}
+                        onChange={(e) => setMaxReminders(parseInt(e.target.value))}
+                        className="h-12 w-48 rounded-xl bg-secondary/30 border-secondary font-black text-sm px-4 focus:ring-2 ring-primary/20 appearance-none cursor-pointer"
+                      >
+                         {[1, 2, 3, 4, 5].map(v => <option key={v} value={v}>{v} fois</option>)}
+                      </select>
+                   </div>
+                 </div>
+
+                 <div className="flex justify-end">
                    <Button onClick={handleSave} disabled={isSaving} className="gap-2 shadow-xl shadow-primary/20 px-8 h-12 rounded-2xl font-black uppercase tracking-widest text-xs">
                     <Save className="w-4 h-4" />
                     {isSaving ? 'Mise à jour...' : 'Enregistrer les préférences'}

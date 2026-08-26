@@ -12,6 +12,9 @@ export type {
   UserMatchAssignmentType,
 } from './supabase';
 
+export * from './arbitre';
+export * from './audit';
+
 import type { Tables } from './supabase';
 
 // -------------------------------------------------------

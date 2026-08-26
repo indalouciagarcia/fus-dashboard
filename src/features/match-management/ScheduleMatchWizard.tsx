@@ -6,6 +6,7 @@ import { useStaff } from '../../hooks/useStaff';
 import { useMatches } from '../../hooks/useMatches';
 import { useTeams } from '../../hooks/useTeams';
 import { useTouchDragAndDrop } from '../../hooks/useTouchDragAndDrop';
+import { useArbitres } from '../../hooks/useArbitres';
 import { PLAYER_CATEGORIES } from '../../constants';
 import { Skeleton } from '../../components/ui/skeleton';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,7 +19,7 @@ import {
   Calendar, MapPin, Trophy, Users, Briefcase,
   Shield, Layout, Gamepad2, CheckCircle2,
   Globe, Target, Save, Search, Filter, Loader2,
-  Trash2, X
+  Trash2, X, UserCheck
 } from 'lucide-react';
 import type { Match, Player, MatchPhase } from '../../types';
 
@@ -27,14 +28,15 @@ interface ScheduleMatchWizardProps {
   onSuccess?: () => void;
 }
 
-type WizardStep = 'setup' | 'staff' | 'lineup' | 'opponent' | 'validate';
+type WizardStep = 'setup' | 'arbitres' | 'staff' | 'lineup' | 'opponent' | 'validate';
 
 const STEPS: { key: WizardStep; label: string; icon: React.ElementType }[] = [
-  { key: 'setup',    label: 'Setup',   icon: Calendar },
-  { key: 'staff',    label: 'Staff',   icon: Briefcase },
-  { key: 'lineup',   label: 'Compo',   icon: Users },
+  { key: 'setup',    label: 'Setup',    icon: Calendar },
+  { key: 'arbitres', label: 'Arbitres', icon: UserCheck },
+  { key: 'staff',    label: 'Staff',    icon: Briefcase },
+  { key: 'lineup',   label: 'Compo',    icon: Users },
   { key: 'opponent', label: 'Adversaire', icon: Target },
-  { key: 'validate', label: 'Valider', icon: CheckCircle2 },
+  { key: 'validate', label: 'Valider',  icon: CheckCircle2 },
 ];
 
 const FORMATIONS = ['4-3-3', '4-4-2', '4-2-3-1', '4-1-4-1', '3-5-2', '3-4-3', '5-3-2', '3-4-2-1', '4-3-2-1', '4-5-1', '5-4-1', '4-4-1-1'];
@@ -129,6 +131,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
   const { leagues, stadiums, isLoading: compLoading } = useCompetitions();
   const { players, isLoading: playersLoading } = usePlayers();
   const { staff, isLoading: staffLoading } = useStaff();
+  const { arbitres } = useArbitres();
   const { teams } = useTeams();
   const { addMatch } = useMatches();
 
@@ -137,6 +140,19 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
   const [currentStep, setCurrentStep] = useState<WizardStep>('setup');
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Arbitres State
+  const [selectedReferees, setSelectedReferees] = useState<{
+    central_id: number | null;
+    assistant1_id: number | null;
+    assistant2_id: number | null;
+    fourth_id: number | null;
+  }>({
+    central_id: null,
+    assistant1_id: null,
+    assistant2_id: null,
+    fourth_id: null,
+  });
 
   // Step 1
   const [setup, setSetup] = useState({
@@ -442,6 +458,11 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
         opponent_lineup: opponentLineup,
         opponent_subs: opponentSubs,
         staff_ids: selectedStaffIds,
+        referee_central_id: selectedReferees.central_id,
+        referee_assistant1_id: selectedReferees.assistant1_id,
+        referee_assistant2_id: selectedReferees.assistant2_id,
+        referee_fourth_id: selectedReferees.fourth_id,
+        referees_assigned: selectedReferees,
         team_id: setup.team_id || teams.find(t => t.category === setup.category)?.id || null,
         match_phase: qualif_status !== '' ? qualif_status : (_mp === '' ? null : _mp),
         // Match timing configuration
@@ -699,6 +720,73 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
 
                   </div>
                </div>
+            </motion.div>
+          )}
+
+          {currentStep === 'arbitres' && (
+            <motion.div key="arbitres" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="p-12 space-y-10 flex-1">
+              <SectionTitle icon={<UserCheck className="w-5 h-5 text-primary" />} title="Corps d'Arbitrage" subtitle="Désignez les arbitres officiels de la rencontre" />
+              <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 bg-secondary/10 p-10 rounded-[3.5rem] border-2 border-dashed border-secondary">
+                {/* Arbitre Central */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Arbitre Central</label>
+                  <select
+                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
+                    value={selectedReferees.central_id || ''}
+                    onChange={e => setSelectedReferees({ ...selectedReferees, central_id: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">Non assigné / À désigner</option>
+                    {arbitres.filter(a => a.statut === 'actif').map(a => (
+                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade} • {a.role_principal})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Assistant 1 */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Arbitre Assistant 1</label>
+                  <select
+                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
+                    value={selectedReferees.assistant1_id || ''}
+                    onChange={e => setSelectedReferees({ ...selectedReferees, assistant1_id: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">Non assigné</option>
+                    {arbitres.filter(a => a.statut === 'actif').map(a => (
+                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Assistant 2 */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Arbitre Assistant 2</label>
+                  <select
+                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
+                    value={selectedReferees.assistant2_id || ''}
+                    onChange={e => setSelectedReferees({ ...selectedReferees, assistant2_id: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">Non assigné</option>
+                    {arbitres.filter(a => a.statut === 'actif').map(a => (
+                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 4ème Arbitre */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">4ème Arbitre / VAR</label>
+                  <select
+                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
+                    value={selectedReferees.fourth_id || ''}
+                    onChange={e => setSelectedReferees({ ...selectedReferees, fourth_id: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">Non assigné</option>
+                    {arbitres.filter(a => a.statut === 'actif').map(a => (
+                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </motion.div>
           )}
 

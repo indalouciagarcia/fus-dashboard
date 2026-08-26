@@ -6,12 +6,18 @@ import { motion } from 'framer-motion';
 import { usePlayers } from '../hooks/usePlayers';
 import { useMatches } from '../hooks/useMatches';
 import { useAdvancedDashboardStats } from '../hooks/useAdvancedDashboardStats';
-import { Filter, Calendar, Users } from 'lucide-react';
-import type { AgeCategory } from '../types';
+import { Filter, Calendar, Users, Trophy, ChevronRight, Crown } from 'lucide-react';
+import type { Player, AgeCategory } from '../types';
+import TopScorerHeroCard from './TopScorerHeroCard';
+import type { TopScorerData } from './TopScorerHeroCard';
+
+interface TopScorersProps {
+  onSelectPlayer?: (player: Player) => void;
+}
 
 const CATEGORIES: AgeCategory[] = ['SENIOR', 'U23', 'U21', 'U19', 'U17', 'U15', 'U13', 'U11', 'U9'];
 const MONTHS = [
-  { value: 'all', label: 'Tous les mois' },
+  { value: 'all', label: 'Toute l\'année' },
   { value: '0', label: 'Janvier' }, { value: '1', label: 'Février' },
   { value: '2', label: 'Mars' }, { value: '3', label: 'Avril' },
   { value: '4', label: 'Mai' }, { value: '5', label: 'Juin' },
@@ -20,14 +26,14 @@ const MONTHS = [
   { value: '10', label: 'Novembre' }, { value: '11', label: 'Décembre' }
 ];
 const TRIMESTERS = [
-  { value: 'all', label: 'Toute l\'année' },
+  { value: 'all', label: 'Tous les trimestres' },
   { value: '1', label: 'T1 (Jan-Mar)' },
   { value: '2', label: 'T2 (Avr-Jun)' },
   { value: '3', label: 'T3 (Jul-Sep)' },
   { value: '4', label: 'T4 (Oct-Déc)' }
 ];
 
-const TopScorers: React.FC = () => {
+export const TopScorers: React.FC<TopScorersProps> = ({ onSelectPlayer }) => {
   const { players } = usePlayers();
   const { matches } = useMatches();
   const { data: statsData } = useAdvancedDashboardStats();
@@ -36,7 +42,7 @@ const TopScorers: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedTrimester, setSelectedTrimester] = useState<string>('all');
 
-  const scorers = useMemo(() => {
+  const scorers: TopScorerData[] = useMemo(() => {
     const events = statsData?.events || [];
     const finishedMatches = matches.filter(m => m.status === 'finished');
 
@@ -93,115 +99,223 @@ const TopScorers: React.FC = () => {
         ...p,
         goals: playerGoals.get(p.id) || 0,
         assists: playerAssists.get(p.id) || 0,
-        played: playerMatches.get(p.id)?.size || 0
+        played: playerMatches.get(p.id)?.size || 0,
+        category: (p as any).category || 'Senior'
       }))
       .filter(p => p.goals > 0 || p.played > 0)
       .sort((a, b) => b.goals - a.goals || b.assists - a.assists)
       .slice(0, 10);
   }, [players, matches, statsData, selectedCategory, selectedMonth, selectedTrimester]);
 
+  const topScorer = scorers.length > 0 ? scorers[0] : null;
+
+  const currentPeriodLabel = useMemo(() => {
+    if (selectedMonth !== 'all') {
+      const m = MONTHS.find(x => x.value === selectedMonth);
+      return m ? m.label : 'Mois sélectionné';
+    }
+    if (selectedTrimester !== 'all') {
+      const t = TRIMESTERS.find(x => x.value === selectedTrimester);
+      return t ? t.label : 'Trimestre sélectionné';
+    }
+    return 'Toute la Saison';
+  }, [selectedMonth, selectedTrimester]);
+
+  const currentCategoryLabel = selectedCategory === 'ALL' ? 'Toutes Catégories' : selectedCategory;
+
+  const handlePlayerClick = (p: Player) => {
+    if (onSelectPlayer) {
+      onSelectPlayer(p);
+    }
+  };
+
   return (
-    <Card className="h-full border shadow-sm hover:shadow-md transition-shadow">
-      <CardHeader className="flex flex-col gap-4 pb-6">
-        <div className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg font-bold tracking-tight">Meilleurs Buteurs</CardTitle>
-          <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest bg-secondary/50">
-            <Filter className="w-3 h-3 mr-1" />
-            Filtrés
-          </Badge>
+    <div className="space-y-6">
+      {/* 2-Column Responsive Layout: Golden Boot Hero Card + Full Top Scorers Table */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* Left Column: #1 Top Scorer Hero Card */}
+        <div className="lg:col-span-5 flex flex-col">
+          <TopScorerHeroCard
+            topScorer={topScorer}
+            onSelectPlayer={handlePlayerClick}
+            periodLabel={currentPeriodLabel}
+            categoryLabel={currentCategoryLabel}
+          />
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          {/* Category Filter */}
-          <div className="flex items-center gap-2 bg-secondary/30 rounded-xl px-3 py-2">
-            <Users className="w-4 h-4 text-primary" />
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as AgeCategory | 'ALL')}
-              className="bg-transparent text-[11px] font-bold outline-none border-none cursor-pointer"
-            >
-              <option value="ALL">Toutes catégories</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-
-          {/* Month Filter */}
-          <div className="flex items-center gap-2 bg-secondary/30 rounded-xl px-3 py-2">
-            <Calendar className="w-4 h-4 text-primary" />
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent text-[11px] font-bold outline-none border-none cursor-pointer"
-            >
-              {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-          </div>
-
-          {/* Trimester Filter */}
-          <div className="flex items-center gap-2 bg-secondary/30 rounded-xl px-3 py-2">
-            <Calendar className="w-4 h-4 text-primary" />
-            <select
-              value={selectedTrimester}
-              onChange={(e) => setSelectedTrimester(e.target.value)}
-              className="bg-transparent text-[11px] font-bold outline-none border-none cursor-pointer"
-            >
-              {TRIMESTERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-4 overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Joueur</TableHead>
-              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-center">B</TableHead>
-              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-center">P</TableHead>
-              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-center">M</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {scorers.map((scorer, index) => (
-              <motion.tr
-                key={scorer.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                className="group border-b border-secondary/50 last:border-0 hover:bg-secondary/20 transition-colors"
-                style={{ cursor: 'pointer' }}
-              >
-                <TableCell className="py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-full bg-secondary/80 overflow-hidden ring-2 ring-primary/10 group-hover:ring-primary/40 transition-all flex items-center justify-center font-bold text-primary">
-                        <img src={(scorer.photo_url && scorer.photo_url !== 'null') ? scorer.photo_url : `https://i.pravatar.cc/300?u=${scorer.id}`} alt={scorer.full_name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-white border-2 border-white">
-                        {index + 1}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">{scorer.full_name}</p>
-                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">{scorer.position}</p>
-                    </div>
+        {/* Right Column: Full Leaderboard & Filters */}
+        <div className="lg:col-span-7 flex flex-col">
+          <Card className="h-full border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow rounded-3xl overflow-hidden flex flex-col justify-between">
+            <CardHeader className="flex flex-col gap-4 pb-4">
+              <div className="flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                    <Trophy className="w-4 h-4" />
                   </div>
-                </TableCell>
-                <TableCell className="text-center">
-                  <span className="text-xs font-black text-foreground">{scorer.goals}</span>
-                </TableCell>
-                <TableCell className="text-center">
-                   <span className="text-xs font-bold text-muted-foreground">{scorer.assists}</span>
-                </TableCell>
-                <TableCell className="text-center">
-                   <span className="text-xs font-bold text-muted-foreground">{scorer.played}</span>
-                </TableCell>
-              </motion.tr>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+                  <div>
+                    <CardTitle className="text-base sm:text-lg font-black uppercase tracking-tight text-foreground">
+                      Classement des Buteurs
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground font-medium">
+                      Cliquez sur une ligne pour afficher les détails du joueur
+                    </p>
+                  </div>
+                </div>
+
+                <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest bg-primary/5 text-primary border-primary/20">
+                  <Filter className="w-3 h-3 mr-1" />
+                  {scorers.length} Classés
+                </Badge>
+              </div>
+
+              {/* Filters Toolbar */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {/* Category Filter */}
+                <div className="flex items-center gap-1.5 bg-secondary/50 dark:bg-secondary/20 rounded-xl px-2.5 py-1.5 border border-slate-200/60 dark:border-slate-800">
+                  <Users className="w-3.5 h-3.5 text-primary" />
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value as AgeCategory | 'ALL')}
+                    className="bg-transparent text-[11px] font-bold outline-none border-none cursor-pointer text-foreground"
+                  >
+                    <option value="ALL">Toutes catégories</option>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+
+                {/* Month Filter */}
+                <div className="flex items-center gap-1.5 bg-secondary/50 dark:bg-secondary/20 rounded-xl px-2.5 py-1.5 border border-slate-200/60 dark:border-slate-800">
+                  <Calendar className="w-3.5 h-3.5 text-primary" />
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => {
+                      setSelectedMonth(e.target.value);
+                      if (e.target.value !== 'all') setSelectedTrimester('all');
+                    }}
+                    className="bg-transparent text-[11px] font-bold outline-none border-none cursor-pointer text-foreground"
+                  >
+                    {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                </div>
+
+                {/* Trimester Filter */}
+                <div className="flex items-center gap-1.5 bg-secondary/50 dark:bg-secondary/20 rounded-xl px-2.5 py-1.5 border border-slate-200/60 dark:border-slate-800">
+                  <Calendar className="w-3.5 h-3.5 text-primary" />
+                  <select
+                    value={selectedTrimester}
+                    onChange={(e) => {
+                      setSelectedTrimester(e.target.value);
+                      if (e.target.value !== 'all') setSelectedMonth('all');
+                    }}
+                    className="bg-transparent text-[11px] font-bold outline-none border-none cursor-pointer text-foreground"
+                  >
+                    {TRIMESTERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-0 overflow-x-auto flex-1">
+              {scorers.length === 0 ? (
+                <div className="py-12 text-center text-xs text-muted-foreground bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed">
+                  Aucun buteur enregistré pour ces filtres.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-b border-slate-200 dark:border-slate-800">
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground w-12 text-center">Rang</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Joueur & Catégorie</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Buts (B)</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Passes (P)</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Matchs (M)</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {scorers.map((scorer, index) => {
+                      const photo = (scorer.photo_url && scorer.photo_url !== 'null') 
+                        ? scorer.photo_url 
+                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(scorer.full_name)}&background=e03d3d&color=fff&size=150`;
+
+                      return (
+                        <motion.tr
+                          key={scorer.id}
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          onClick={() => handlePlayerClick(scorer)}
+                          className="group border-b border-slate-100 dark:border-slate-800/60 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                        >
+                          <TableCell className="text-center font-black text-xs text-muted-foreground py-3">
+                            {index === 0 ? (
+                              <span className="w-6 h-6 rounded-full bg-amber-400 text-slate-950 font-black text-[11px] inline-flex items-center justify-center shadow-sm">
+                                1
+                              </span>
+                            ) : index === 1 ? (
+                              <span className="w-6 h-6 rounded-full bg-slate-300 text-slate-900 font-black text-[11px] inline-flex items-center justify-center">
+                                2
+                              </span>
+                            ) : index === 2 ? (
+                              <span className="w-6 h-6 rounded-full bg-amber-700 text-white font-black text-[11px] inline-flex items-center justify-center">
+                                3
+                              </span>
+                            ) : (
+                              `#${index + 1}`
+                            )}
+                          </TableCell>
+
+                          <TableCell className="py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-2xl bg-secondary overflow-hidden ring-1 ring-slate-200 dark:ring-slate-800 group-hover:ring-primary/40 transition-all shrink-0">
+                                <img
+                                  src={photo}
+                                  alt={scorer.full_name}
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).setAttribute('src', `https://ui-avatars.com/api/?name=${encodeURIComponent(scorer.full_name)}&background=e03d3d&color=fff&size=150`);
+                                  }}
+                                />
+                              </div>
+                              <div className="overflow-hidden">
+                                <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors truncate">
+                                  {scorer.full_name}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                                  #{scorer.jersey_number ?? '-'} • {scorer.position || 'FW'} • {scorer.category || 'Senior'}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="text-center py-3">
+                            <span className="text-sm font-black text-amber-500">{scorer.goals}</span>
+                          </TableCell>
+
+                          <TableCell className="text-center py-3">
+                            <span className="text-xs font-bold text-rose-400">{scorer.assists}</span>
+                          </TableCell>
+
+                          <TableCell className="text-center py-3">
+                            <span className="text-xs font-bold text-muted-foreground">{scorer.played}</span>
+                          </TableCell>
+
+                          <TableCell className="text-right py-3 pr-2">
+                            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                          </TableCell>
+                        </motion.tr>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+      </div>
+    </div>
   );
 };
 

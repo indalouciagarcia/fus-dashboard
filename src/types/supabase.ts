@@ -540,6 +540,7 @@ export interface Database {
           is_active: boolean;
           force_password_change: boolean;
           system_role: string;
+          job_title: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -550,6 +551,7 @@ export interface Database {
           is_active?: boolean;
           force_password_change?: boolean;
           system_role?: string;
+          job_title?: string | null;
           created_at?: string;
           updated_at?: string;
         };
