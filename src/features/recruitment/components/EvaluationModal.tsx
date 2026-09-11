@@ -1,14 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sparkles, Award, FileText, CheckCircle2, ChevronRight, Sliders, Shield } from 'lucide-react';
-import type { TrialCandidate, CandidateEvaluation, EvaluationVerdict } from '../types/recruitment';
+import {
+  X,
+  Sparkles,
+  Award,
+  FileText,
+  CheckCircle2,
+  ChevronRight,
+  Sliders,
+  Shield,
+  RotateCcw,
+  TrendingUp,
+  TrendingDown,
+  Edit3,
+  Calendar,
+  Lock,
+  AlertTriangle,
+  Trash2,
+  Clock,
+  MapPin,
+  Plus,
+  UserCheck,
+  Check
+} from 'lucide-react';
+import { toast } from 'sonner';
+import type { TrialCandidate, CandidateEvaluation, EvaluationVerdict, PlayerTest } from '../types/recruitment';
 import { cn } from '../../../lib/utils';
+import { usePermissions } from '../../../context/PermissionsContext';
+import {
+  getScoutPositionConfig,
+  addScoutCriterion,
+  updateScoutCriterion,
+  deleteScoutCriterion,
+  SCOUT_CRITERIA_UPDATED_EVENT,
+  type ScoutPillarKey
+} from '../constants/scoutCriteriaByPosition';
+import ScoutCriteriaManagerModal from './ScoutCriteriaManagerModal';
 
 interface EvaluationModalProps {
   isOpen: boolean;
   onClose: () => void;
   candidate: TrialCandidate;
   existingEvaluation?: CandidateEvaluation | null;
-  onSave: (evaluation: Omit<CandidateEvaluation, 'id' | 'created_at'>) => Promise<void>;
+  evaluations?: CandidateEvaluation[];
+  initialMode?: 'create' | 'reevaluate' | 'edit';
+  tests?: PlayerTest[];
+  initialTestId?: string;
+  onSave: (
+    evaluation: Omit<CandidateEvaluation, 'id' | 'created_at'>,
+    options?: { isReevaluation?: boolean; updateId?: string }
+  ) => Promise<void>;
+  onDelete?: (evaluationId: string) => Promise<void>;
+  onOpenScheduleTest?: (candidate: TrialCandidate) => void;
 }
 
 export const EvaluationModal: React.FC<EvaluationModalProps> = ({
@@ -16,57 +58,66 @@ export const EvaluationModal: React.FC<EvaluationModalProps> = ({
   onClose,
   candidate,
   existingEvaluation,
+  evaluations = [],
+  initialMode,
+  tests = [],
+  initialTestId,
   onSave,
+  onDelete,
+  onOpenScheduleTest,
 }) => {
-  const [activeTab, setActiveTab] = useState<'tech' | 'phys' | 'tact' | 'ment' | 'position' | 'verdict'>('tech');
+  const [evalMode, setEvalMode] = useState<'create' | 'reevaluate' | 'edit'>('create');
+  const [activeTab, setActiveTab] = useState<'tech' | 'tact' | 'phys' | 'ment' | 'position' | 'verdict'>('tech');
   const [evaluatorName, setEvaluatorName] = useState('Hassan Benabicha');
   const [evaluatorRole, setEvaluatorRole] = useState('Directeur du Recrutement');
   const [evaluationDate, setEvaluationDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedTestId, setSelectedTestId] = useState<string>('');
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Pilier 1 : Technique (1–10)
-  const [techBallControl, setTechBallControl] = useState(7.5);
-  const [techFirstTouch, setTechFirstTouch] = useState(7.5);
-  const [techPassingShort, setTechPassingShort] = useState(7.0);
-  const [techPassingLong, setTechPassingLong] = useState(7.0);
-  const [techDribbling, setTechDribbling] = useState(7.5);
-  const [techCrossing, setTechCrossing] = useState(6.5);
-  const [techFinishing, setTechFinishing] = useState(7.0);
-  const [techHeading, setTechHeading] = useState(6.5);
-  const [tech1v1Attacking, setTech1v1Attacking] = useState(7.5);
-  const [tech1v1Defending, setTech1v1Defending] = useState(6.5);
-  const [techWeakFoot, setTechWeakFoot] = useState(6.0);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const candidateTests = tests.filter(t => t.candidate_id === candidate.id);
+  const selectedTest = candidateTests.find(t => t.id === selectedTestId);
+  const isFutureTest = Boolean(selectedTest && selectedTest.test_date > todayStr);
 
-  // Pilier 2 : Physique (1–10)
-  const [physAcceleration, setPhysAcceleration] = useState(8.0);
-  const [physSprintSpeed, setPhysSprintSpeed] = useState(8.0);
-  const [physAgility, setPhysAgility] = useState(7.5);
-  const [physBalance, setPhysBalance] = useState(7.5);
-  const [physStrength, setPhysStrength] = useState(7.0);
-  const [physEndurance, setPhysEndurance] = useState(7.5);
-  const [physExplosiveness, setPhysExplosiveness] = useState(7.5);
+  const { authState } = usePermissions();
+  const isSuperAdmin = Boolean(
+    (authState?.roles ?? []).includes('super_admin') ||
+    authState?.user?.system_role?.toLowerCase() === 'super_admin' ||
+    authState?.user?.system_role?.toLowerCase() === 'admin'
+  );
 
-  // Pilier 3 : Tactique (1–10)
-  const [tactPositioning, setTactPositioning] = useState(7.5);
-  const [tactAwareness, setTactAwareness] = useState(7.5);
-  const [tactDecisionMaking, setTactDecisionMaking] = useState(7.5);
-  const [tactAnticipation, setTactAnticipation] = useState(7.5);
-  const [tactSpaceAwareness, setTactSpaceAwareness] = useState(7.0);
-  const [tactTransition, setTactTransition] = useState(7.5);
+  // Écoute de l'événement de mise à jour des critères
+  const [criteriaVersion, setCriteriaVersion] = useState(0);
+  useEffect(() => {
+    const handler = () => setCriteriaVersion((v) => v + 1);
+    window.addEventListener(SCOUT_CRITERIA_UPDATED_EVENT, handler);
+    return () => window.removeEventListener(SCOUT_CRITERIA_UPDATED_EVENT, handler);
+  }, []);
 
-  // Pilier 4 : Mental (1–10)
-  const [mentConcentration, setMentConcentration] = useState(7.5);
-  const [mentDiscipline, setMentDiscipline] = useState(8.0);
-  const [mentMotivation, setMentMotivation] = useState(8.5);
-  const [mentConfidence, setMentConfidence] = useState(7.5);
-  const [mentTeamwork, setMentTeamwork] = useState(8.0);
-  const [mentLeadership, setMentLeadership] = useState(7.0);
-  const [mentCoachability, setMentCoachability] = useState(8.5);
+  // Configuration dynamique des critères selon le poste du joueur (9 profils)
+  const positionConfig = React.useMemo(() => {
+    return getScoutPositionConfig(candidate.primary_position);
+  }, [candidate.primary_position, criteriaVersion]);
 
-  // Critères Spécifiques par Poste
-  const isGK = candidate.primary_position.toLowerCase().includes('gardien');
-  const isDef = candidate.primary_position.toLowerCase().includes('défenseur') || candidate.primary_position.toLowerCase().includes('latéral');
-  const isMid = candidate.primary_position.toLowerCase().includes('milieu');
-  const isWng = candidate.primary_position.toLowerCase().includes('ailier');
+  // Notes des critères dynamiques par nom de critère (Échelle 1–10)
+  const [criterionScores, setCriterionScores] = useState<Record<string, number>>({});
+  // État d'activation des critères (Coché = pris en compte, Décoché = exclu)
+  const [criterionEnabled, setCriterionEnabled] = useState<Record<string, boolean>>({});
+
+  // Super Admin Criteria inline management
+  const [isCriteriaManagerOpen, setIsCriteriaManagerOpen] = useState(false);
+  const [inlineAddingPillar, setInlineAddingPillar] = useState<ScoutPillarKey | null>(null);
+  const [inlineNewCriterionName, setInlineNewCriterionName] = useState('');
+  const [editingCriterion, setEditingCriterion] = useState<{ pillar: ScoutPillarKey; oldName: string } | null>(null);
+  const [editingCriterionNewName, setEditingCriterionNewName] = useState('');
+
+  // Critères complémentaires spécifiques
+  const posUpper = candidate.primary_position.toUpperCase();
+  const isGK = posUpper.includes('GK') || candidate.primary_position.toLowerCase().includes('gardien');
+  const isDef = posUpper.includes('CB') || posUpper.includes('LB') || posUpper.includes('RB') || candidate.primary_position.toLowerCase().includes('défenseur') || candidate.primary_position.toLowerCase().includes('latéral') || candidate.primary_position.toLowerCase().includes('arrière');
+  const isMid = posUpper.includes('CDM') || posUpper.includes('CM') || posUpper.includes('CAM') || candidate.primary_position.toLowerCase().includes('milieu');
+  const isWng = posUpper.includes('LW') || posUpper.includes('RW') || candidate.primary_position.toLowerCase().includes('ailier');
 
   const [posTrait1Label, setPosTrait1Label] = useState(isGK ? 'Réflexes & Arrêts sur sa ligne' : isDef ? 'Duels Aériens & Tacles' : isMid ? 'Résistance au Pressing' : isWng ? 'Percussion 1v1 & Dribble' : 'Finition Clinique');
   const [posTrait1Score, setPosTrait1Score] = useState(8.0);
@@ -82,114 +133,235 @@ export const EvaluationModal: React.FC<EvaluationModalProps> = ({
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (existingEvaluation) {
-      setEvaluatorName(existingEvaluation.evaluator_name);
-      setEvaluatorRole(existingEvaluation.evaluator_role || 'Scout');
-      setEvaluationDate(existingEvaluation.evaluation_date);
+  // Helper pour initialiser ou réinitialiser les notes de critères
+  const initCriterionScores = (evaluation?: CandidateEvaluation | null) => {
+    const scores: Record<string, number> = {};
+    const enabled: Record<string, boolean> = {};
 
-      setTechBallControl(existingEvaluation.tech_ball_control ?? 7.5);
-      setTechFirstTouch(existingEvaluation.tech_first_touch ?? 7.5);
-      setTechPassingShort(existingEvaluation.tech_passing_short ?? 7.0);
-      setTechPassingLong(existingEvaluation.tech_passing_long ?? 7.0);
-      setTechDribbling(existingEvaluation.tech_dribbling ?? 7.5);
-      setTechCrossing(existingEvaluation.tech_crossing ?? 6.5);
-      setTechFinishing(existingEvaluation.tech_finishing ?? 7.0);
-      setTechHeading(existingEvaluation.tech_heading ?? 6.5);
-      setTech1v1Attacking(existingEvaluation.tech_1v1_attacking ?? 7.5);
-      setTech1v1Defending(existingEvaluation.tech_1v1_defending ?? 6.5);
-      setTechWeakFoot(existingEvaluation.tech_weak_foot ?? 6.0);
+    const pillars: ScoutPillarKey[] = ['technique', 'tactique', 'physique', 'mental'];
+    pillars.forEach((p) => {
+      positionConfig.criteria[p].forEach((criterion) => {
+        if (evaluation?.criteria_scores && evaluation.criteria_scores[criterion] !== undefined) {
+          scores[criterion] = evaluation.criteria_scores[criterion];
+        } else if (evaluation) {
+          if (p === 'technique') scores[criterion] = evaluation.technical_score ?? 7.5;
+          else if (p === 'tactique') scores[criterion] = evaluation.tactical_score ?? 7.5;
+          else if (p === 'physique') scores[criterion] = evaluation.physical_score ?? 7.5;
+          else scores[criterion] = evaluation.mental_score ?? 7.5;
+        } else {
+          scores[criterion] = 7.5;
+        }
+        enabled[criterion] = true;
+      });
+    });
 
-      setPhysAcceleration(existingEvaluation.phys_acceleration ?? 8.0);
-      setPhysSprintSpeed(existingEvaluation.phys_sprint_speed ?? 8.0);
-      setPhysAgility(existingEvaluation.phys_agility ?? 7.5);
-      setPhysBalance(existingEvaluation.phys_balance ?? 7.5);
-      setPhysStrength(existingEvaluation.phys_strength ?? 7.0);
-      setPhysEndurance(existingEvaluation.phys_endurance ?? 7.5);
-      setPhysExplosiveness(existingEvaluation.phys_explosiveness ?? 7.5);
+    setCriterionScores(scores);
+    setCriterionEnabled(enabled);
+  };
 
-      setTactPositioning(existingEvaluation.tact_positioning ?? 7.5);
-      setTactAwareness(existingEvaluation.tact_awareness ?? 7.5);
-      setTactDecisionMaking(existingEvaluation.tact_decision_making ?? 7.5);
-      setTactAnticipation(existingEvaluation.tact_anticipation ?? 7.5);
-      setTactSpaceAwareness(existingEvaluation.tact_space_awareness ?? 7.0);
-      setTactTransition(existingEvaluation.tact_transition ?? 7.5);
+  // Helper to load evaluation data or reset to default
+  const loadEvaluationData = (evaluation: CandidateEvaluation | null, test?: PlayerTest) => {
+    if (evaluation) {
+      setEvalMode('edit');
+      setEvaluatorName(evaluation.evaluator_name || 'Hassan Benabicha');
+      setEvaluatorRole(evaluation.evaluator_role || 'Directeur du Recrutement');
+      setEvaluationDate(evaluation.evaluation_date || test?.test_date || todayStr);
 
-      setMentConcentration(existingEvaluation.ment_concentration ?? 7.5);
-      setMentDiscipline(existingEvaluation.ment_discipline ?? 8.0);
-      setMentMotivation(existingEvaluation.ment_motivation ?? 8.5);
-      setMentConfidence(existingEvaluation.ment_confidence ?? 7.5);
-      setMentTeamwork(existingEvaluation.ment_teamwork ?? 8.0);
-      setMentLeadership(existingEvaluation.ment_leadership ?? 7.0);
-      setMentCoachability(existingEvaluation.ment_coachability ?? 8.5);
+      initCriterionScores(evaluation);
 
-      setVerdict(existingEvaluation.verdict || 'shortlist');
-      setStrengths(existingEvaluation.strengths || '');
-      setWeaknesses(existingEvaluation.weaknesses || '');
-      setComments(existingEvaluation.comments || '');
+      if (evaluation.pos_specific_1_label) setPosTrait1Label(evaluation.pos_specific_1_label);
+      if (evaluation.pos_specific_1_score !== undefined) setPosTrait1Score(evaluation.pos_specific_1_score);
+      if (evaluation.pos_specific_2_label) setPosTrait2Label(evaluation.pos_specific_2_label);
+      if (evaluation.pos_specific_2_score !== undefined) setPosTrait2Score(evaluation.pos_specific_2_score);
+      if (evaluation.pos_specific_3_label) setPosTrait3Label(evaluation.pos_specific_3_label);
+      if (evaluation.pos_specific_3_score !== undefined) setPosTrait3Score(evaluation.pos_specific_3_score);
+
+      setVerdict(evaluation.verdict || 'shortlist');
+      setStrengths(evaluation.strengths || '');
+      setWeaknesses(evaluation.weaknesses || '');
+      setComments(evaluation.comments || '');
+    } else {
+      setEvalMode('create');
+      setEvaluatorName('Hassan Benabicha');
+      setEvaluatorRole('Directeur du Recrutement');
+      setEvaluationDate(test?.test_date || todayStr);
+
+      initCriterionScores(null);
+
+      setPosTrait1Score(8.0);
+      setPosTrait2Score(7.5);
+      setPosTrait3Score(7.5);
+
+      setVerdict('shortlist');
+      setStrengths('');
+      setWeaknesses('');
+      setComments('');
     }
-  }, [existingEvaluation, isOpen]);
+  };
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    // Si un initialTestId est donné ou qu'un test correspond à l'évaluation existante
+    const defaultTest = (initialTestId && candidateTests.find(t => t.id === initialTestId))
+      || (existingEvaluation?.test_id && candidateTests.find(t => t.id === existingEvaluation.test_id))
+      || (candidateTests.length > 0 ? candidateTests.find(t => t.test_date <= todayStr) || candidateTests[0] : undefined);
 
-  // Calcul des scores par pilier (1–10)
-  const techScore = Math.round(((techBallControl + techFirstTouch + techPassingShort + techPassingLong + techDribbling + techCrossing + techFinishing + techHeading + tech1v1Attacking + tech1v1Defending + techWeakFoot) / 11) * 10) / 10;
-  const physScore = Math.round(((physAcceleration + physSprintSpeed + physAgility + physBalance + physStrength + physEndurance + physExplosiveness) / 7) * 10) / 10;
-  const tactScore = Math.round(((tactPositioning + tactAwareness + tactDecisionMaking + tactAnticipation + tactSpaceAwareness + tactTransition) / 6) * 10) / 10;
-  const mentScore = Math.round(((mentConcentration + mentDiscipline + mentMotivation + mentConfidence + mentTeamwork + mentLeadership + mentCoachability) / 7) * 10) / 10;
+    const defaultTestId = defaultTest ? defaultTest.id : '';
+    setSelectedTestId(defaultTestId);
 
-  // Formule officielle pondérée : Tech 30%, Phys 25%, Tact 25%, Ment 20%
-  const overallScore = Math.round((techScore * 0.30 + physScore * 0.25 + tactScore * 0.25 + mentScore * 0.20) * 10) / 10;
+    // Trouver l'évaluation : soit par test_id soit la première évaluation disponible pour ce candidat
+    const matchedEval = (evaluations || []).find(e => defaultTestId ? e.test_id === defaultTestId : e.candidate_id === candidate.id)
+      || (existingEvaluation?.test_id === defaultTestId ? existingEvaluation : null)
+      || (existingEvaluation && !existingEvaluation.test_id ? existingEvaluation : null)
+      || (evaluations || []).find(e => e.candidate_id === candidate.id)
+      || null;
+
+    loadEvaluationData(matchedEval, defaultTest);
+  }, [existingEvaluation, evaluations, isOpen, initialTestId, candidate.id, candidate.primary_position]);
+
+  const handleSelectTest = (testId: string) => {
+    setSelectedTestId(testId);
+    if (!testId) {
+      // Mode évaluation autonome sans test
+      const candEval = (evaluations || []).find(e => e.candidate_id === candidate.id) || existingEvaluation || null;
+      loadEvaluationData(candEval, undefined);
+      return;
+    }
+    const test = candidateTests.find(t => t.id === testId);
+    const matchedEval = (evaluations || []).find(e => e.test_id === testId)
+      || (existingEvaluation?.test_id === testId ? existingEvaluation : null);
+    loadEvaluationData(matchedEval || null, test);
+  };
+
+  const toggleCriterion = (key: string) => {
+    setCriterionEnabled(prev => ({ ...prev, [key]: !(prev[key] ?? true) }));
+  };
+
+  const setCriterionScore = (key: string, val: number) => {
+    setCriterionScores(prev => ({ ...prev, [key]: val }));
+  };
+
+  // Calcul dynamique des moyennes par pilier
+  const getPillarScore = (pillar: ScoutPillarKey) => {
+    const list = positionConfig.criteria[pillar] || [];
+    const active = list
+      .filter(c => criterionEnabled[c] ?? true)
+      .map(c => criterionScores[c] ?? 7.5);
+
+    if (active.length === 0) return 7.0;
+    return Math.round((active.reduce((a, b) => a + b, 0) / active.length) * 10) / 10;
+  };
+
+  const getPillarActiveCount = (pillar: ScoutPillarKey) => {
+    const list = positionConfig.criteria[pillar] || [];
+    return list.filter(c => criterionEnabled[c] ?? true).length;
+  };
+
+  const techScore = getPillarScore('technique');
+  const tactScore = getPillarScore('tactique');
+  const physScore = getPillarScore('physique');
+  const mentScore = getPillarScore('mental');
+
+  // Formule officielle pondérée dynamique : Tech 30%, Phys 25%, Tact 25%, Ment 20%
+  const activePillars: { score: number; weight: number }[] = [];
+  if (getPillarActiveCount('technique') > 0) activePillars.push({ score: techScore, weight: 0.30 });
+  if (getPillarActiveCount('tactique') > 0) activePillars.push({ score: tactScore, weight: 0.25 });
+  if (getPillarActiveCount('physique') > 0) activePillars.push({ score: physScore, weight: 0.25 });
+  if (getPillarActiveCount('mental') > 0) activePillars.push({ score: mentScore, weight: 0.20 });
+
+  const totalWeight = activePillars.reduce((acc, p) => acc + p.weight, 0);
+  const overallScore = totalWeight > 0
+    ? Math.round((activePillars.reduce((acc, p) => acc + p.score * p.weight, 0) / totalWeight) * 10) / 10
+    : 7.0;
+
+  // Trouver l'évaluation correspondante
+  const currentEvaluation = (evaluations || []).find(e => selectedTestId ? e.test_id === selectedTestId : e.candidate_id === candidate.id)
+    || (existingEvaluation && (!selectedTestId || existingEvaluation.test_id === selectedTestId) ? existingEvaluation : null);
+
+  const handleDeleteEvaluation = async () => {
+    if (!currentEvaluation?.id) {
+      toast.error("Aucune évaluation trouvée.");
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      if (onDelete) {
+        await onDelete(currentEvaluation.id);
+        toast.success("L'évaluation a été supprimée avec succès.");
+        setIsConfirmingDelete(false);
+        onClose();
+      }
+    } catch (err) {
+      console.error("Erreur suppression évaluation:", err);
+      toast.error("Erreur lors de la suppression de l'évaluation.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (selectedTestId && isFutureTest) {
+      toast.error(`Impossible d'évaluer ce joueur pour cette session future avant sa date (${selectedTest?.test_date}). Sélectionnez l'évaluation autonome.`);
+      return;
+    }
+
     setIsSubmitting(true);
+    const matchedTest = selectedTestId ? candidateTests.find(t => t.id === selectedTestId) : undefined;
     try {
       await onSave({
         candidate_id: candidate.id,
+        test_id: selectedTestId || undefined,
+        test_name: matchedTest?.test_name || (selectedTestId ? undefined : 'Évaluation Approfondie Scout'),
         evaluator_name: evaluatorName,
         evaluator_role: evaluatorRole,
         evaluation_date: evaluationDate,
         position_evaluated: candidate.primary_position,
+        position_code: positionConfig.code,
 
-        tech_ball_control: techBallControl,
-        tech_first_touch: techFirstTouch,
-        tech_passing_short: techPassingShort,
-        tech_passing_long: techPassingLong,
-        tech_dribbling: techDribbling,
-        tech_crossing: techCrossing,
-        tech_finishing: techFinishing,
-        tech_heading: techHeading,
-        tech_1v1_attacking: tech1v1Attacking,
-        tech_1v1_defending: tech1v1Defending,
-        tech_weak_foot: techWeakFoot,
+        // Grille complète des critères par poste
+        criteria_scores: criterionScores,
+
+        // Scores de synthèse des 4 Piliers
         technical_score: techScore,
-
-        phys_acceleration: physAcceleration,
-        phys_sprint_speed: physSprintSpeed,
-        phys_agility: physAgility,
-        phys_balance: physBalance,
-        phys_strength: physStrength,
-        phys_endurance: physEndurance,
-        phys_explosiveness: physExplosiveness,
         physical_score: physScore,
-
-        tact_positioning: tactPositioning,
-        tact_awareness: tactAwareness,
-        tact_decision_making: tactDecisionMaking,
-        tact_anticipation: tactAnticipation,
-        tact_space_awareness: tactSpaceAwareness,
-        tact_transition: tactTransition,
         tactical_score: tactScore,
-
-        ment_concentration: mentConcentration,
-        ment_discipline: mentDiscipline,
-        ment_motivation: mentMotivation,
-        ment_confidence: mentConfidence,
-        ment_teamwork: mentTeamwork,
-        ment_leadership: mentLeadership,
-        ment_coachability: mentCoachability,
         mental_score: mentScore,
+
+        // Rétrocompatibilité legacy avec les anciens champs DB / composants
+        tech_ball_control: criterionScores['Contrôle'] ?? criterionScores['Prise de balle'] ?? techScore,
+        tech_first_touch: criterionScores['Contrôle orienté'] ?? criterionScores['Contrôle'] ?? techScore,
+        tech_passing_short: criterionScores['Passe courte'] ?? criterionScores['Passe'] ?? techScore,
+        tech_passing_long: criterionScores['Passe longue'] ?? techScore,
+        tech_dribbling: criterionScores['Dribble'] ?? techScore,
+        tech_crossing: criterionScores['Centre'] ?? techScore,
+        tech_finishing: criterionScores['Finition'] ?? criterionScores['Tir'] ?? techScore,
+        tech_heading: criterionScores['Jeu aérien'] ?? criterionScores['Jeu de tête'] ?? techScore,
+        tech_1v1_attacking: criterionScores['Duel 1v1'] ?? criterionScores['1 contre 1'] ?? techScore,
+        tech_1v1_defending: criterionScores['Tacle'] ?? techScore,
+        tech_weak_foot: techScore,
+
+        phys_acceleration: criterionScores['Accélération'] ?? physScore,
+        phys_sprint_speed: criterionScores['Vitesse'] ?? physScore,
+        phys_agility: criterionScores['Agilité'] ?? physScore,
+        phys_balance: criterionScores['Souplesse'] ?? criterionScores['Coordination'] ?? physScore,
+        phys_strength: criterionScores['Force'] ?? criterionScores['Puissance'] ?? physScore,
+        phys_endurance: criterionScores['Endurance'] ?? criterionScores['Résistance'] ?? physScore,
+        phys_explosiveness: criterionScores['Explosivité'] ?? criterionScores['Détente'] ?? physScore,
+
+        tact_positioning: criterionScores['Placement'] ?? criterionScores['Positionnement'] ?? tactScore,
+        tact_awareness: criterionScores['Lecture du jeu'] ?? criterionScores['Vision'] ?? tactScore,
+        tact_decision_making: criterionScores['Prise de décision'] ?? tactScore,
+        tact_anticipation: criterionScores['Anticipation'] ?? tactScore,
+        tact_space_awareness: criterionScores['Gestion profondeur'] ?? criterionScores['Occupation espaces'] ?? tactScore,
+        tact_transition: criterionScores['Transition défensive'] ?? criterionScores['Transition'] ?? tactScore,
+
+        ment_concentration: criterionScores['Concentration'] ?? mentScore,
+        ment_discipline: criterionScores['Discipline'] ?? mentScore,
+        ment_motivation: criterionScores['Combativité'] ?? criterionScores['Courage'] ?? mentScore,
+        ment_confidence: criterionScores['Confiance'] ?? mentScore,
+        ment_teamwork: criterionScores['Communication'] ?? mentScore,
+        ment_leadership: criterionScores['Leadership'] ?? mentScore,
+        ment_coachability: criterionScores['Intelligence'] ?? mentScore,
 
         pos_specific_1_label: posTrait1Label,
         pos_specific_1_score: posTrait1Score,
@@ -203,36 +375,297 @@ export const EvaluationModal: React.FC<EvaluationModalProps> = ({
         strengths: strengths.trim() || undefined,
         weaknesses: weaknesses.trim() || undefined,
         comments: comments.trim() || undefined,
+      }, {
+        isReevaluation: false,
+        updateId: currentEvaluation?.id,
       });
+      toast.success(currentEvaluation ? "Évaluation mise à jour avec succès !" : "Évaluation enregistrée avec succès !");
       onClose();
+    } catch (err) {
+      console.error("Erreur sauvegarde évaluation:", err);
+      toast.error("Erreur lors de l'enregistrement de l'évaluation.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const renderSlider = (label: string, value: number, setter: (v: number) => void) => {
+  const handleSaveInlineAdd = (pillar: ScoutPillarKey) => {
+    const trimmed = inlineNewCriterionName.trim();
+    if (!trimmed) {
+      toast.error("Veuillez saisir un nom de critère.");
+      return;
+    }
+    const success = addScoutCriterion(positionConfig.code, pillar, trimmed);
+    if (success) {
+      setCriterionScores((prev) => ({ ...prev, [trimmed]: 7.5 }));
+      setCriterionEnabled((prev) => ({ ...prev, [trimmed]: true }));
+      setInlineNewCriterionName('');
+      setInlineAddingPillar(null);
+      toast.success(`Critère "${trimmed}" ajouté pour ${positionConfig.name}.`);
+    } else {
+      toast.error("Ce critère existe déjà pour ce profil.");
+    }
+  };
+
+  const handleSaveInlineEdit = () => {
+    if (!editingCriterion) return;
+    const trimmed = editingCriterionNewName.trim();
+    if (!trimmed) {
+      toast.error("Le nom du critère ne peut pas être vide.");
+      return;
+    }
+    if (trimmed === editingCriterion.oldName) {
+      setEditingCriterion(null);
+      return;
+    }
+
+    const success = updateScoutCriterion(positionConfig.code, editingCriterion.pillar, editingCriterion.oldName, trimmed);
+    if (success) {
+      setCriterionScores((prev) => {
+        const next = { ...prev };
+        if (next[editingCriterion.oldName] !== undefined) {
+          next[trimmed] = next[editingCriterion.oldName];
+          delete next[editingCriterion.oldName];
+        }
+        return next;
+      });
+      setCriterionEnabled((prev) => {
+        const next = { ...prev };
+        if (next[editingCriterion.oldName] !== undefined) {
+          next[trimmed] = next[editingCriterion.oldName];
+          delete next[editingCriterion.oldName];
+        }
+        return next;
+      });
+      setEditingCriterion(null);
+      toast.success(`Critère renommé : "${trimmed}".`);
+    } else {
+      toast.error("Un critère portant ce nom existe déjà.");
+    }
+  };
+
+  const handleInlineDeleteCriterion = (pillar: ScoutPillarKey, label: string) => {
+    const currentList = positionConfig.criteria[pillar] || [];
+    if (currentList.length <= 1) {
+      toast.error("Impossible de supprimer le dernier critère de ce pilier.");
+      return;
+    }
+
+    const success = deleteScoutCriterion(positionConfig.code, pillar, label);
+    if (success) {
+      setCriterionScores((prev) => {
+        const next = { ...prev };
+        delete next[label];
+        return next;
+      });
+      setCriterionEnabled((prev) => {
+        const next = { ...prev };
+        delete next[label];
+        return next;
+      });
+      toast.success(`Critère "${label}" retiré.`);
+    } else {
+      toast.error("Erreur lors de la suppression.");
+    }
+  };
+
+  const renderCriterionSlider = (pillar: ScoutPillarKey, label: string) => {
+    const isEnabled = criterionEnabled[label] ?? true;
+    const value = criterionScores[label] ?? 7.5;
+    const isEditing = editingCriterion?.pillar === pillar && editingCriterion?.oldName === label;
+
     let scoreBadgeColor = 'bg-slate-100 text-slate-700';
     if (value >= 9) scoreBadgeColor = 'bg-red-50 text-primary font-black';
     else if (value >= 7.5) scoreBadgeColor = 'bg-emerald-50 text-emerald-700 font-bold';
     else if (value >= 6) scoreBadgeColor = 'bg-blue-50 text-blue-700';
 
     return (
-      <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5 hover:border-slate-200 transition-colors">
-        <div className="flex justify-between items-center text-xs">
-          <span className="font-semibold text-slate-800">{label}</span>
-          <span className={cn("px-2 py-0.5 rounded-lg text-xs", scoreBadgeColor)}>
-            {value.toFixed(1)} <span className="text-[10px] opacity-70">/10</span>
-          </span>
+      <div
+        key={label}
+        className={cn(
+          "p-3 rounded-2xl border transition-all space-y-2 group relative",
+          isEnabled
+            ? "bg-slate-50/90 border-slate-200/80 hover:border-slate-300 hover:bg-white shadow-2xs"
+            : "bg-slate-100/50 border-dashed border-slate-200 opacity-60"
+        )}
+      >
+        <div className="flex justify-between items-center text-xs gap-2">
+          {isEditing ? (
+            <div className="flex items-center gap-1.5 flex-1">
+              <input
+                type="text"
+                value={editingCriterionNewName}
+                onChange={(e) => setEditingCriterionNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveInlineEdit();
+                  if (e.key === 'Escape') setEditingCriterion(null);
+                }}
+                autoFocus
+                className="w-full px-2 py-0.5 text-xs rounded border border-primary bg-white text-slate-900 font-bold"
+              />
+              <button
+                type="button"
+                onClick={handleSaveInlineEdit}
+                className="p-1 rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer"
+                title="Valider"
+              >
+                <Check className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingCriterion(null)}
+                className="p-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer"
+                title="Annuler"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 font-bold text-slate-800 cursor-pointer select-none truncate flex-1">
+                <input
+                  type="checkbox"
+                  checked={isEnabled}
+                  onChange={() => toggleCriterion(label)}
+                  className="w-4 h-4 rounded text-primary accent-primary cursor-pointer shrink-0"
+                  title={isEnabled ? "Critère pris en compte dans le calcul (Coché)" : "Critère exclu / Non évalué (Décoché)"}
+                />
+                <span className={cn("truncate", !isEnabled && "line-through text-slate-400 font-normal")} title={label}>
+                  {label}
+                </span>
+              </label>
+
+              <div className="flex items-center gap-1 shrink-0">
+                {isEnabled ? (
+                  <span className={cn("px-2 py-0.5 rounded-lg text-xs font-black", scoreBadgeColor)}>
+                    {value.toFixed(1)} <span className="text-[10px] opacity-70 font-normal">/10</span>
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-lg text-[10px] bg-slate-200 text-slate-500 font-bold shrink-0">
+                    Non évalué
+                  </span>
+                )}
+
+                {/* Actions Super Admin */}
+                {isSuperAdmin && (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 ml-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCriterion({ pillar, oldName: label });
+                        setEditingCriterionNewName(label);
+                      }}
+                      className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-200/70 transition cursor-pointer"
+                      title="Modifier ce critère (Super Admin)"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInlineDeleteCriterion(pillar, label)}
+                      className="p-1 rounded text-rose-400 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer"
+                      title="Supprimer ce critère (Super Admin)"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
         <input
           type="range"
           min="1"
           max="10"
           step="0.5"
+          disabled={!isEnabled}
           value={value}
-          onChange={(e) => setter(Number(e.target.value))}
-          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
+          onChange={(e) => setCriterionScore(label, Number(e.target.value))}
+          className={cn(
+            "w-full h-2 rounded-lg appearance-none cursor-pointer accent-primary",
+            isEnabled ? "bg-slate-200" : "bg-slate-200 opacity-40 cursor-not-allowed"
+          )}
         />
+      </div>
+    );
+  };
+
+  const renderPillarSection = (
+    pillar: ScoutPillarKey,
+    letter: string,
+    label: string,
+    desc: string,
+    score: number
+  ) => {
+    const criteria = positionConfig.criteria[pillar] || [];
+    const isAdding = inlineAddingPillar === pillar;
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b gap-2">
+          <div>
+            <h4 className="text-sm font-bold text-foreground flex items-center gap-2 flex-wrap">
+              <span>{letter}. Critères {label} — {positionConfig.emoji} {positionConfig.name}</span>
+            </h4>
+            <p className="text-[11px] text-muted-foreground">{desc}</p>
+          </div>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-[11px] text-slate-400 font-medium">
+              ({getPillarActiveCount(pillar)}/{criteria.length} critères pris en compte)
+            </span>
+            <span className="text-xs font-bold text-primary">Moyenne Pilier : {score}/10</span>
+            {isSuperAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setInlineAddingPillar(isAdding ? null : pillar);
+                  setInlineNewCriterionName('');
+                }}
+                className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 flex items-center gap-1 transition cursor-pointer"
+                title="Ajouter un critère pour ce profil (Super Admin)"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{isAdding ? 'Annuler' : 'Ajouter un critère'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Barre d'ajout rapide pour Super Admin */}
+        {isSuperAdmin && isAdding && (
+          <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-2xl flex items-center gap-2 animate-in fade-in duration-150">
+            <input
+              type="text"
+              placeholder={`Nouveau critère ${label.toLowerCase()} pour ${positionConfig.name}...`}
+              value={inlineNewCriterionName}
+              onChange={(e) => setInlineNewCriterionName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSaveInlineAdd(pillar);
+                }
+                if (e.key === 'Escape') {
+                  setInlineAddingPillar(null);
+                }
+              }}
+              autoFocus
+              className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-amber-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 text-slate-900"
+            />
+            <button
+              type="button"
+              onClick={() => handleSaveInlineAdd(pillar)}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition flex items-center gap-1 shadow-xs cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Valider</span>
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {criteria.map((crit) => renderCriterionSlider(pillar, crit))}
+        </div>
       </div>
     );
   };
@@ -240,40 +673,243 @@ export const EvaluationModal: React.FC<EvaluationModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
       <div className="bg-white rounded-3xl shadow-2xl border w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        {/* Header avec résumé joueur et Note Pondérée */}
-        <div className="p-6 border-b flex items-center justify-between bg-slate-50/70">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-bold text-foreground">
-                Grille d'Évaluation 1–10 : {candidate.first_name} {candidate.last_name}
-              </h3>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-800">
-                {candidate.primary_position}
-              </span>
+        {/* Header */}
+        <div className="p-6 border-b bg-gradient-to-r from-slate-50 via-white to-slate-50">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Award className="w-5 h-5 text-primary" />
+                  <span>Évaluation 1–10 : {candidate.first_name} {candidate.last_name}</span>
+                </h3>
+
+                {/* Badge du Poste Spécifique Détecté */}
+                <span className="text-xs font-black px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1.5 shadow-xs">
+                  <span>{positionConfig.emoji}</span>
+                  <span>{positionConfig.code} — {positionConfig.name}</span>
+                </span>
+
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCriteriaManagerOpen(true)}
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 flex items-center gap-1 transition cursor-pointer"
+                    title="Gérer les critères d'évaluation de ce poste (Super Admin)"
+                  >
+                    <Sliders className="w-3 h-3 text-amber-600" />
+                    <span>Gérer critères ({positionConfig.code})</span>
+                  </button>
+                )}
+
+                {selectedTest && (
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Test du {selectedTest.test_date}</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Évaluation approfondie du scout • Grille spécialisée pour le poste de <strong>{positionConfig.name}</strong>.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Pondération officielle FUS : Technique 30% • Physique 25% • Tactique 25% • Mental 20%
-            </p>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Score Global Pondéré</span>
+                <div className="text-2xl font-black text-primary">
+                  {overallScore} <span className="text-xs text-slate-400 font-normal">/10</span>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <span className="text-[10px] uppercase font-bold text-muted-foreground block">Score Pondéré</span>
-              <span className="text-3xl font-black text-primary">{overallScore}/10</span>
+          {/* Bannière de verrouillage si la date du test est future */}
+          {selectedTestId && isFutureTest && (
+            <div className="mt-3 p-3 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-2.5 text-xs text-rose-900 animate-in fade-in duration-200">
+              <Lock className="w-4 h-4 text-rose-600 shrink-0" />
+              <div>
+                <strong>Session future :</strong> le test est planifié pour le <strong>{selectedTest?.test_date}</strong>. Vous pouvez basculer en évaluation autonome pour noter le joueur immédiatement.
+              </div>
             </div>
-            <button onClick={onClose} className="p-2 rounded-xl text-muted-foreground hover:bg-slate-100">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          )}
+        </div>
+
+        {/* Test Sessions Selector / Info Bar */}
+        <div className="bg-slate-50/90 border-b px-6 py-3 space-y-2">
+          {candidateTests.length > 0 ? (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-bold text-slate-800">
+                    Sessions de Test Disponibles ({candidateTests.length})
+                  </span>
+                  <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                    — Rattachez l'évaluation à une session ou évaluez en mode autonome :
+                  </span>
+                </div>
+                {onOpenScheduleTest && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenScheduleTest(candidate);
+                    }}
+                    className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Programmer une autre session</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex gap-2.5 overflow-x-auto pb-1 custom-scrollbar">
+                {/* Option Évaluation Autonome Scout */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectTest('')}
+                  className={cn(
+                    "p-2.5 rounded-2xl border text-left transition-all shrink-0 min-w-[200px] flex flex-col justify-between space-y-1.5 cursor-pointer",
+                    !selectedTestId
+                      ? "bg-white border-primary ring-2 ring-primary/20 shadow-sm"
+                      : "bg-white/80 border-slate-200 hover:border-slate-300 hover:bg-white"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-black text-slate-900 flex items-center gap-1 truncate">
+                      <UserCheck className="w-3.5 h-3.5 text-primary" />
+                      Évaluation Autonome
+                    </span>
+                    {!selectedTestId && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                        Sélectionné
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-600 font-medium">
+                    Observation scout directe
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Sans session terrain liée
+                  </div>
+                </button>
+
+                {/* Sessions de tests du candidat */}
+                {candidateTests.map((t) => {
+                  const isSelected = t.id === selectedTestId;
+                  const testEval = (evaluations || []).find((e) => e.test_id === t.id) || (existingEvaluation?.test_id === t.id ? existingEvaluation : null);
+                  const isFuture = t.test_date > todayStr;
+                  const startTime = t.start_time || '10:00';
+                  const endTime = t.end_time || '12:00';
+
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => handleSelectTest(t.id)}
+                      className={cn(
+                        "p-2.5 rounded-2xl border text-left transition-all shrink-0 min-w-[230px] max-w-[280px] flex flex-col justify-between space-y-1.5 cursor-pointer",
+                        isSelected
+                          ? "bg-white border-primary ring-2 ring-primary/20 shadow-sm"
+                          : "bg-white/80 border-slate-200 hover:border-slate-300 hover:bg-white"
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-black text-slate-900 flex items-center gap-1 truncate">
+                          <Calendar className="w-3.5 h-3.5 text-primary" />
+                          {t.test_date}
+                        </span>
+                        {testEval ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            ✅ {testEval.overall_score}/10
+                          </span>
+                        ) : isFuture ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border">
+                            🔒 Prévu
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            ⏱️ À évaluer
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] text-slate-600 flex items-center gap-1 font-semibold">
+                        <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>{startTime} - {endTime}</span>
+                        <span className="text-slate-300">•</span>
+                        <span className="truncate">{t.test_name}</span>
+                      </div>
+
+                      <div className="text-[10px] text-slate-400 flex items-center gap-1 truncate">
+                        <MapPin className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{t.training_ground || t.location || 'Terrain FUS'}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-between text-xs text-slate-700 bg-white p-2.5 rounded-2xl border border-slate-200/80">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-primary shrink-0" />
+                <span>
+                  <strong>Mode Évaluation Approfondie Scout :</strong> saisie directe pour <strong>{candidate.first_name} {candidate.last_name}</strong> (Aucun test terrain prérequis à cette étape).
+                </span>
+              </div>
+              {onOpenScheduleTest && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenScheduleTest(candidate);
+                  }}
+                  className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 shrink-0 cursor-pointer ml-2"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Programmer un test club</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Information si l'évaluation est déjà enregistrée */}
+          {currentEvaluation && (
+            <div className="mt-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs text-emerald-900 animate-in fade-in duration-150">
+              <div className="flex items-center gap-2 truncate">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="truncate">
+                  <strong>Évaluation existante :</strong> Note globale {currentEvaluation.overall_score}/10 par {currentEvaluation.evaluator_name || 'Scout FUS'}. Vous pouvez ajuster les critères ou supprimer.
+                </span>
+              </div>
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(true)}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-rose-700 hover:text-rose-800 hover:bg-rose-100 border border-rose-200 transition-colors shrink-0 flex items-center gap-1 ml-2 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Supprimer</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tab Switcher */}
         <div className="flex border-b bg-white px-6 overflow-x-auto gap-2 py-2.5">
           {[
-            { id: 'tech', label: '⚽ Technique (30%)', score: techScore },
-            { id: 'phys', label: '🏃 Physique (25%)', score: physScore },
-            { id: 'tact', label: '🧭 Tactique (25%)', score: tactScore },
-            { id: 'ment', label: '🧠 Mental (20%)', score: mentScore },
+            { id: 'tech', label: '⚽ Technique', score: techScore },
+            { id: 'tact', label: '🧭 Tactique', score: tactScore },
+            { id: 'phys', label: '🏃 Physique', score: physScore },
+            { id: 'ment', label: '🧠 Mental', score: mentScore },
             { id: 'position', label: '🎯 Spécifique Poste', score: undefined },
             { id: 'verdict', label: '⚖️ Verdict Final', score: undefined },
           ].map((tab) => (
@@ -282,7 +918,7 @@ export const EvaluationModal: React.FC<EvaluationModalProps> = ({
               type="button"
               onClick={() => setActiveTab(tab.id as any)}
               className={cn(
-                "px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0",
+                "px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer",
                 activeTab === tab.id
                   ? "bg-primary text-white shadow-sm"
                   : "text-slate-600 hover:bg-slate-100"
@@ -304,95 +940,84 @@ export const EvaluationModal: React.FC<EvaluationModalProps> = ({
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
           {/* TAB 1 : TECHNIQUE */}
-          {activeTab === 'tech' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center pb-2 border-b">
-                <h4 className="text-sm font-bold text-foreground">A. Critères Techniques (Barème 1–10)</h4>
-                <span className="text-xs font-bold text-primary">Moyenne Pilier : {techScore}/10</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {renderSlider('Contrôle du ballon', techBallControl, setTechBallControl)}
-                {renderSlider('Première touche orientée', techFirstTouch, setTechFirstTouch)}
-                {renderSlider('Passes courtes & précision', techPassingShort, setTechPassingShort)}
-                {renderSlider('Passes longues & transversales', techPassingLong, setTechPassingLong)}
-                {renderSlider('Dribble & conduite de balle', techDribbling, setTechDribbling)}
-                {renderSlider('Qualité de centre', techCrossing, setTechCrossing)}
-                {renderSlider('Finition & Tir au but', techFinishing, setTechFinishing)}
-                {renderSlider('Jeu de tête', techHeading, setTechHeading)}
-                {renderSlider('Duel 1v1 offensif', tech1v1Attacking, setTech1v1Attacking)}
-                {renderSlider('Duel 1v1 défensif', tech1v1Defending, setTech1v1Defending)}
-                {renderSlider('Utilisation du pied faible', techWeakFoot, setTechWeakFoot)}
-              </div>
-            </div>
-          )}
+          {activeTab === 'tech' && renderPillarSection('technique', 'A', 'Techniques', 'Barème 1 à 10 spécifique au poste', techScore)}
 
-          {/* TAB 2 : PHYSIQUE */}
-          {activeTab === 'phys' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center pb-2 border-b">
-                <h4 className="text-sm font-bold text-foreground">B. Capacités Physiques & Athlétiques (Barème 1–10)</h4>
-                <span className="text-xs font-bold text-primary">Moyenne Pilier : {physScore}/10</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {renderSlider('Accélération (0-10m)', physAcceleration, setPhysAcceleration)}
-                {renderSlider('Vitesse de pointe (Sprint)', physSprintSpeed, setPhysSprintSpeed)}
-                {renderSlider('Agilité & Vivacité', physAgility, setPhysAgility)}
-                {renderSlider('Équilibre & Appuis', physBalance, setPhysBalance)}
-                {renderSlider('Puissance musculaire & Impact', physStrength, setPhysStrength)}
-                {renderSlider('Endurance & Volume (VMA)', physEndurance, setPhysEndurance)}
-                {renderSlider('Explosivité & Détente', physExplosiveness, setPhysExplosiveness)}
-              </div>
-            </div>
-          )}
+          {/* TAB 2 : TACTIQUE */}
+          {activeTab === 'tact' && renderPillarSection('tactique', 'B', 'Tactiques', 'Intelligence, vision & placement adaptés au rôle', tactScore)}
 
-          {/* TAB 3 : TACTIQUE */}
-          {activeTab === 'tact' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center pb-2 border-b">
-                <h4 className="text-sm font-bold text-foreground">C. Intelligence & Rigueur Tactique (Barème 1–10)</h4>
-                <span className="text-xs font-bold text-primary">Moyenne Pilier : {tactScore}/10</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {renderSlider('Placement sans ballon', tactPositioning, setTactPositioning)}
-                {renderSlider('Vision du jeu globale', tactAwareness, setTactAwareness)}
-                {renderSlider('Prise de décision sous pression', tactDecisionMaking, setTactDecisionMaking)}
-                {renderSlider('Anticipation & Lecture des passes', tactAnticipation, setTactAnticipation)}
-                {renderSlider('Gestion des espaces', tactSpaceAwareness, setTactSpaceAwareness)}
-                {renderSlider('Comportement en transition (Off/Déf)', tactTransition, setTactTransition)}
-              </div>
-            </div>
-          )}
+          {/* TAB 3 : PHYSIQUE */}
+          {activeTab === 'phys' && renderPillarSection('physique', 'C', 'Physiques & Athlétiques', 'Vitesse, endurance et profil athlétique requis', physScore)}
 
           {/* TAB 4 : MENTAL */}
-          {activeTab === 'ment' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center pb-2 border-b">
-                <h4 className="text-sm font-bold text-foreground">D. Profil Mental & Psychologique (Barème 1–10)</h4>
-                <span className="text-xs font-bold text-primary">Moyenne Pilier : {mentScore}/10</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {renderSlider('Concentration & Rigueur', mentConcentration, setMentConcentration)}
-                {renderSlider('Discipline & Respect des consignes', mentDiscipline, setMentDiscipline)}
-                {renderSlider('Motivation & Volonté de réussir', mentMotivation, setMentMotivation)}
-                {renderSlider('Confiance en soi & Sang-froid', mentConfidence, setMentConfidence)}
-                {renderSlider('Esprit d\'équipe & Communication', mentTeamwork, setMentTeamwork)}
-                {renderSlider('Leadership naturel', mentLeadership, setMentLeadership)}
-                {renderSlider('Réceptivité au coaching (Coachability)', mentCoachability, setMentCoachability)}
-              </div>
-            </div>
-          )}
+          {activeTab === 'ment' && renderPillarSection('mental', 'D', 'Mentaux & Psychologiques', 'Force mentale, lucidité et leadership attendus', mentScore)}
 
           {/* TAB 5 : POSITION SPECIFIC */}
           {activeTab === 'position' && (
             <div className="space-y-4">
               <div className="flex justify-between items-center pb-2 border-b">
-                <h4 className="text-sm font-bold text-foreground">Critères Additionnels Spécifiques : {candidate.primary_position}</h4>
+                <div>
+                  <h4 className="text-sm font-bold text-foreground">Critères Additionnels Spécifiques : {candidate.primary_position}</h4>
+                  <p className="text-[11px] text-muted-foreground">Traits complémentaires distinctifs du profil</p>
+                </div>
                 <span className="text-xs font-bold text-slate-500">Adaptation au poste</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {renderSlider(posTrait1Label, posTrait1Score, setPosTrait1Score)}
-                {renderSlider(posTrait2Label, posTrait2Score, setPosTrait2Score)}
-                {renderSlider(posTrait3Label, posTrait3Score, setPosTrait3Score)}
+                {/* Trait 1 */}
+                <div className="p-3 rounded-2xl border bg-slate-50/90 border-slate-200/80 space-y-2">
+                  <div className="flex justify-between items-center text-xs gap-2">
+                    <span className="font-bold text-slate-800 truncate">{posTrait1Label}</span>
+                    <span className="px-2 py-0.5 rounded-lg text-xs font-black bg-emerald-50 text-emerald-700">
+                      {posTrait1Score.toFixed(1)} /10
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="0.5"
+                    value={posTrait1Score}
+                    onChange={(e) => setPosTrait1Score(Number(e.target.value))}
+                    className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-primary bg-slate-200"
+                  />
+                </div>
+
+                {/* Trait 2 */}
+                <div className="p-3 rounded-2xl border bg-slate-50/90 border-slate-200/80 space-y-2">
+                  <div className="flex justify-between items-center text-xs gap-2">
+                    <span className="font-bold text-slate-800 truncate">{posTrait2Label}</span>
+                    <span className="px-2 py-0.5 rounded-lg text-xs font-black bg-emerald-50 text-emerald-700">
+                      {posTrait2Score.toFixed(1)} /10
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="0.5"
+                    value={posTrait2Score}
+                    onChange={(e) => setPosTrait2Score(Number(e.target.value))}
+                    className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-primary bg-slate-200"
+                  />
+                </div>
+
+                {/* Trait 3 */}
+                <div className="p-3 rounded-2xl border bg-slate-50/90 border-slate-200/80 space-y-2">
+                  <div className="flex justify-between items-center text-xs gap-2">
+                    <span className="font-bold text-slate-800 truncate">{posTrait3Label}</span>
+                    <span className="px-2 py-0.5 rounded-lg text-xs font-black bg-emerald-50 text-emerald-700">
+                      {posTrait3Score.toFixed(1)} /10
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="0.5"
+                    value={posTrait3Score}
+                    onChange={(e) => setPosTrait3Score(Number(e.target.value))}
+                    className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-primary bg-slate-200"
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -400,9 +1025,51 @@ export const EvaluationModal: React.FC<EvaluationModalProps> = ({
           {/* TAB 6 : VERDICT FINAL */}
           {activeTab === 'verdict' && (
             <div className="space-y-4">
+              {/* Liaison Session de Test (Optionnelle pour le scout) */}
+              <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                    <Calendar className="w-4 h-4 text-amber-600" />
+                    Session de Test Club (Optionnel)
+                  </label>
+                  {selectedTestId && (
+                    <span className={cn(
+                      "text-[11px] px-2 py-0.5 rounded-full font-semibold",
+                      isFutureTest ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
+                    )}>
+                      {isFutureTest ? "🔒 Date future" : "✓ Lié au test"}
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={selectedTestId}
+                  onChange={(e) => handleSelectTest(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white text-xs text-slate-800 font-medium focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                >
+                  <option value="">-- Évaluation autonome Scout (sans session liée) --</option>
+                  {candidateTests.map(t => {
+                    const testEval = (evaluations || []).find((e) => e.test_id === t.id) || (existingEvaluation?.test_id === t.id ? existingEvaluation : null);
+                    const startTime = t.start_time || '10:00';
+                    const endTime = t.end_time || '12:00';
+                    const location = t.training_ground || t.location || 'Terrain FUS';
+                    return (
+                      <option key={t.id} value={t.id}>
+                        {t.test_date > todayStr ? '🔒 ' : '⚽ '} {t.test_date} ({startTime} - {endTime}) — {t.test_name} ({location}) [{testEval ? `✅ Déjà évalué (${testEval.overall_score}/10)` : t.status === 'completed' ? 'Complété' : 'Planifié'}]
+                      </option>
+                    );
+                  })}
+                </select>
+
+                <p className="text-[11px] text-amber-800 mt-1.5">
+                  {selectedTestId
+                    ? "L'évaluation est rattachée à cette session de test et synchronisera son statut."
+                    : "Évaluation approfondie du scout enregistrée directement sur la fiche du joueur (sans test terrain obligatoire)."}
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Évaluateur / Scout *</label>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Nom de l'Évaluateur *</label>
                   <input
                     type="text"
                     required
@@ -438,7 +1105,7 @@ export const EvaluationModal: React.FC<EvaluationModalProps> = ({
                       type="button"
                       onClick={() => setVerdict(v.id as EvaluationVerdict)}
                       className={cn(
-                        "p-3 rounded-2xl border text-xs font-bold text-left transition-all",
+                        "p-3 rounded-2xl border text-xs font-bold text-left transition-all cursor-pointer",
                         verdict === v.id ? `${v.color} shadow ring-2 ring-primary/20` : "border-slate-200 bg-white hover:bg-slate-50"
                       )}
                     >
@@ -485,32 +1152,115 @@ export const EvaluationModal: React.FC<EvaluationModalProps> = ({
           )}
 
           {/* Footer Actions */}
-          <div className="pt-4 border-t flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">
-              Score Global Pondéré : <span className="font-black text-primary text-sm">{overallScore}/10</span>
+          <div className="pt-4 border-t flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs text-muted-foreground flex items-center gap-2">
+              <span>Score Global Pondéré :</span>
+              <span className="font-black text-primary text-base">{overallScore}/10</span>
+              {currentEvaluation && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                  Mode Édition
+                </span>
+              )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              {currentEvaluation && onDelete && (
+                <button
+                  type="button"
+                  disabled={isSubmitting || isDeleting}
+                  onClick={() => setIsConfirmingDelete(true)}
+                  className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Supprimer l'Évaluation</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl border text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                className="px-4 py-2 rounded-xl border text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="px-5 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
+                disabled={isSubmitting || (Boolean(selectedTestId) && isFutureTest)}
+                className={cn(
+                  "px-5 py-2 rounded-xl text-white text-xs font-bold shadow flex items-center gap-2 transition-all cursor-pointer",
+                  (Boolean(selectedTestId) && isFutureTest)
+                    ? "bg-slate-400 cursor-not-allowed opacity-75"
+                    : "bg-primary hover:bg-primary/90"
+                )}
               >
-                <CheckCircle2 className="w-4 h-4" />
-                {isSubmitting ? 'Validation...' : 'Valider l\'Évaluation 1–10'}
+                {selectedTestId && isFutureTest ? <Lock className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                {isSubmitting
+                  ? 'Validation...'
+                  : selectedTestId && isFutureTest
+                    ? `🔒 Verrouillé jusqu'au ${selectedTest?.test_date}`
+                    : currentEvaluation
+                      ? `Mettre à jour l'Évaluation (${overallScore}/10)`
+                      : selectedTestId
+                        ? `Valider l'Évaluation pour ce Test (${overallScore}/10)`
+                        : `Valider l'Évaluation Scout (${overallScore}/10)`}
               </button>
             </div>
           </div>
         </form>
+
+        {/* Modal de confirmation de suppression */}
+        {isConfirmingDelete && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl shadow-2xl border border-rose-200 max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">Supprimer cette évaluation ?</h4>
+                  <p className="text-xs text-slate-500">
+                    {candidate.first_name} {candidate.last_name} ({candidate.primary_position})
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200 text-xs text-rose-900 space-y-1 font-medium">
+                <p>Cette action supprimera définitivement les notes et le rapport d'évaluation associés.</p>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-1">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setIsConfirmingDelete(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleDeleteEvaluation}
+                  className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition-colors shadow flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isDeleting ? 'Suppression...' : 'Confirmer la suppression'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Super Admin Criteria Manager Modal */}
+        {isSuperAdmin && (
+          <ScoutCriteriaManagerModal
+            isOpen={isCriteriaManagerOpen}
+            onClose={() => setIsCriteriaManagerOpen(false)}
+            defaultPositionCode={positionConfig.code}
+          />
+        )}
       </div>
     </div>
   );
 };
+
 export default EvaluationModal;

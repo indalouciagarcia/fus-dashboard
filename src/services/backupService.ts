@@ -13,6 +13,137 @@ const DB_TABLES = [
   'backups'
 ];
 
+// -------------------------------------------------------
+// Strategy Pattern: Backup Destinations
+// -------------------------------------------------------
+
+export interface BackupExecutionContext {
+  type: BackupType;
+  destination: BackupDestination;
+  backup: Backup | null;
+  insertError: any;
+}
+
+export interface BackupStrategy {
+  execute(ctx: BackupExecutionContext): Promise<Backup>;
+}
+
+class DesktopBackupStrategy implements BackupStrategy {
+  async execute(ctx: BackupExecutionContext): Promise<Backup> {
+    const { backup, type } = ctx;
+    try {
+      const logs: string[] = [];
+      const addLog = async (msg: string) => {
+        const time = new Date().toLocaleTimeString();
+        logs.push(`[${time}] ${msg}`);
+        if (backup?.id) {
+          await supabase.from('backups').update({ logs }).eq('id', backup.id);
+        }
+      };
+
+      if (backup?.id) {
+        await supabase.from('backups').update({ status: 'running', started_at: new Date().toISOString() }).eq('id', backup.id);
+      }
+      await addLog("Initialisation du backup complet (25 tables)...");
+
+      const archive: Record<string, any> = {
+        metadata: {
+          version: "1.0",
+          timestamp: new Date().toISOString(),
+          type,
+          source: "Client-side Full Export"
+        },
+        tables: {} as Record<string, any[]>
+      };
+
+      for (const table of DB_TABLES) {
+        await addLog(`Extraction : ${table}...`);
+        try {
+          const { data, error } = await supabase.from(table).select('*');
+          if (error) {
+            await addLog(`⚠ Table ${table}: ${error.message}`);
+          } else {
+            archive.tables[table] = data || [];
+            await addLog(`✓ ${table}: ${data?.length || 0} lignes.`);
+          }
+        } catch (e) {
+          await addLog(`⚠ Table ${table} inaccessible.`);
+        }
+      }
+
+      const jsonString = JSON.stringify(archive, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const fileUrl = URL.createObjectURL(blob);
+      const fileSize = blob.size;
+
+      await addLog("Backup terminé avec succès ✓");
+      
+      if (backup?.id) {
+        await supabase
+          .from('backups')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            file_url: fileUrl,
+            file_size_bytes: fileSize,
+            logs
+          })
+          .eq('id', backup.id);
+      }
+
+      return (backup || {
+        id: 'temp-' + Date.now(),
+        status: 'completed',
+        destination: 'desktop',
+        file_url: fileUrl,
+        logs,
+        created_at: new Date().toISOString(),
+        type
+      }) as Backup;
+
+    } catch (err: any) {
+      if (backup?.id) {
+        await supabase.from('backups').update({
+          status: 'failed',
+          error_message: `Erreur: ${err.message}`,
+          completed_at: new Date().toISOString()
+        }).eq('id', backup.id);
+      }
+      throw err;
+    }
+  }
+}
+
+class EdgeWorkerBackupStrategy implements BackupStrategy {
+  async execute(ctx: BackupExecutionContext): Promise<Backup> {
+    const { backup, insertError, type, destination } = ctx;
+    if (insertError) throw new Error("Base de données non configurée. Lancez le script SQL d'abord.");
+    if (!backup?.id) throw new Error("ID de sauvegarde introuvable.");
+
+    const { error: fnError } = await supabase.functions.invoke('backup-worker', {
+      body: { backupId: backup.id, type, destination },
+    });
+
+    if (fnError) {
+      await supabase.from('backups').update({
+        status: 'failed',
+        error_message: "Edge Function non déployée.",
+        completed_at: new Date().toISOString(),
+      }).eq('id', backup.id);
+      throw fnError;
+    }
+
+    return backup;
+  }
+}
+
+const backupStrategies: Record<BackupDestination, BackupStrategy> = {
+  desktop: new DesktopBackupStrategy(),
+  cloud_storage: new EdgeWorkerBackupStrategy(),
+  google_drive: new EdgeWorkerBackupStrategy(),
+  s3: new EdgeWorkerBackupStrategy(),
+};
+
 export const backupService = {
   async getBackups(): Promise<Backup[]> {
     const { data, error } = await supabase
@@ -62,105 +193,13 @@ export const backupService = {
       insertError = e;
     }
 
-    if (opts.destination === 'desktop') {
-      try {
-        const logs: string[] = [];
-        const addLog = async (msg: string) => {
-          const time = new Date().toLocaleTimeString();
-          logs.push(`[${time}] ${msg}`);
-          if (backup?.id) {
-            await supabase.from('backups').update({ logs }).eq('id', backup.id);
-          }
-        };
-
-        if (backup?.id) {
-          await supabase.from('backups').update({ status: 'running', started_at: new Date().toISOString() }).eq('id', backup.id);
-        }
-        await addLog("Initialisation du backup complet (25 tables)...");
-
-        const archive: Record<string, any> = {
-          metadata: {
-            version: "1.0",
-            timestamp: new Date().toISOString(),
-            type: opts.type,
-            source: "Client-side Full Export"
-          },
-          tables: {} as Record<string, any[]>
-        };
-
-        for (const table of DB_TABLES) {
-          await addLog(`Extraction : ${table}...`);
-          try {
-            const { data, error } = await supabase.from(table).select('*');
-            if (error) {
-              await addLog(`⚠ Table ${table}: ${error.message}`);
-            } else {
-              archive.tables[table] = data || [];
-              await addLog(`✓ ${table}: ${data?.length || 0} lignes.`);
-            }
-          } catch (e) {
-            await addLog(`⚠ Table ${table} inaccessible.`);
-          }
-        }
-
-        const jsonString = JSON.stringify(archive, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const fileUrl = URL.createObjectURL(blob);
-        const fileSize = blob.size;
-
-        await addLog("Backup terminé avec succès ✓");
-        
-        if (backup?.id) {
-          await supabase
-            .from('backups')
-            .update({
-              status: 'completed',
-              completed_at: new Date().toISOString(),
-              file_url: fileUrl,
-              file_size_bytes: fileSize,
-              logs
-            })
-            .eq('id', backup.id);
-        }
-
-        return (backup || {
-          id: 'temp-' + Date.now(),
-          status: 'completed',
-          destination: 'desktop',
-          file_url: fileUrl,
-          logs,
-          created_at: new Date().toISOString(),
-          type: opts.type
-        }) as Backup;
-
-      } catch (err: any) {
-        if (backup?.id) {
-          await supabase.from('backups').update({
-            status: 'failed',
-            error_message: `Erreur: ${err.message}`,
-            completed_at: new Date().toISOString()
-          }).eq('id', backup.id);
-        }
-        throw err;
-      }
-    }
-
-    if (insertError) throw new Error("Base de données non configurée. Lancez le script SQL d'abord.");
-
-    const { error: fnError } = await supabase.functions.invoke('backup-worker', {
-      body: { backupId: backup.id, type: opts.type, destination: opts.destination },
+    const strategy = backupStrategies[opts.destination] || backupStrategies.desktop;
+    return strategy.execute({
+      type: opts.type,
+      destination: opts.destination,
+      backup,
+      insertError,
     });
-
-    if (fnError) {
-      await supabase.from('backups').update({
-        status: 'failed',
-        error_message: "Edge Function non déployée.",
-        completed_at: new Date().toISOString(),
-      }).eq('id', backup.id);
-      throw fnError;
-    }
-
-    return backup;
   },
 
   async restoreBackup(

@@ -77,11 +77,19 @@ const getDeviceSupportInfo = (userAgent: string): { device: string; support: str
 };
 
 class AuditLoggerService {
+  private static instance: AuditLoggerService | null = null;
   private currentSession: UserSession | null = null;
   private cachedIp: string | null = null;
 
-  constructor() {
+  private constructor() {
     this.restoreSessionFromStorage();
+  }
+
+  public static getInstance(): AuditLoggerService {
+    if (!AuditLoggerService.instance) {
+      AuditLoggerService.instance = new AuditLoggerService();
+    }
+    return AuditLoggerService.instance;
   }
 
   private restoreSessionFromStorage() {
@@ -363,4 +371,5 @@ class AuditLoggerService {
   }
 }
 
-export const AuditLogger = new AuditLoggerService();
+export { AuditLoggerService };
+export const AuditLogger = AuditLoggerService.getInstance();

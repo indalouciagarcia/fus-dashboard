@@ -34,7 +34,15 @@ import {
   ArrowUpDown,
   Sparkles,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  ArrowLeft,
+  Flame,
+  Award,
+  Zap,
+  CheckCircle2,
+  Eye,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Team } from '../../services/teamService';
@@ -42,14 +50,16 @@ import type { Player, Match } from '../../types';
 import { useSurclassements } from '../../hooks/useSurclassements';
 import { Skeleton } from '../../components/ui/skeleton';
 import { supabase } from '../../lib/supabase';
+import { PLAYER_CATEGORIES, normalizeAgeCategory } from '../../constants';
+import { useRecruitment } from '../recruitment/hooks/useRecruitment';
+import type { TrialCandidate } from '../recruitment/types/recruitment';
+import { toast } from 'sonner';
 
 const CATEGORY_FILTERS = [
-  'ALL', 'U7', 'U8', 'U9', 'U10', 'U11', 'U12', 'U13', 'U14', 'U15', 'U16', 'U17', 'U18', 'U19', 'U21', 'SENIOR', 'PRO'
+  'ALL', ...PLAYER_CATEGORIES
 ] as const;
 
-const FORM_CATEGORIES = [
-  'U7', 'U8', 'U9', 'U10', 'U11', 'U12', 'U13', 'U14', 'U15', 'U16', 'U17', 'U18', 'U19', 'U21', 'Senior', 'Pro', 'Veteran'
-];
+const FORM_CATEGORIES = PLAYER_CATEGORIES;
 
 interface TeamMatchStats {
   totalMatches: number;
@@ -65,6 +75,9 @@ interface TeamMatchStats {
   totalMinutesPlayed: number;
   totalPlayers: number;
   goalkeepersCount: number;
+  defendersCount: number;
+  midfieldersCount: number;
+  forwardsCount: number;
   outfieldPlayersCount: number;
   opponentsFaced: string[];
 }
@@ -72,7 +85,8 @@ interface TeamMatchStats {
 const TeamManagement: React.FC = () => {
   const { teams, isLoading: teamsLoading, addTeam, updateTeam, deleteTeam } = useTeams();
   const { staff } = useStaff();
-  const { players, updatePlayer } = usePlayers();
+  const { players, addPlayer, updatePlayer } = usePlayers();
+  const { candidates, updatePipelineStage, updateCandidate } = useRecruitment();
   const { matches } = useMatches();
   const { mainClub, opponentClubs, isLoading: clubLoading } = useClubData();
   const { can } = usePermissions();
@@ -129,7 +143,7 @@ const TeamManagement: React.FC = () => {
     return teams.filter(t => {
       const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             t.category.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = categoryFilter === 'ALL' || t.category?.toUpperCase() === categoryFilter.toUpperCase();
+      const matchesCategory = categoryFilter === 'ALL' || normalizeAgeCategory(t.category) === categoryFilter;
       
       return matchesSearch && matchesCategory;
     });
@@ -180,23 +194,100 @@ const TeamManagement: React.FC = () => {
   const [editingJerseyId, setEditingJerseyId] = useState<string | null>(null);
   const [editingJerseyValue, setEditingJerseyValue] = useState<string>('');
 
-  const rosterPlayers = useMemo(() => {
+  // Multi-sélection pour joueurs disponibles
+  const [selectedAvailableIds, setSelectedAvailableIds] = useState<string[]>([]);
+
+  const rosterOfficialPlayers = useMemo(() => {
     if (!rosterTeam) return [];
     const regular = players.filter(p => (p as any).team_id === rosterTeam.id);
     const surclassed = players.filter(p =>
       surclassedIdsForRoster.has(p.id) && (p as any).team_id !== rosterTeam.id
     );
-    return [...regular, ...surclassed];
-  }, [rosterTeam, players, surclassedIdsForRoster]);
+
+    // Candidats signés depuis la cellule recrutement / scouting
+    const signedCandidates = candidates
+      .filter(c =>
+        (c.pipeline_stage === 'signed' || c.pipeline_stage === 'academy') &&
+        (c.assigned_team_id === rosterTeam.id || normalizeAgeCategory(c.age_category || '') === normalizeAgeCategory(rosterTeam.category || '')) &&
+        !regular.some(p => p.id === c.id || (p.full_name && p.full_name.toLowerCase() === `${c.first_name} ${c.last_name}`.toLowerCase()))
+      )
+      .map(c => ({
+        id: c.id,
+        full_name: `${c.first_name} ${c.last_name}`,
+        first_name: c.first_name,
+        last_name: c.last_name,
+        jersey_number: undefined,
+        position: c.primary_position,
+        category: c.age_category,
+        photo_url: c.photo_url,
+        team_id: rosterTeam.id,
+        isSignedCandidate: true,
+        candidateData: c
+      } as unknown as Player & { isSignedCandidate: boolean; candidateData: TrialCandidate }));
+
+    return [...regular, ...surclassed, ...signedCandidates];
+  }, [rosterTeam, players, candidates, surclassedIdsForRoster]);
+
+  // Groupe Sous Observation / À l'essai affecté à cette équipe
+  const rosterObservationPlayers = useMemo(() => {
+    if (!rosterTeam) return [];
+    return candidates
+      .filter(c =>
+        c.pipeline_stage === 'shortlisted' &&
+        c.assigned_team_id === rosterTeam.id &&
+        !players.some(p => p.id === c.id || (p.full_name && p.full_name.toLowerCase() === `${c.first_name} ${c.last_name}`.toLowerCase()))
+      )
+      .map(c => ({
+        id: c.id,
+        full_name: `${c.first_name} ${c.last_name}`,
+        first_name: c.first_name,
+        last_name: c.last_name,
+        jersey_number: undefined,
+        position: c.primary_position,
+        category: c.age_category,
+        photo_url: c.photo_url,
+        team_id: rosterTeam.id,
+        isObservationCandidate: true,
+        current_club: c.current_club,
+        candidateData: c
+      } as unknown as Player & { isObservationCandidate: boolean; current_club?: string; candidateData: TrialCandidate }));
+  }, [rosterTeam, players, candidates]);
+
+  const rosterPlayers = rosterOfficialPlayers;
 
   const availablePlayers = useMemo(() => {
     if (!rosterTeam) return [];
-    return players.filter(p =>
+    const clubPlayers = players.filter(p =>
       (p as any).team_id !== rosterTeam.id &&
-      p.category?.toUpperCase() === rosterTeam.category?.toUpperCase() &&
+      normalizeAgeCategory(p.category || '') === normalizeAgeCategory(rosterTeam.category || '') &&
       !surclassedIdsForRoster.has(p.id)
     );
-  }, [rosterTeam, players, surclassedIdsForRoster]);
+
+    // Candidats sous observation (shortlistés) non encore affectés à cette équipe
+    const observationCandidates = candidates
+      .filter(c =>
+        c.pipeline_stage === 'shortlisted' &&
+        c.assigned_team_id !== rosterTeam.id &&
+        normalizeAgeCategory(c.age_category || '') === normalizeAgeCategory(rosterTeam.category || '') &&
+        !players.some(p => p.id === c.id || (p.full_name && p.full_name.toLowerCase() === `${c.first_name} ${c.last_name}`.toLowerCase()))
+      )
+      .map(c => ({
+        id: c.id,
+        full_name: `${c.first_name} ${c.last_name}`,
+        first_name: c.first_name,
+        last_name: c.last_name,
+        jersey_number: undefined,
+        position: c.primary_position,
+        category: c.age_category,
+        photo_url: c.photo_url,
+        team_id: null,
+        isObservation: true,
+        current_club: c.current_club,
+        candidateData: c
+      } as unknown as Player & { isObservation: boolean; current_club?: string; candidateData: TrialCandidate }));
+
+    return [...clubPlayers, ...observationCandidates];
+  }, [rosterTeam, players, candidates, surclassedIdsForRoster]);
 
   // =========================================================================
   // AUTOMATIC STATS & MATCH HISTORY COMPUTATION FOR ANY TEAM
@@ -269,11 +360,26 @@ const TeamManagement: React.FC = () => {
       }
     });
 
-    // Count goalkeepers and outfield players
+    // Count players and tactical breakdown
     const teamSquad = players.filter(p => (p as any).team_id === targetTeam.id);
-    const goalkeepersCount = teamSquad.filter(p =>
-      ['GK', 'G', 'GARDIEN'].includes((p.position || '').toUpperCase())
-    ).length;
+    let goalkeepersCount = 0;
+    let defendersCount = 0;
+    let midfieldersCount = 0;
+    let forwardsCount = 0;
+
+    teamSquad.forEach(p => {
+      const pos = (p.position || '').toUpperCase();
+      if (['GK', 'G', 'GARDIEN'].includes(pos) || pos.includes('GARD') || pos.includes('GK')) {
+        goalkeepersCount++;
+      } else if (['DF', 'DEF', 'CB', 'LB', 'RB', 'DC', 'DG', 'DD'].includes(pos) || pos.includes('DEF')) {
+        defendersCount++;
+      } else if (['FW', 'ATT', 'ST', 'RW', 'LW', 'SS', 'BU', 'AD', 'AG'].includes(pos) || pos.includes('ATT') || pos.includes('AVANT') || pos.includes('AIL')) {
+        forwardsCount++;
+      } else {
+        midfieldersCount++;
+      }
+    });
+
     const outfieldPlayersCount = teamSquad.length - goalkeepersCount;
 
     const statsSummary: TeamMatchStats = {
@@ -290,6 +396,9 @@ const TeamManagement: React.FC = () => {
       totalMinutesPlayed,
       totalPlayers: teamSquad.length,
       goalkeepersCount,
+      defendersCount,
+      midfieldersCount,
+      forwardsCount,
       outfieldPlayersCount,
       opponentsFaced: Array.from(opponentSet),
     };
@@ -314,6 +423,169 @@ const TeamManagement: React.FC = () => {
       await updatePlayer({ id: player.id, data: { team_id: null } as any });
     } catch (e) {
       console.error("Failed to remove player", e);
+    }
+  };
+
+  const toggleSelectAvailable = (id: string) => {
+    setSelectedAvailableIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllAvailable = () => {
+    if (selectedAvailableIds.length === availablePlayers.length) {
+      setSelectedAvailableIds([]);
+    } else {
+      setSelectedAvailableIds(availablePlayers.map(p => p.id));
+    }
+  };
+
+  const handleAssignToObservationGroup = async (candidateId: string) => {
+    if (!rosterTeam) return;
+    try {
+      await updateCandidate({
+        id: candidateId,
+        updates: {
+          assigned_team_id: rosterTeam.id,
+          assigned_team_name: rosterTeam.name,
+          status: 'in_trial'
+        }
+      });
+      const cand = candidates.find(c => c.id === candidateId);
+      toast.success(`👁️ ${cand ? `${cand.first_name} ${cand.last_name}` : 'Le joueur'} a rejoint le groupe sous observation de l'équipe ${rosterTeam.name} !`);
+    } catch (e) {
+      console.error("Failed to assign to observation group", e);
+      toast.error("Erreur lors de l'affectation au groupe d'observation");
+    }
+  };
+
+  const handleBatchAssignToObservation = async () => {
+    if (!rosterTeam || selectedAvailableIds.length === 0) return;
+    try {
+      for (const id of selectedAvailableIds) {
+        const cand = candidates.find(c => c.id === id);
+        if (cand) {
+          await updateCandidate({
+            id,
+            updates: {
+              assigned_team_id: rosterTeam.id,
+              assigned_team_name: rosterTeam.name,
+              status: 'in_trial'
+            }
+          });
+        }
+      }
+      toast.success(`👁️ ${selectedAvailableIds.length} joueur(s) affecté(s) au Groupe Sous Observation (${rosterTeam.name})`);
+      setSelectedAvailableIds([]);
+    } catch (e) {
+      console.error("Batch assign observation error:", e);
+      toast.error("Erreur lors de l'affectation groupée");
+    }
+  };
+
+  const handleBatchValidateSignature = async () => {
+    if (!rosterTeam || selectedAvailableIds.length === 0) return;
+    try {
+      for (const id of selectedAvailableIds) {
+        const cand = candidates.find(c => c.id === id);
+        if (cand) {
+          await handleAssignCandidate(cand);
+        } else {
+          const clubPlayer = players.find(p => p.id === id);
+          if (clubPlayer) {
+            await handleAssignPlayer(clubPlayer);
+          }
+        }
+      }
+      toast.success(`🎉 Signature validée avec succès pour ${selectedAvailableIds.length} joueur(s) !`);
+      setSelectedAvailableIds([]);
+    } catch (e) {
+      console.error("Batch signature error:", e);
+      toast.error("Erreur lors de la validation des signatures");
+    }
+  };
+
+  const handleRemoveFromObservationGroup = async (candidatePlayer: any) => {
+    if (!rosterTeam) return;
+    try {
+      await updateCandidate({
+        id: candidatePlayer.id,
+        updates: {
+          assigned_team_id: null as any,
+          assigned_team_name: null as any,
+        }
+      });
+      toast.info(`${candidatePlayer.full_name} a été libéré du groupe sous observation de l'équipe`);
+    } catch (e) {
+      console.error("Error removing from observation group:", e);
+    }
+  };
+
+  const handleAssignCandidate = async (candidatePlayer: any) => {
+    if (!rosterTeam) return;
+    try {
+      updatePipelineStage({
+        id: candidatePlayer.id,
+        stage: 'signed',
+        reason: `Signé et affecté à l'équipe ${rosterTeam.name} (${rosterTeam.category})`,
+        notes: `Transfert depuis la Shortlist Scouting vers l'effectif officiel.`
+      });
+
+      await updateCandidate({
+        id: candidatePlayer.id,
+        updates: {
+          assigned_team_id: rosterTeam.id,
+          assigned_team_name: rosterTeam.name,
+          pipeline_stage: 'signed',
+          status: 'selected'
+        }
+      });
+
+      // Synchroniser également dans la table players si absent
+      const existing = players.find(p => p.id === candidatePlayer.id || (p.full_name && p.full_name.toLowerCase() === candidatePlayer.full_name.toLowerCase()));
+      if (!existing) {
+        try {
+          await addPlayer({
+            full_name: candidatePlayer.full_name,
+            position: candidatePlayer.position || 'Milieu',
+            category: rosterTeam.category,
+            team_id: rosterTeam.id,
+            photo_url: candidatePlayer.photo_url || null,
+          } as any);
+        } catch {
+          // Si Supabase bloque ou offline, le state useRecruitment prend le relais
+        }
+      } else if (existing.team_id !== rosterTeam.id) {
+        await updatePlayer({ id: existing.id, data: { team_id: rosterTeam.id } as any });
+      }
+
+      toast.success(`🎉 ${candidatePlayer.full_name} est désormais signé et intégré à l'équipe ${rosterTeam.name} !`);
+    } catch (e) {
+      console.error("Failed to assign candidate", e);
+      toast.error("Échec de l'intégration du candidat");
+    }
+  };
+
+  const handleRemoveCandidateFromRoster = async (player: any) => {
+    if (!rosterTeam) return;
+    try {
+      updatePipelineStage({
+        id: player.id,
+        stage: 'shortlisted',
+        reason: `Retiré de l'équipe ${rosterTeam.name}, replacé en observation (Shortlist)`,
+      });
+      await updateCandidate({
+        id: player.id,
+        updates: {
+          assigned_team_id: null as any,
+          assigned_team_name: null as any,
+          pipeline_stage: 'shortlisted',
+          status: 'in_trial'
+        }
+      });
+      toast.info(`${player.full_name} a été replacé sous observation (Shortlist)`);
+    } catch (e) {
+      console.error("Failed to remove candidate from roster", e);
     }
   };
 
@@ -760,153 +1032,341 @@ const TeamManagement: React.FC = () => {
           >
              {(() => {
                 const { teamMatches, stats: tStats } = getTeamMatchHistoryAndStats(statsTeam);
+                const coach = staff.find(s => s.id === statsTeam.coach_id);
+                const winRate = tStats.totalMatches > 0 ? Math.round((tStats.wins / tStats.totalMatches) * 100) : 0;
+                const diff = tStats.goalsScored - tStats.goalsConceded;
+                const totalCards = tStats.yellowCards + tStats.redCards;
+                const gkPct = tStats.totalPlayers > 0 ? Math.round((tStats.goalkeepersCount / tStats.totalPlayers) * 100) : 0;
+                const dfPct = tStats.totalPlayers > 0 ? Math.round((tStats.defendersCount / tStats.totalPlayers) * 100) : 0;
+                const mfPct = tStats.totalPlayers > 0 ? Math.round((tStats.midfieldersCount / tStats.totalPlayers) * 100) : 0;
+                const fwPct = tStats.totalPlayers > 0 ? Math.round((tStats.forwardsCount / tStats.totalPlayers) * 100) : 0;
+
                 return (
                   <>
                     {/* Header Banner */}
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-card border border-border p-8 rounded-[2.5rem] shadow-sm">
-                       <div className="flex items-center gap-6">
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 bg-card border border-border/80 p-6 md:p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden">
+                       <div className="absolute -right-16 -top-16 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+
+                       <div className="flex items-center gap-5 relative z-10">
                           <Button 
-                            variant="ghost" 
-                            size="icon" 
+                            variant="outline" 
                             onClick={() => setViewState('LIST')} 
-                            className="w-14 h-14 rounded-2xl bg-secondary/30 border border-border shadow-sm hover:bg-secondary transition-all shrink-0"
+                            className="h-12 px-4 rounded-2xl bg-card border-border hover:bg-secondary/80 text-foreground font-black uppercase tracking-wider text-xs gap-2 shrink-0 shadow-xs transition-all hover:-translate-x-0.5"
                           >
-                            <X className="w-6 h-6 rotate-90" />
+                            <ArrowLeft className="w-4 h-4 text-primary" />
+                            <span className="hidden sm:inline">Équipes</span>
                           </Button>
+
+                          <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-secondary border border-primary/20 flex items-center justify-center p-3 shadow-inner shrink-0 relative">
+                             {mainClub?.logo_url ? (
+                                <img src={mainClub.logo_url} alt="Club" className="w-full h-full object-contain drop-shadow-sm" />
+                             ) : (
+                                <Shield className="w-8 h-8 md:w-10 md:h-10 text-primary" />
+                             )}
+                             <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-md bg-primary text-[9px] font-black text-white uppercase shadow-xs">
+                                {statsTeam.category}
+                             </span>
+                          </div>
+
                           <div>
                              <div className="flex items-center gap-3">
-                                <h3 className="text-3xl font-black tracking-tight uppercase italic">{statsTeam.name}</h3>
-                                <Badge className="bg-primary text-primary-foreground font-black uppercase px-4 py-1 border-none text-[10px]">
+                                <h3 className="text-2xl md:text-3xl font-black tracking-tight uppercase italic text-foreground">{statsTeam.name}</h3>
+                                <Badge className="bg-primary text-primary-foreground font-black uppercase px-3 py-1 border-none text-[10px] shadow-sm shadow-primary/25">
                                    Catégorie {statsTeam.category}
                                 </Badge>
                              </div>
-                             <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">
-                                Analyse Statistiques & Historique Automatique des Matchs
-                             </p>
+                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-medium mt-1">
+                                <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-primary text-[10px]">
+                                   <Sparkles className="w-3.5 h-3.5" /> Centre d'Analyse des Matchs
+                                </span>
+                                <span className="text-border hidden sm:inline">•</span>
+                                <span className="flex items-center gap-1.5">
+                                   <UserCheck className="w-3.5 h-3.5 text-muted-foreground" />
+                                   {coach ? <span className="text-foreground font-bold">Coach : {coach.full_name}</span> : <span>Staff technique non assigné</span>}
+                                </span>
+                             </div>
                           </div>
                        </div>
-                       <Button 
-                         onClick={() => handleOpenRoster(statsTeam)}
-                         className="rounded-2xl h-12 px-6 font-black uppercase tracking-widest text-xs gap-2 bg-secondary text-foreground hover:bg-secondary/80"
-                       >
-                         <Users className="w-4 h-4" /> Effectif ({tStats.totalPlayers})
-                       </Button>
+
+                       <div className="flex items-center gap-3 w-full lg:w-auto justify-end relative z-10">
+                          <Button 
+                            onClick={() => handleOpenRoster(statsTeam)}
+                            className="rounded-2xl h-12 px-6 font-black uppercase tracking-widest text-xs gap-2.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 flex-1 lg:flex-initial"
+                          >
+                            <Users className="w-4 h-4" /> Effectif ({tStats.totalPlayers})
+                          </Button>
+                          {can('manage_teams') && (
+                            <Button 
+                              variant="outline" 
+                              onClick={() => handleOpenEdit(statsTeam)} 
+                              className="rounded-2xl h-12 px-4 font-black uppercase tracking-widest text-xs gap-2 border-border hover:bg-secondary shadow-xs"
+                              title="Modifier les informations de l'équipe"
+                            >
+                              <Edit2 className="w-4 h-4 text-muted-foreground" />
+                            </Button>
+                          )}
+                       </div>
                     </div>
 
                     {/* Automatic Key Stats Cards */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                        {/* Matchs & Ratio */}
-                       <Card className="rounded-2xl border-border bg-card p-5">
-                          <div className="flex items-center justify-between mb-2">
+                       <Card className="rounded-3xl border-border/80 bg-card p-6 relative overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                          <div className="flex items-center justify-between mb-3">
                              <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Matchs Joués</span>
-                             <Trophy className="w-5 h-5 text-primary" />
+                             <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-transform group-hover:scale-110">
+                                <Trophy className="w-4 h-4" />
+                             </div>
                           </div>
-                          <div className="text-3xl font-black text-foreground">{tStats.totalMatches}</div>
-                          <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                             {tStats.wins}V - {tStats.draws}N - {tStats.losses}D
+                          <div className="text-3xl font-black text-foreground tracking-tight">{tStats.totalMatches}</div>
+                          <div className="flex items-center gap-1.5 mt-2">
+                             <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black">{tStats.wins}V</span>
+                             <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-black">{tStats.draws}N</span>
+                             <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-black">{tStats.losses}D</span>
                           </div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-2.5">
+                             {tStats.totalMatches > 0 ? `${winRate}% de victoires` : 'Aucun match disputé'}
+                          </p>
                        </Card>
 
                        {/* Buts Marqués / Encaissés */}
-                       <Card className="rounded-2xl border-border bg-card p-5">
-                          <div className="flex items-center justify-between mb-2">
-                             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Buts (Marqués / Enc.)</span>
-                             <Target className="w-5 h-5 text-emerald-500" />
+                       <Card className="rounded-3xl border-border/80 bg-card p-6 relative overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                          <div className="flex items-center justify-between mb-3">
+                             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Attaque & Défense</span>
+                             <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center transition-transform group-hover:scale-110">
+                                <Target className="w-4 h-4" />
+                             </div>
                           </div>
-                          <div className="text-3xl font-black text-foreground">
-                             {tStats.goalsScored} <span className="text-sm text-muted-foreground font-semibold">/ {tStats.goalsConceded}</span>
+                          <div className="text-3xl font-black text-foreground tracking-tight">
+                             {tStats.goalsScored} <span className="text-base text-muted-foreground font-semibold">/ {tStats.goalsConceded}</span>
                           </div>
-                          <div className="text-xs font-bold text-muted-foreground mt-1">
-                             Différence : {tStats.goalsScored - tStats.goalsConceded > 0 ? `+${tStats.goalsScored - tStats.goalsConceded}` : tStats.goalsScored - tStats.goalsConceded}
+                          <div className="flex items-center gap-2 mt-2">
+                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                                diff > 0 
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                                  : diff < 0 
+                                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' 
+                                  : 'bg-secondary text-muted-foreground'
+                             }`}>
+                                Différence : {diff > 0 ? `+${diff}` : diff}
+                             </span>
                           </div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-2.5">
+                             {tStats.totalMatches > 0 ? `${(tStats.goalsScored / tStats.totalMatches).toFixed(1)} buts / match` : '0.0 but / match'}
+                          </p>
                        </Card>
 
-                       {/* Cartons Jaunes / Rouges */}
-                       <Card className="rounded-2xl border-border bg-card p-5">
-                          <div className="flex items-center justify-between mb-2">
-                             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Discipline (🟨 / 🟥)</span>
-                             <Activity className="w-5 h-5 text-amber-500" />
+                       {/* Discipline (Soccer Cards) */}
+                       <Card className="rounded-3xl border-border/80 bg-card p-6 relative overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                          <div className="flex items-center justify-between mb-3">
+                             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Discipline & Sanctions</span>
+                             <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center transition-transform group-hover:scale-110">
+                                <Activity className="w-4 h-4" />
+                             </div>
                           </div>
-                          <div className="text-3xl font-black text-foreground">
-                             🟨 {tStats.yellowCards} <span className="text-sm font-bold text-red-500 ml-2">🟥 {tStats.redCards}</span>
+                          <div className="flex items-center gap-3">
+                             {/* Yellow Card Soccer Badge */}
+                             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-b from-amber-300 to-amber-400 text-amber-950 font-black text-xs shadow-xs border border-amber-300/80">
+                                <div className="w-2.5 h-3.5 bg-amber-500 rounded-[2px] shadow-inner" />
+                                <span>{tStats.yellowCards}</span>
+                             </div>
+                             {/* Red Card Soccer Badge */}
+                             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-b from-rose-500 to-rose-600 text-white font-black text-xs shadow-xs border border-rose-400/80">
+                                <div className="w-2.5 h-3.5 bg-rose-700 rounded-[2px] shadow-inner" />
+                                <span>{tStats.redCards}</span>
+                             </div>
                           </div>
-                          <div className="text-xs font-bold text-muted-foreground mt-1">
-                             Total Cartons : {tStats.yellowCards + tStats.redCards}
+                          <div className="text-xs font-bold text-muted-foreground mt-2">
+                             Total Cartons : <span className="text-foreground font-black">{totalCards}</span>
                           </div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-2.5">
+                             {totalCards === 0 ? 'Discipline exemplaire' : `${totalCards} sanction${totalCards > 1 ? 's' : ''} enregistrée${totalCards > 1 ? 's' : ''}`}
+                          </p>
                        </Card>
 
                        {/* Remplacements & Minutes */}
-                       <Card className="rounded-2xl border-border bg-card p-5">
-                          <div className="flex items-center justify-between mb-2">
-                             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Minutes & Changements</span>
-                             <Clock className="w-5 h-5 text-blue-500" />
+                       <Card className="rounded-3xl border-border/80 bg-card p-6 relative overflow-hidden shadow-sm hover:shadow-md transition-all group">
+                          <div className="flex items-center justify-between mb-3">
+                             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Temps de Jeu & Rythme</span>
+                             <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center transition-transform group-hover:scale-110">
+                                <Clock className="w-4 h-4" />
+                             </div>
                           </div>
-                          <div className="text-3xl font-black text-foreground">
-                             {tStats.totalMinutesPlayed} <span className="text-xs font-bold text-muted-foreground">min</span>
+                          <div className="text-3xl font-black text-foreground tracking-tight">
+                             {tStats.totalMinutesPlayed.toLocaleString()} <span className="text-xs font-bold text-muted-foreground">min</span>
                           </div>
-                          <div className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">
-                             🔄 {tStats.substitutions} remplacements
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 mt-2">
+                             <RefreshCw className="w-3 h-3 animate-spin-slow" />
+                             <span>{tStats.substitutions} remplacements</span>
                           </div>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-2.5">
+                             {tStats.totalMatches > 0 ? `~${Math.round(tStats.totalMinutesPlayed / tStats.totalMatches)} min / match` : 'Temps calculé auto'}
+                          </p>
                        </Card>
                     </div>
 
                     {/* Squad Detail Summary & Opponents Faced */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                        {/* Squad Breakdown */}
-                       <Card className="rounded-3xl border-border bg-card p-6 space-y-4">
-                          <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                             <Users className="w-4 h-4" /> Répartition de l'Effectif
-                          </h4>
-                          <div className="grid grid-cols-3 gap-3 text-center">
-                             <div className="p-3 bg-secondary/30 rounded-2xl">
-                                <div className="text-2xl font-black text-foreground">{tStats.totalPlayers}</div>
-                                <div className="text-[9px] font-bold text-muted-foreground uppercase mt-1">Total Joueurs</div>
+                       <Card className="lg:col-span-7 rounded-[2.5rem] border-border/80 bg-card p-6 md:p-8 space-y-6 shadow-sm">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                             <div>
+                                <h4 className="text-sm font-black uppercase tracking-wider text-foreground flex items-center gap-2">
+                                   <Users className="w-4 h-4 text-primary" /> Répartition Tactique de l'Effectif
+                                </h4>
+                                <p className="text-xs text-muted-foreground mt-0.5">Composition par lignes de jeu et postes clés</p>
                              </div>
-                             <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
-                                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{tStats.goalkeepersCount}</div>
-                                <div className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase mt-1">Gardiens (GK)</div>
+                             <Badge variant="outline" className="text-[10px] font-black uppercase tracking-wider px-3 py-1 border-primary/20 text-primary w-fit">
+                                {tStats.totalPlayers} Joueurs Actifs
+                             </Badge>
+                          </div>
+
+                          {/* Tactical Proportional Progress Bar */}
+                          {tStats.totalPlayers > 0 ? (
+                             <div className="space-y-2">
+                                <div className="h-3 w-full bg-secondary rounded-full overflow-hidden flex gap-0.5 p-0.5">
+                                   {gkPct > 0 && <div style={{ width: `${gkPct}%` }} title={`Gardiens: ${tStats.goalkeepersCount} (${gkPct}%)`} className="bg-amber-500 rounded-sm transition-all" />}
+                                   {dfPct > 0 && <div style={{ width: `${dfPct}%` }} title={`Défenseurs: ${tStats.defendersCount} (${dfPct}%)`} className="bg-blue-500 rounded-sm transition-all" />}
+                                   {mfPct > 0 && <div style={{ width: `${mfPct}%` }} title={`Milieux: ${tStats.midfieldersCount} (${mfPct}%)`} className="bg-emerald-500 rounded-sm transition-all" />}
+                                   {fwPct > 0 && <div style={{ width: `${fwPct}%` }} title={`Attaquants: ${tStats.forwardsCount} (${fwPct}%)`} className="bg-rose-500 rounded-sm transition-all" />}
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                   <span>GK ({gkPct}%)</span>
+                                   <span>DF ({dfPct}%)</span>
+                                   <span>MF ({mfPct}%)</span>
+                                   <span>FW ({fwPct}%)</span>
+                                </div>
                              </div>
-                             <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20">
-                                <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{tStats.outfieldPlayersCount}</div>
-                                <div className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase mt-1">Joueurs Champ</div>
+                          ) : (
+                             <div className="h-2 w-full bg-secondary rounded-full" />
+                          )}
+
+                          {/* 4 Position Metric Tiles */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                             {/* Gardiens */}
+                             <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 flex flex-col justify-between">
+                                <div className="flex items-center justify-between mb-2">
+                                   <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-black text-[9px] px-2 py-0.5">
+                                      GK
+                                   </Badge>
+                                   <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{gkPct}%</span>
+                                </div>
+                                <div>
+                                   <div className="text-2xl font-black text-amber-600 dark:text-amber-400">{tStats.goalkeepersCount}</div>
+                                   <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-0.5">Gardiens</div>
+                                </div>
+                             </div>
+
+                             {/* Défenseurs */}
+                             <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 flex flex-col justify-between">
+                                <div className="flex items-center justify-between mb-2">
+                                   <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 font-black text-[9px] px-2 py-0.5">
+                                      DF
+                                   </Badge>
+                                   <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">{dfPct}%</span>
+                                </div>
+                                <div>
+                                   <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{tStats.defendersCount}</div>
+                                   <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-0.5">Défenseurs</div>
+                                </div>
+                             </div>
+
+                             {/* Milieux */}
+                             <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col justify-between">
+                                <div className="flex items-center justify-between mb-2">
+                                   <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-black text-[9px] px-2 py-0.5">
+                                      MF
+                                   </Badge>
+                                   <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">{mfPct}%</span>
+                                </div>
+                                <div>
+                                   <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{tStats.midfieldersCount}</div>
+                                   <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-0.5">Milieux</div>
+                                </div>
+                             </div>
+
+                             {/* Attaquants */}
+                             <div className="p-4 rounded-2xl bg-rose-500/5 border border-rose-500/20 flex flex-col justify-between">
+                                <div className="flex items-center justify-between mb-2">
+                                   <Badge className="bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 font-black text-[9px] px-2 py-0.5">
+                                      FW
+                                   </Badge>
+                                   <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">{fwPct}%</span>
+                                </div>
+                                <div>
+                                   <div className="text-2xl font-black text-rose-600 dark:text-rose-400">{tStats.forwardsCount}</div>
+                                   <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mt-0.5">Attaquants</div>
+                                </div>
                              </div>
                           </div>
+
+                          <Button 
+                            variant="outline" 
+                            onClick={() => handleOpenRoster(statsTeam)}
+                            className="w-full h-12 rounded-2xl border-border hover:bg-secondary text-xs font-black uppercase tracking-wider gap-2 text-foreground transition-all shadow-xs"
+                          >
+                             <Users className="w-4 h-4 text-primary" />
+                             Gérer les numéros de maillot & l'effectif complet →
+                          </Button>
                        </Card>
 
                        {/* Opponents Faced */}
-                       <Card className="rounded-3xl border-border bg-card p-6 space-y-4">
-                          <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                             <ShieldCheck className="w-4 h-4" /> Adversaires Affrontés ({tStats.opponentsFaced.length})
-                          </h4>
+                       <Card className="lg:col-span-5 rounded-[2.5rem] border-border/80 bg-card p-6 md:p-8 space-y-6 shadow-sm flex flex-col justify-between">
+                          <div className="space-y-1">
+                             <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-black uppercase tracking-wider text-foreground flex items-center gap-2">
+                                   <ShieldCheck className="w-4 h-4 text-primary" /> Clubs Adversaires ({tStats.opponentsFaced.length})
+                                </h4>
+                                <Badge variant="secondary" className="text-[10px] font-bold uppercase">Historique</Badge>
+                             </div>
+                             <p className="text-xs text-muted-foreground">Équipes affrontées lors des dernières rencontres</p>
+                          </div>
+
                           {tStats.opponentsFaced.length > 0 ? (
-                             <div className="flex flex-wrap gap-2.5">
+                             <div className="flex flex-wrap gap-2.5 my-auto">
                                 {tStats.opponentsFaced.map((oppName, idx) => {
                                    const oppClub = opponentClubs.find(c => c.name === oppName || c.id === oppName);
                                    return (
-                                      <div key={idx} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-secondary/40 text-foreground text-xs font-bold border border-border shadow-sm">
+                                      <div key={idx} className="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-secondary/50 text-foreground text-xs font-bold border border-border/70 shadow-xs hover:border-primary/30 transition-all">
                                          {oppClub?.logo_url ? (
                                             <img src={oppClub.logo_url} alt={oppName} className="w-5 h-5 object-contain shrink-0 rounded-md" />
                                          ) : (
                                             <Shield className="w-4 h-4 text-primary shrink-0" />
                                          )}
-                                         <span>{oppName}</span>
+                                         <span className="font-extrabold">{oppName}</span>
                                       </div>
                                    );
                                 })}
                              </div>
                           ) : (
-                             <p className="text-xs text-muted-foreground italic font-medium">Aucun adversaire enregistré dans les matchs récents.</p>
+                             <div className="py-8 text-center flex flex-col items-center justify-center my-auto bg-secondary/20 rounded-2xl border border-dashed border-border/70 p-6">
+                                <Shield className="w-8 h-8 text-muted-foreground/40 mb-2" />
+                                <p className="text-xs font-bold text-foreground uppercase tracking-wider">Aucune Confrontation</p>
+                                <p className="text-[11px] text-muted-foreground mt-1 max-w-[240px]">
+                                   Les clubs adverses s'afficheront automatiquement dès qu'un match sera planifié ou joué.
+                                </p>
+                             </div>
                           )}
+
+                          <div className="pt-2 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground font-semibold">
+                             <span>Compétitions officielles FUS</span>
+                             <span className="text-primary font-bold">Synchronisation en direct</span>
+                          </div>
                        </Card>
                     </div>
 
                     {/* Match History List */}
-                    <Card className="rounded-3xl border-border bg-card p-6 space-y-6">
-                       <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-black uppercase tracking-widest text-foreground flex items-center gap-2">
-                             <Calendar className="w-4 h-4 text-primary" /> Historique des Matchs ({teamMatches.length})
-                          </h4>
-                          <span className="text-xs font-bold text-muted-foreground uppercase">Calcul Automatique</span>
+                    <Card className="rounded-[2.5rem] border-border/80 bg-card p-6 md:p-8 space-y-6 shadow-sm">
+                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                             <h4 className="text-base font-black uppercase tracking-wider text-foreground flex items-center gap-2.5">
+                                <Calendar className="w-5 h-5 text-primary" /> Historique & Calendrier des Matchs ({teamMatches.length})
+                             </h4>
+                             <p className="text-xs text-muted-foreground mt-0.5">Calcul des scores, discipline et composition en direct</p>
+                          </div>
+                          <Badge variant="outline" className="border-primary/20 text-primary font-black uppercase text-[10px] px-3 py-1 w-fit">
+                             Calcul Automatisé
+                          </Badge>
                        </div>
 
                        {teamMatches.length > 0 ? (
@@ -920,7 +1380,7 @@ const TeamManagement: React.FC = () => {
                                 const scored = isHome ? homeScore : awayScore;
                                 const conceded = isHome ? awayScore : homeScore;
 
-                                let resultBadge = 'bg-secondary text-muted-foreground';
+                                let resultBadge = 'bg-secondary text-muted-foreground border-border';
                                 let resultText = 'À VENIR';
 
                                 if (m.status === 'finished') {
@@ -931,23 +1391,23 @@ const TeamManagement: React.FC = () => {
                                       resultBadge = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
                                       resultText = 'NUL';
                                    } else {
-                                      resultBadge = 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30';
+                                      resultBadge = 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30';
                                       resultText = 'DÉFAITE';
                                    }
                                 } else if (m.status === 'live') {
-                                   resultBadge = 'bg-red-500 text-white animate-pulse';
-                                   resultText = 'LIVE';
+                                   resultBadge = 'bg-rose-500 text-white animate-pulse border-rose-600';
+                                   resultText = 'EN DIRECT';
                                 }
 
                                 return (
-                                   <div key={m.id} className="p-4 rounded-2xl bg-secondary/20 border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                                   <div key={m.id} className="p-4 md:p-5 rounded-2xl bg-secondary/30 border border-border/70 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:border-primary/20 transition-all">
                                       <div className="flex items-center gap-4">
                                          {/* Opponent Logo */}
                                          {oppClub?.logo_url ? (
                                             <img
                                                src={oppClub.logo_url}
                                                alt={oppName}
-                                               className="w-12 h-12 rounded-xl object-contain p-1 border border-border bg-card shadow-sm shrink-0"
+                                               className="w-12 h-12 rounded-xl object-contain p-1 border border-border bg-card shadow-xs shrink-0"
                                             />
                                          ) : (
                                             <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-black text-sm shrink-0">
@@ -958,22 +1418,22 @@ const TeamManagement: React.FC = () => {
                                          <div>
                                             <div className="font-black text-base text-foreground flex items-center gap-2">
                                                <span>vs {oppName}</span>
-                                               <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-secondary text-muted-foreground border border-border">
+                                               <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-lg bg-card text-muted-foreground border border-border/80">
                                                   {isHome ? 'Domicile' : 'Extérieur'}
                                                </span>
                                             </div>
                                             <div className="text-xs text-muted-foreground font-medium flex items-center gap-3 mt-1">
                                                <span>📅 {m.match_date}</span>
-                                               {m.formation && <span>• Compo: {m.formation}</span>}
+                                               {m.formation && <span className="font-semibold text-foreground">• Schéma : {m.formation}</span>}
                                             </div>
                                          </div>
                                       </div>
 
-                                      <div className="flex items-center gap-4">
-                                         <div className="text-lg font-black text-foreground tracking-wider">
+                                      <div className="flex items-center gap-4 self-end md:self-center">
+                                         <div className="text-xl font-black text-foreground tracking-wider font-mono">
                                             {homeScore} — {awayScore}
                                          </div>
-                                         <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase border ${resultBadge}`}>
+                                         <span className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase border ${resultBadge}`}>
                                             {resultText}
                                          </span>
                                       </div>
@@ -982,8 +1442,12 @@ const TeamManagement: React.FC = () => {
                              })}
                           </div>
                        ) : (
-                          <div className="py-12 text-center text-muted-foreground text-xs font-medium italic">
-                             Aucun match joué ou programmé pour cette équipe.
+                          <div className="py-14 text-center flex flex-col items-center justify-center bg-secondary/20 rounded-2xl border border-dashed border-border/70 p-8">
+                             <Calendar className="w-10 h-10 text-muted-foreground/40 mb-3" />
+                             <p className="text-sm font-black uppercase tracking-wider text-foreground">Aucune rencontre programmée</p>
+                             <p className="text-xs text-muted-foreground mt-1 max-w-md">
+                                Aucun match n'a encore été joué ou programmé pour l'équipe {statsTeam.name}. Les résultats et statistiques apparaîtront ici automatiquement dès l'enregistrement de matchs.
+                             </p>
                           </div>
                        )}
                     </Card>
@@ -1002,67 +1466,88 @@ const TeamManagement: React.FC = () => {
           >
              {rosterTeam && (
                <div className="space-y-10">
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-6">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-card border border-border/80 p-6 md:p-8 rounded-[2.5rem] shadow-sm relative overflow-hidden">
+                     <div className="flex items-center gap-5">
                         <Button 
-                          variant="ghost" 
-                          size="icon" 
+                          variant="outline" 
                           onClick={() => { setViewState('LIST'); setIsAssignMode(false); }} 
-                          className="w-14 h-14 rounded-2xl bg-card border border-border shadow-sm hover:bg-secondary transition-all"
+                          className="h-12 px-4 rounded-2xl bg-card border-border hover:bg-secondary/80 text-foreground font-black uppercase tracking-wider text-xs gap-2 shrink-0 shadow-xs transition-all hover:-translate-x-0.5"
                         >
-                          <X className="w-6 h-6 rotate-90" />
+                          <ArrowLeft className="w-4 h-4 text-primary" />
+                          <span className="hidden sm:inline">Équipes</span>
                         </Button>
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-secondary border border-primary/20 flex items-center justify-center p-2.5 shadow-inner shrink-0 relative">
+                           {mainClub?.logo_url ? (
+                              <img src={mainClub.logo_url} alt="Club" className="w-full h-full object-contain drop-shadow-sm" />
+                           ) : (
+                              <Shield className="w-7 h-7 text-primary" />
+                           )}
+                           <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-md bg-primary text-[9px] font-black text-white uppercase shadow-xs">
+                              {rosterTeam.category}
+                           </span>
+                        </div>
                         <div>
                            <div className="flex items-center gap-3">
-                              <h3 className="text-4xl font-black tracking-tight uppercase italic">{rosterTeam.name}</h3>
-                              <Badge className="bg-primary text-primary-foreground font-black uppercase px-4 py-1 border-none text-[10px]">{rosterTeam.category}</Badge>
+                              <h3 className="text-2xl md:text-3xl font-black tracking-tight uppercase italic text-foreground">{rosterTeam.name}</h3>
+                              <Badge className="bg-primary text-primary-foreground font-black uppercase px-3.5 py-1 border-none text-[10px] shadow-sm shadow-primary/25">{rosterTeam.category}</Badge>
                            </div>
-                           <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.3em] mt-1">Official Team Roster • {rosterPlayers.length} Athlètes</p>
+                           <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-1">
+                              Effectif Officiel • {rosterOfficialPlayers.length} Athlètes
+                              {rosterObservationPlayers.length > 0 && (
+                                <span className="text-amber-500 ml-2">• {rosterObservationPlayers.length} en observation</span>
+                              )}
+                            </p>
                         </div>
                      </div>
-                     <div className="flex items-center gap-3">
+                     <div className="flex items-center gap-3 w-full md:w-auto justify-end">
                         <Button
                           variant="outline"
                           onClick={() => handleOpenStats(rosterTeam)}
-                          className="rounded-2xl h-14 px-6 font-black uppercase tracking-widest text-xs gap-2 border-border"
+                          className="rounded-2xl h-12 px-5 font-black uppercase tracking-widest text-xs gap-2 border-border hover:bg-secondary shadow-xs"
                         >
                            <BarChart3 className="w-4 h-4 text-primary" /> Voir Stats
                         </Button>
                         <Button 
                            variant={isAssignMode ? "default" : "outline"} 
                            onClick={() => setIsAssignMode(!isAssignMode)} 
-                           className={`rounded-2xl h-14 px-8 font-black uppercase tracking-widest text-xs gap-3 shadow-lg transition-all ${isAssignMode ? 'bg-primary text-primary-foreground' : 'border-border'}`}
+                           className={`rounded-2xl h-12 px-6 font-black uppercase tracking-widest text-xs gap-2.5 shadow-md transition-all ${isAssignMode ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-primary/20' : 'border-border hover:bg-secondary'}`}
                         >
-                           {isAssignMode ? 'Fermer la Gestion' : 'Modifier l\'Effectif'} <UserCog className="w-4 h-4" />
+                           {isAssignMode ? 'Fermer Gestion' : 'Gérer l\'Effectif'} <UserCog className="w-4 h-4" />
                         </Button>
                      </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                      <div className={isAssignMode ? "lg:col-span-7 space-y-6" : "lg:col-span-12 space-y-6"}>
-                        <Card className="border-border shadow-2xl rounded-[3rem] bg-card overflow-hidden p-10">
+                        {/* SECTION 1 : EFFECTIF OFFICIEL (SIGNÉS) */}
+                        <Card className="border-border shadow-2xl rounded-[3rem] bg-card overflow-hidden p-8 md:p-10">
                            <h4 className="text-xs font-black uppercase tracking-widest text-primary mb-8 flex items-center gap-3">
-                              <div className="w-8 h-px bg-primary/30" /> Effectif Actuel ({rosterPlayers.length})
+                              <div className="w-8 h-px bg-primary/30" /> Effectif Officiel ({rosterOfficialPlayers.length})
                            </h4>
                            
                            <div className={`grid gap-4 ${isAssignMode ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
-                              {rosterPlayers.length > 0 ? (
-                                 rosterPlayers.map(player => {
+                              {rosterOfficialPlayers.length > 0 ? (
+                                 rosterOfficialPlayers.map(player => {
                                     const originCat = surclassedOriginMap[player.id];
                                     const isSurclasse = !!originCat;
                                     const displayJersey = surclassedJerseyMap[player.id] ?? player.jersey_number;
                                     const isEditingJersey = editingJerseyId === player.id;
                                     return (
-                                    <motion.div key={player.id} layout className={`flex items-center gap-6 p-4 rounded-3xl border transition-all ${isAssignMode ? 'bg-red-50/20 border-red-100 dark:bg-red-950/20 dark:border-red-900/30' : isSurclasse ? 'bg-amber-50/30 border-amber-200 dark:bg-amber-950/20' : 'bg-secondary/20 border-border'} group`}>
-                                       <div className="w-16 h-16 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 border border-border shadow-sm">
-                                          <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} alt={player.full_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
-                                       </div>
+                                       <motion.div key={player.id} layout className={`flex items-center gap-6 p-4 rounded-3xl border transition-all ${isAssignMode ? 'bg-red-50/20 border-red-100 dark:bg-red-950/20 dark:border-red-900/30' : isSurclasse ? 'bg-amber-50/30 border-amber-200 dark:bg-amber-950/20' : 'bg-secondary/20 border-border'} group`}>
+                                          <div className="w-16 h-16 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 border border-border shadow-sm">
+                                             <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} alt={player.full_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                          </div>
                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 flex-wrap">
                                             <h4 className="font-black text-lg uppercase truncate leading-none text-foreground">{player.full_name}</h4>
                                             {isSurclasse && (
                                               <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-100 border border-amber-200 text-amber-700 text-[9px] font-black uppercase">
                                                 ↑ {originCat}
+                                              </span>
+                                            )}
+                                            {(player as any).isSignedCandidate && (
+                                              <span className="shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-[9px] font-black uppercase tracking-wider">
+                                                <CheckCircle2 className="w-3 h-3" /> Signé • Recrue
                                               </span>
                                             )}
                                           </div>
@@ -1124,7 +1609,19 @@ const TeamManagement: React.FC = () => {
                                           </div>
                                        </div>
                                        {isAssignMode && !isSurclasse && (
-                                          <Button size="icon" variant="ghost" onClick={() => handleRemovePlayer(player)} className="h-12 w-12 rounded-xl bg-red-100 text-red-600 hover:bg-red-600 hover:text-white transition-all shrink-0">
+                                          <Button 
+                                            size="icon" 
+                                            variant="ghost" 
+                                            onClick={() => {
+                                              if ((player as any).isSignedCandidate) {
+                                                handleRemoveCandidateFromRoster(player);
+                                              } else {
+                                                handleRemovePlayer(player);
+                                              }
+                                            }} 
+                                            title={(player as any).isSignedCandidate ? "Replacer en observation" : "Retirer de l'effectif"}
+                                            className="h-12 w-12 rounded-xl bg-red-100 text-red-600 hover:bg-red-600 hover:text-white transition-all shrink-0"
+                                          >
                                              <X className="w-5 h-5" />
                                           </Button>
                                        )}
@@ -1132,47 +1629,314 @@ const TeamManagement: React.FC = () => {
                                     );
                                  })
                               ) : (
-                                 <div className="col-span-full flex flex-col items-center justify-center py-20 text-center opacity-40 border-2 border-dashed border-border rounded-[3rem]">
+                                 <div className="col-span-full flex flex-col items-center justify-center py-16 text-center opacity-40 border-2 border-dashed border-border rounded-[3rem]">
                                     <Users className="w-12 h-12 mb-4" />
-                                    <p className="text-xs font-black uppercase tracking-widest">Effectif Vide</p>
+                                    <p className="text-xs font-black uppercase tracking-widest">Effectif Officiel Vide</p>
                                  </div>
                               )}
                            </div>
                         </Card>
+
+                        {/* SECTION 2 : GROUPE SOUS OBSERVATION / À L'ESSAI */}
+                        {(rosterObservationPlayers.length > 0 || isAssignMode) && (
+                           <Card className="border-2 border-amber-500/30 shadow-xl rounded-[3rem] bg-amber-500/[0.03] overflow-hidden p-8 md:p-10">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                                 <div>
+                                    <h4 className="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-3">
+                                       <div className="w-8 h-px bg-amber-500/40" />
+                                       <Eye className="w-4 h-4 text-amber-500" />
+                                       Groupe Sous Observation & Essais ({rosterObservationPlayers.length})
+                                    </h4>
+                                    <p className="text-[11px] font-bold text-muted-foreground mt-1">
+                                       Joueurs rattachés à l'équipe pour évaluation et séances d'essai avant signature définitive
+                                    </p>
+                                 </div>
+                                 {rosterObservationPlayers.length > 1 && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        handleBatchValidateSignature(rosterObservationPlayers.map(p => p.id));
+                                      }}
+                                      className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider px-4 py-2 gap-1.5 shadow-sm shrink-0"
+                                    >
+                                       <CheckCircle2 className="w-3.5 h-3.5" /> Tout signer ({rosterObservationPlayers.length})
+                                    </Button>
+                                 )}
+                              </div>
+
+                              <div className={`grid gap-4 ${isAssignMode ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
+                                 {rosterObservationPlayers.length > 0 ? (
+                                    rosterObservationPlayers.map(player => (
+                                       <motion.div
+                                          key={player.id}
+                                          layout
+                                          className="flex items-center gap-4 p-4 rounded-3xl border-2 border-amber-500/30 bg-card hover:border-amber-500/50 shadow-sm transition-all group"
+                                       >
+                                          <div className="w-14 h-14 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 border border-amber-500/30 shadow-xs">
+                                             <img
+                                                src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`}
+                                                alt={player.full_name}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                             />
+                                             <div className="absolute top-0 right-0 p-1 bg-amber-500 text-black rounded-bl-lg shadow-xs">
+                                                <Eye className="w-3 h-3" />
+                                             </div>
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                             <div className="flex items-center gap-2 flex-wrap">
+                                                <h4 className="font-black text-base uppercase truncate text-foreground leading-none">{player.full_name}</h4>
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                                   <Eye className="w-2.5 h-2.5" /> Sous observation
+                                                </span>
+                                             </div>
+                                             <p className="text-[10px] font-bold text-muted-foreground mt-1.5 flex items-center gap-2">
+                                                <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest h-4 px-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400">
+                                                   {player.position}
+                                                </Badge>
+                                                <span className="truncate">{(player as any).current_club || 'Scouting'}</span>
+                                             </p>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                             <Button
+                                                size="sm"
+                                                onClick={() => handleAssignCandidate(player)}
+                                                title="Valider la signature officielle du joueur"
+                                                className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider px-3 py-2 gap-1.5 shadow-sm"
+                                             >
+                                                <CheckCircle2 className="w-3.5 h-3.5" /> Valider Signature
+                                             </Button>
+                                             {isAssignMode && (
+                                                <Button
+                                                   size="icon"
+                                                   variant="ghost"
+                                                   onClick={() => handleRemoveFromObservationGroup(player)}
+                                                   title="Libérer du groupe sous observation"
+                                                   className="h-9 w-9 rounded-xl bg-red-100 text-red-600 hover:bg-red-600 hover:text-white transition-all shrink-0"
+                                                >
+                                                   <X className="w-4 h-4" />
+                                                </Button>
+                                             )}
+                                          </div>
+                                       </motion.div>
+                                    ))
+                                 ) : (
+                                    <div className="col-span-full flex flex-col items-center justify-center py-8 text-center opacity-60 border-2 border-dashed border-amber-500/30 rounded-3xl p-6">
+                                       <Eye className="w-8 h-8 text-amber-500 mb-2" />
+                                       <p className="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Aucun joueur en observation actuellement</p>
+                                       <p className="text-[11px] text-muted-foreground mt-1 max-w-sm">
+                                          Sélectionnez des talents dans la colonne « Joueurs Disponibles » à droite pour les affecter en groupe d'essai.
+                                       </p>
+                                    </div>
+                                 )}
+                              </div>
+                           </Card>
+                        )}
                      </div>
 
                      {isAssignMode && (
                         <div className="lg:col-span-5">
                            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                              <Card className="border-border shadow-2xl rounded-[3rem] bg-card overflow-hidden p-10">
-                                 <h4 className="text-xs font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-8 flex items-center gap-3">
-                                    <div className="w-8 h-px bg-emerald-400" /> Joueurs Disponibles ({rosterTeam.category})
-                                 </h4>
-
-                                 <div className="space-y-4 max-h-[600px] overflow-y-auto no-scrollbar pr-2">
-                                    {availablePlayers.length > 0 ? (
-                                       availablePlayers.map(player => (
-                                          <div key={player.id} className="flex items-center gap-5 p-4 rounded-3xl border border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40 transition-all group">
-                                             <div className="w-14 h-14 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 shadow-sm border border-emerald-500/20">
-                                                <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} alt={player.full_name} className="w-full h-full object-cover" />
-                                             </div>
-                                             <div className="flex-1 min-w-0">
-                                                <h4 className="font-black text-sm uppercase truncate text-foreground leading-none">{player.full_name}</h4>
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mt-2">#{player.jersey_number} • {player.position}</p>
-                                             </div>
-                                             <Button size="icon" variant="ghost" onClick={() => handleAssignPlayer(player)} className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white shrink-0 shadow-sm transition-all">
-                                                <Plus className="w-5 h-5" />
-                                             </Button>
-                                          </div>
-                                       ))
-                                    ) : (
-                                       <div className="text-center py-10 opacity-40">
-                                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Aucun joueur disponible en {rosterTeam.category}.</p>
-                                       </div>
+                              <Card className="border-border shadow-2xl rounded-[3rem] bg-card overflow-hidden p-8 md:p-10">
+                                 <div className="flex items-center justify-between gap-3 mb-4">
+                                    <h4 className="text-xs font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-3">
+                                       <div className="w-8 h-px bg-emerald-400" /> Joueurs Disponibles ({rosterTeam.category})
+                                    </h4>
+                                    {availablePlayers.length > 0 && (
+                                       <button
+                                         type="button"
+                                         onClick={handleSelectAllAvailable}
+                                         className="text-[10px] font-black uppercase tracking-wider text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors cursor-pointer"
+                                       >
+                                          {selectedAvailableIds.length === availablePlayers.length ? (
+                                             <>
+                                                <CheckSquare className="w-3.5 h-3.5 text-primary" /> Tout désélectionner
+                                             </>
+                                          ) : (
+                                             <>
+                                                <Square className="w-3.5 h-3.5" /> Tout cocher ({availablePlayers.length})
+                                             </>
+                                          )}
+                                       </button>
                                     )}
                                  </div>
-                              </Card>
-                           </motion.div>
+
+                                 {/* BARRE D'ACTIONS GROUPÉES / BATCH */}
+                                 <AnimatePresence>
+                                    {selectedAvailableIds.length > 0 && (
+                                       <motion.div
+                                          initial={{ opacity: 0, y: -10 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          exit={{ opacity: 0, y: -10 }}
+                                          className="mb-6 p-4 rounded-2xl bg-slate-950 border border-amber-500/30 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3"
+                                       >
+                                          <div className="flex items-center gap-2">
+                                             <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-xs font-black">
+                                                {selectedAvailableIds.length}
+                                             </span>
+                                             <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                                                {selectedAvailableIds.length > 1 ? 'Joueurs cochés' : 'Joueur coché'}
+                                             </span>
+                                          </div>
+                                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                                             <Button
+                                                size="sm"
+                                                onClick={handleBatchAssignToObservation}
+                                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl gap-1.5 shadow-sm"
+                                                title="Affecter au groupe d'essai sans valider la signature"
+                                             >
+                                                <Eye className="w-3.5 h-3.5" /> Affecter (Observation)
+                                             </Button>
+                                             <Button
+                                                size="sm"
+                                                onClick={handleBatchValidateSignature}
+                                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl gap-1.5 shadow-sm"
+                                                title="Signer directement tous les joueurs sélectionnés"
+                                             >
+                                                <CheckCircle2 className="w-3.5 h-3.5" /> Valider Signature
+                                             </Button>
+                                             <button
+                                                onClick={() => setSelectedAvailableIds([])}
+                                                className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-white px-2 py-1 cursor-pointer"
+                                             >
+                                                Annuler
+                                             </button>
+                                          </div>
+                                       </motion.div>
+                                    )}
+                                 </AnimatePresence>
+
+                                 <div className="space-y-3.5 max-h-[600px] overflow-y-auto no-scrollbar pr-1">
+                                    {availablePlayers.length > 0 ? (
+                                       availablePlayers.map(player => {
+                                          const isObs = (player as any).isObservation;
+                                          const isChecked = selectedAvailableIds.includes(player.id);
+                                          return isObs ? (
+                                            <div 
+                                              key={player.id} 
+                                              onClick={() => toggleSelectAvailable(player.id)}
+                                              className={`flex items-center gap-3.5 p-3.5 rounded-3xl border-2 transition-all cursor-pointer group ${
+                                                isChecked
+                                                  ? 'border-amber-500 bg-amber-500/15 shadow-sm'
+                                                  : 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50 hover:bg-amber-500/10'
+                                              }`}
+                                            >
+                                               {/* Checkbox */}
+                                               <button
+                                                 type="button"
+                                                 onClick={(e) => {
+                                                   e.stopPropagation();
+                                                   toggleSelectAvailable(player.id);
+                                                 }}
+                                                 className="shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1"
+                                               >
+                                                  {isChecked ? (
+                                                     <CheckSquare className="w-5 h-5 text-amber-500" />
+                                                  ) : (
+                                                     <Square className="w-5 h-5 text-muted-foreground/40 group-hover:text-muted-foreground" />
+                                                  )}
+                                               </button>
+
+                                               <div className="w-13 h-13 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 shadow-sm border border-amber-500/30">
+                                                  <img 
+                                                    src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} 
+                                                    alt={player.full_name} 
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                                                  />
+                                                  <div className="absolute top-0 right-0 p-1 bg-amber-500 text-black rounded-bl-lg shadow-xs">
+                                                     <Eye className="w-3 h-3" />
+                                                  </div>
+                                               </div>
+                                               <div className="flex-1 min-w-0">
+                                                  <div className="flex items-center gap-2 flex-wrap">
+                                                     <h4 className="font-black text-sm uppercase truncate text-foreground leading-none">{player.full_name}</h4>
+                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                                        <Eye className="w-2.5 h-2.5" /> Sous observation
+                                                     </span>
+                                                  </div>
+                                                  <p className="text-[10px] font-bold text-muted-foreground mt-1.5 flex items-center gap-2">
+                                                     <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest h-4 px-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400">
+                                                        {player.position}
+                                                     </Badge>
+                                                     <span className="truncate">{(player as any).current_club || 'Scouting'}</span>
+                                                  </p>
+                                               </div>
+
+                                               {/* Actions individuelles : Affecter en observation OU Signer directement */}
+                                               <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                                                  <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    onClick={() => handleAssignToObservationGroup(player.id)} 
+                                                    title="Affecter au groupe sous observation de l'équipe (sans signer)"
+                                                    className="h-9 w-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-slate-950 font-bold shadow-xs transition-all"
+                                                  >
+                                                     <Eye className="w-4 h-4" />
+                                                  </Button>
+                                                  <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    onClick={() => handleAssignCandidate(player)} 
+                                                    title="Signer officiellement et intégrer à l'effectif"
+                                                    className="h-9 w-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-xs transition-all"
+                                                  >
+                                                     <CheckCircle2 className="w-4 h-4" />
+                                                  </Button>
+                                               </div>
+                                            </div>
+                                           ) : (
+                                             <div 
+                                               key={player.id} 
+                                               onClick={() => toggleSelectAvailable(player.id)}
+                                               className={`flex items-center gap-3.5 p-3.5 rounded-3xl border transition-all cursor-pointer group ${
+                                                 isChecked
+                                                   ? 'border-emerald-500 bg-emerald-500/15 shadow-sm'
+                                                   : 'border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40'
+                                               }`}
+                                             >
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleSelectAvailable(player.id);
+                                                  }}
+                                                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1"
+                                                >
+                                                   {isChecked ? (
+                                                      <CheckSquare className="w-5 h-5 text-emerald-500" />
+                                                   ) : (
+                                                      <Square className="w-5 h-5 text-muted-foreground/40 group-hover:text-muted-foreground" />
+                                                   )}
+                                                </button>
+                                                <div className="w-13 h-13 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 shadow-sm border border-emerald-500/20">
+                                                   <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} alt={player.full_name} className="w-full h-full object-cover" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                   <h4 className="font-black text-sm uppercase truncate text-foreground leading-none">{player.full_name}</h4>
+                                                   <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mt-2">#{player.jersey_number ?? '—'} • {player.position}</p>
+                                                </div>
+                                                <Button 
+                                                  size="icon" 
+                                                  variant="ghost" 
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleAssignPlayer(player);
+                                                  }} 
+                                                  title="Ajouter à l'effectif"
+                                                  className="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white shrink-0 shadow-sm transition-all"
+                                                >
+                                                   <Plus className="w-4 h-4" />
+                                                </Button>
+                                             </div>
+                                           );
+                                        })
+                                     ) : (
+                                        <div className="text-center py-10 opacity-40">
+                                           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Aucun joueur disponible en {rosterTeam.category}.</p>
+                                        </div>
+                                     )}
+                                  </div>
+                               </Card>
+                            </motion.div>
                         </div>
                      )}
                   </div>

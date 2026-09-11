@@ -18,13 +18,20 @@ CREATE TABLE IF NOT EXISTS public.trial_candidates (
     weight_kg NUMERIC(5,1),
     origin_club VARCHAR(150),
     status VARCHAR(30) DEFAULT 'registered' CHECK (status IN ('registered', 'in_trial', 'selected', 'rejected', 'on_hold')),
+    pipeline_stage VARCHAR(50) DEFAULT 'shortlisted',
+    age_category VARCHAR(30) DEFAULT 'U19',
+    current_club VARCHAR(150),
     phone VARCHAR(50), 
-    email VARCHAR(150),
     agent_name VARCHAR(150),
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Idempotent alter for existing databases:
+ALTER TABLE public.trial_candidates ADD COLUMN IF NOT EXISTS pipeline_stage VARCHAR(50) DEFAULT 'shortlisted';
+ALTER TABLE public.trial_candidates ADD COLUMN IF NOT EXISTS age_category VARCHAR(30) DEFAULT 'U19';
+ALTER TABLE public.trial_candidates ADD COLUMN IF NOT EXISTS current_club VARCHAR(150);
 
 -- 2. Table des Sessions de Tests / Détections
 CREATE TABLE IF NOT EXISTS public.trial_sessions (

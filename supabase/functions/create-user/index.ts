@@ -28,7 +28,6 @@ serve(async (req) => {
       }
     })
 
-    // Get the JWT from the Authorization header to verify caller
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing auth header' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -41,7 +40,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Verify caller is super_admin
     const { data: callerProfile, error: profileError } = await supabaseAdmin
       .from('user_profiles')
       .select('system_role')
@@ -49,77 +47,98 @@ serve(async (req) => {
       .single()
 
     if (profileError || callerProfile?.system_role !== 'super_admin') {
-      return new Response(JSON.stringify({ error: 'Unauthorized: Only super_admin can create users' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'Unauthorized: Only super_admin can perform this action' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Parse request body
-    const { email, password, full_name, system_role, categories, club_id } = await req.json()
+    const body = await req.json()
+    const { action, email, password, full_name, system_role, categories, club_id, user_id, job_title, phone_number } = body
 
-    if (!email || !password || !full_name || !system_role) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    // ─────────────────────────────────────────────────────────────
+    // ACTION: GET_ALL_PROFILES — Read all profiles including job_title (bypasses RLS)
+    // ─────────────────────────────────────────────────────────────
+    if (action === 'get_all_profiles') {
+      const { data: profiles, error: pErr } = await supabaseAdmin
+        .from('user_profiles')
+        .select('id, job_title, phone_number, avatar_url, system_role, full_name, is_active')
+
+      if (pErr) return new Response(JSON.stringify({ error: pErr.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+      return new Response(JSON.stringify({ profiles }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
     }
 
-    // 1. Create auth user
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: full_name
+    if (action === 'create') {
+      if (!email || !password || !full_name || !system_role) {
+        return new Response(JSON.stringify({ error: 'Missing required fields' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
-    })
 
-    if (authError) {
-      console.error('Error creating auth user:', authError)
-      return new Response(JSON.stringify({ error: authError.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
-
-    const userId = authData.user.id
-
-    // 2. Update user_profiles table
-    const { error: updateError } = await supabaseAdmin
-      .from('user_profiles')
-      .update({
-        system_role: system_role,
-        force_password_change: true,
-        default_club_id: club_id || callerUser.user_metadata?.club_id // Optional
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name }
       })
-      .eq('id', userId)
 
-    if (updateError) {
-      console.error('Error updating profile:', updateError)
-      // Cleanup the user if profile update fails
-      await supabaseAdmin.auth.admin.deleteUser(userId)
-      return new Response(JSON.stringify({ error: 'Failed to update user profile' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
+      if (authError) return new Response(JSON.stringify({ error: authError.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-    // 3. Assign categories if needed (Coach/Assistant Coach)
-    if (categories && categories.length > 0 && club_id) {
-      const categoryAssignments = categories.map((cat: string) => ({
-        user_id: userId,
-        category: cat,
-        club_id: club_id
-      }))
+      const { error: updateError } = await supabaseAdmin
+        .from('user_profiles')
+        .update({ system_role, force_password_change: true, default_club_id: club_id, job_title: job_title || null, phone_number: phone_number || null })
+        .eq('id', authData.user.id)
 
-      const { error: categoryError } = await supabaseAdmin
-        .from('user_category_assignments')
-        .insert(categoryAssignments)
-
-      if (categoryError) {
-         console.error('Error assigning categories:', categoryError)
-         // Not a fatal error, user is created but without categories
+      if (updateError) {
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+        return new Response(JSON.stringify({ error: 'Failed to update user profile' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
+
+      // Assign categories if needed
+      if (categories && categories.length > 0 && club_id) {
+        const categoryAssignments = categories.map((cat: string) => ({ user_id: authData.user.id, category: cat, club_id }))
+        await supabaseAdmin.from('user_category_assignments').insert(categoryAssignments)
+      }
+
+      return new Response(JSON.stringify({ user: authData.user, message: 'User created successfully' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+
+    } else if (action === 'update') {
+      if (!user_id) return new Response(JSON.stringify({ error: 'Missing user_id' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+      // Update auth user (email, password, full_name)
+      const authUpdatePayload: Record<string, any> = {}
+      if (email) authUpdatePayload.email = email
+      if (password) authUpdatePayload.password = password
+      if (full_name) authUpdatePayload.user_metadata = { full_name }
+
+      if (Object.keys(authUpdatePayload).length > 0) {
+        await supabaseAdmin.auth.admin.updateUserById(user_id, authUpdatePayload)
+      }
+
+      // Update profile with service_role (bypasses RLS)
+      const profileUpdate: Record<string, any> = {}
+      if (system_role !== undefined) profileUpdate.system_role = system_role
+      if (job_title !== undefined) profileUpdate.job_title = job_title || null
+      if (phone_number !== undefined) profileUpdate.phone_number = phone_number || null
+      if (full_name !== undefined) profileUpdate.full_name = full_name
+
+      const { error: updateError } = await supabaseAdmin
+        .from('user_profiles')
+        .update(profileUpdate)
+        .eq('id', user_id)
+
+      if (updateError) return new Response(JSON.stringify({ error: 'Failed to update user profile: ' + updateError.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+      // Update category assignments if provided
+      if (categories !== undefined && club_id) {
+        await supabaseAdmin.from('user_category_assignments').delete().eq('user_id', user_id)
+        if (categories.length > 0) {
+          const categoryAssignments = categories.map((cat: string) => ({ user_id, category: cat, club_id }))
+          await supabaseAdmin.from('user_category_assignments').insert(categoryAssignments)
+        }
+      }
+
+      return new Response(JSON.stringify({ message: 'User updated successfully' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
     }
 
-    return new Response(JSON.stringify({ user: authData.user, message: 'User created successfully' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
+    return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (error: any) {
-    console.error('Unexpected error:', error.message)
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
-    })
+    return new Response(JSON.stringify({ error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 })
   }
 })

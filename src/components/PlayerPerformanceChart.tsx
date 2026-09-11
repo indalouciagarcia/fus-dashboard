@@ -15,6 +15,7 @@ import { usePlayers } from '../hooks/usePlayers';
 import { useMatches } from '../hooks/useMatches';
 import { useAdvancedDashboardStats } from '../hooks/useAdvancedDashboardStats';
 import type { Player, AgeCategory } from '../types';
+import { normalizeAgeCategory } from '../constants';
 
 // ─── TYPES ─────────────────────────────────────────────────────────────
 interface PlayerPerformance {
@@ -153,7 +154,7 @@ const usePlayerPerformances = (): PlayerPerformance[] => {
         );
 
         // Catégorie d'âge depuis le joueur (sa catégorie officielle d'appartenance)
-        const category = (player.category || 'SENIOR') as AgeCategory;
+        const category = normalizeAgeCategory(player.category || 'SENIOR') as AgeCategory;
 
         return {
           player,

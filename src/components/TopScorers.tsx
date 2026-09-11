@@ -8,6 +8,7 @@ import { useMatches } from '../hooks/useMatches';
 import { useAdvancedDashboardStats } from '../hooks/useAdvancedDashboardStats';
 import { Filter, Calendar, Users, Trophy, ChevronRight, Crown } from 'lucide-react';
 import type { Player, AgeCategory } from '../types';
+import { PLAYER_CATEGORIES, normalizeAgeCategory } from '../constants';
 import TopScorerHeroCard from './TopScorerHeroCard';
 import type { TopScorerData } from './TopScorerHeroCard';
 
@@ -15,7 +16,7 @@ interface TopScorersProps {
   onSelectPlayer?: (player: Player) => void;
 }
 
-const CATEGORIES: AgeCategory[] = ['SENIOR', 'U23', 'U21', 'U19', 'U17', 'U15', 'U13', 'U11', 'U9'];
+const CATEGORIES = PLAYER_CATEGORIES;
 const MONTHS = [
   { value: 'all', label: 'Toute l\'année' },
   { value: '0', label: 'Janvier' }, { value: '1', label: 'Février' },
@@ -54,7 +55,7 @@ export const TopScorers: React.FC<TopScorersProps> = ({ onSelectPlayer }) => {
 
       if (selectedMonth !== 'all' && matchMonth !== parseInt(selectedMonth)) return false;
       if (selectedTrimester !== 'all' && matchTrimester !== parseInt(selectedTrimester)) return false;
-      if (selectedCategory !== 'ALL' && m.category !== selectedCategory) return false;
+      if (selectedCategory !== 'ALL' && normalizeAgeCategory(m.category) !== selectedCategory) return false;
 
       return true;
     });

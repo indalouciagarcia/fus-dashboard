@@ -41,6 +41,8 @@ export type Staff    = Tables<'staff'>;
 export type StaffMember = Staff & { team_ids?: string[] };
 export type Team     = Tables<'teams'>;
 export type Player   = Tables<'players'>;
+export type OpponentPlayer = Tables<'opponent_players'>;
+
 
 export type Match           = Tables<'matches'>;
 export type MatchPlayer     = Tables<'match_players'>;

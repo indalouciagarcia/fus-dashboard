@@ -4,6 +4,7 @@ import { usePlayers } from '../../hooks/usePlayers';
 import { useClubData } from '../../hooks/useClubData';
 import { useTeams } from '../../hooks/useTeams';
 import { useMatchEvents } from '../../hooks/useMatchEvents';
+import { useOpponentPlayers } from '../../hooks/useOpponentPlayers';
 import { usePermissions } from '../../context/PermissionsContext';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -55,6 +56,7 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
   const { events, addEvent: addEventHook, updateEvent: updateEventHook, deleteEvent: deleteEventHook } = useMatchEvents(matchId);
   
   const match = matches.find(m => m.id === matchId);
+  const { players: opponentPlayers } = useOpponentPlayers(match?.opponent_id, match?.category);
 
   // --- Match Configuration ---
   const matchConfig: MatchTimingConfig = {
@@ -206,7 +208,7 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
   const handleActionClick = (type: string, isOpponent: boolean) => {
     setEditingEventId(null);
     setEventType(type);
-    setSelectedPlayerId(isOpponent ? 'OPPONENT-1' : '');
+    setSelectedPlayerId(isOpponent ? (opponentPlayers.length > 0 ? opponentPlayers[0].id : 'OPPONENT-1') : '');
     setIsEventModalOpen(true);
   };
 
@@ -229,7 +231,7 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
   const saveEvent = async () => {
     if (!eventType || !matchId || (!selectedPlayerId && eventType !== 'substitution')) return;
 
-    const isOpponent = selectedPlayerId?.startsWith('OPPONENT');
+    const isOpponent = selectedPlayerId?.startsWith('OPPONENT-') || opponentPlayers.some(p => p.id === selectedPlayerId);
     const playerUuid = isOpponent ? null : (selectedPlayerId || null);
     const relatedUuid = (eventType === 'substitution' ? selectedPlayerInId : selectedAssistId) || null;
 
@@ -1038,10 +1040,10 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
                 {eventType !== 'substitution' && (
                    <div className="space-y-4">
                       <label className="text-[10px] font-black uppercase tracking_widest text-slate-400 block px-2">
-                         {selectedPlayerId.startsWith('OPPONENT') ? 'Numéro de l\'Adversaire' : 'Joueur de l\'Équipe'}
+                         {(selectedPlayerId.startsWith('OPPONENT-') || opponentPlayers.some(p => p.id === selectedPlayerId)) ? 'Joueur de l\'Adversaire' : 'Joueur de l\'Équipe'}
                       </label>
                       
-                      {!selectedPlayerId.startsWith('OPPONENT') ? (
+                      {!(selectedPlayerId.startsWith('OPPONENT-') || opponentPlayers.some(p => p.id === selectedPlayerId)) ? (
                          <select value={selectedPlayerId} onChange={e => setSelectedPlayerId(e.target.value)} className="w-full h-16 px-6 rounded-3xl bg-slate-50 border-2 border-slate-200 font-black text-sm outline-none focus:border-primary transition-all appearance-none cursor-pointer">
                             <option value="">Choisir un joueur...</option>
                             {currentLineup.length > 0 || bench.length > 0 ? (
@@ -1063,25 +1065,36 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
                          </select>
                       ) : (
                          <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                            {[...Array(99)].map((_, i) => {
-                               const num = i + 1;
-                               const ref = `OPPONENT-${num}`;
-                               return (
+                            {opponentPlayers.length > 0 ? (
+                               opponentPlayers.map(op => (
                                   <button 
-                                    key={ref} 
-                                    onClick={() => setSelectedPlayerId(ref)}
-                                    className={`h-12 rounded-xl flex items-center justify-center text-xs font-black transition-all border-2 ${selectedPlayerId === ref ? 'bg-primary border-primary text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
-                                     {num}
+                                    key={op.id} 
+                                    onClick={() => setSelectedPlayerId(op.id)}
+                                    className={`h-12 rounded-xl flex items-center justify-center text-[10px] font-black uppercase transition-all border-2 px-1 text-center leading-tight ${selectedPlayerId === op.id ? 'bg-primary border-primary text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
+                                     #{op.jersey_number ?? '?'} {op.full_name.split(' ').pop()}
                                   </button>
-                               );
-                            })}
+                               ))
+                            ) : (
+                               [...Array(99)].map((_, i) => {
+                                  const num = i + 1;
+                                  const ref = `OPPONENT-${num}`;
+                                  return (
+                                     <button 
+                                       key={ref} 
+                                       onClick={() => setSelectedPlayerId(ref)}
+                                       className={`h-12 rounded-xl flex items-center justify-center text-xs font-black transition-all border-2 ${selectedPlayerId === ref ? 'bg-primary border-primary text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
+                                        {num}
+                                     </button>
+                                  );
+                               })
+                            )}
                          </div>
                       )}
                    </div>
                 )}
 
                 {/* GOAL ASSIST (Only for My Club) */}
-                {eventType === 'goal' && !selectedPlayerId.startsWith('OPPONENT') && (
+                {eventType === 'goal' && !(selectedPlayerId.startsWith('OPPONENT-') || opponentPlayers.some(p => p.id === selectedPlayerId)) && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-top-4">
                      <label className="text-[10px] font-black uppercase tracking-widest text-emerald-500 block px-2">Passeur Décisif (Assist)</label>
                      <select value={selectedAssistId || ''} onChange={e => setSelectedAssistId(e.target.value)} className="w-full h-16 px-6 rounded-3xl bg-emerald-50 border-2 border-emerald-100 font-black text-sm outline-none focus:border-emerald-500 transition-all appearance-none cursor-pointer">

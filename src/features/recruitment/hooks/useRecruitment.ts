@@ -124,29 +124,89 @@ export function useRecruitment(candidateIdForTimeline?: string) {
     mutationFn: (test: Omit<PlayerTest, 'id' | 'created_at' | 'updated_at'>) => recruitmentService.createTest(test),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.tests });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.candidates });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.evaluations });
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.timeline() });
-      toast.success('Session de test planifiée');
+      toast.success('Session de test planifiée (Dossier déplacé dans "Test Planifié")');
+    },
+  });
+
+  const updateTestMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: string; updates: Partial<PlayerTest> }) =>
+      recruitmentService.updateTest(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.tests });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.candidates });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.evaluations });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.timeline() });
+      toast.success('Session de test mise à jour');
+    },
+    onError: (err: any) => {
+      toast.error(`Erreur: ${err.message}`);
+    },
+  });
+
+  const deleteTestMutation = useMutation({
+    mutationFn: (id: string) => recruitmentService.deleteTest(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.tests });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.candidates });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.evaluations });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.timeline() });
+      toast.success('Session de test supprimée');
+    },
+    onError: (err: any) => {
+      toast.error(`Erreur: ${err.message}`);
     },
   });
 
   // EVALUATIONS MUTATIONS
   const saveEvaluationMutation = useMutation({
-    mutationFn: (evalData: Omit<CandidateEvaluation, 'id' | 'created_at'>) => recruitmentService.saveEvaluation(evalData),
-    onSuccess: () => {
+    mutationFn: ({ evalData, options }: { evalData: Omit<CandidateEvaluation, 'id' | 'created_at'>; options?: { isReevaluation?: boolean; updateId?: string } }) =>
+      recruitmentService.saveEvaluation(evalData, options),
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.evaluations });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.tests });
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.candidates });
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.timeline() });
-      toast.success('Évaluation 1–10 enregistrée avec succès');
+      if (variables.options?.isReevaluation) {
+        toast.success('Réévaluation enregistrée avec succès');
+      } else if (variables.options?.updateId) {
+        toast.success('Évaluation mise à jour avec succès');
+      } else {
+        toast.success('Évaluation 1–10 enregistrée avec succès');
+      }
     },
   });
 
-  // OBSERVATIONS MUTATIONS
+  const deleteEvaluationMutation = useMutation({
+    mutationFn: (id: string) => recruitmentService.deleteEvaluation(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.evaluations });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.tests });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.candidates });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.timeline() });
+      toast.success('Évaluation supprimée avec succès');
+    },
+    onError: (err: any) => {
+      toast.error(`Erreur: ${err.message}`);
+    },
+  });
   const createObservationMutation = useMutation({
     mutationFn: (obs: Omit<ScoutObservation, 'id' | 'created_at'>) => recruitmentService.createObservation(obs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.observations });
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.timeline() });
       toast.success('Rapport d\'observation match enregistré');
+    },
+  });
+
+  // RESET RECRUITMENT MUTATION
+  const resetRecruitmentMutation = useMutation({
+    mutationFn: (credentials: { email: string; password: string; confirmationWord: string }) =>
+      recruitmentService.resetRecruitmentData(credentials),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recruitment'] });
     },
   });
 
@@ -174,7 +234,12 @@ export function useRecruitment(candidateIdForTimeline?: string) {
     deleteCandidate: deleteCandidateMutation.mutateAsync,
 
     createTest: createTestMutation.mutateAsync,
-    saveEvaluation: saveEvaluationMutation.mutateAsync,
+    updateTest: updateTestMutation.mutateAsync,
+    deleteTest: deleteTestMutation.mutateAsync,
+    saveEvaluation: (evalData: Omit<CandidateEvaluation, 'id' | 'created_at'>, options?: { isReevaluation?: boolean; updateId?: string }) =>
+      saveEvaluationMutation.mutateAsync({ evalData, options }),
+    deleteEvaluation: (id: string) => deleteEvaluationMutation.mutateAsync(id),
     createObservation: createObservationMutation.mutateAsync,
+    resetRecruitmentData: resetRecruitmentMutation.mutateAsync,
   };
 }

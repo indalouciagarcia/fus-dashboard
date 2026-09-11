@@ -27,7 +27,7 @@ const POSITION_GROUPS = [
   { label: 'Gardiens', roles: ['GK', 'G', 'GARDIEN'] },
   { label: 'Défenseurs', roles: ['CB', 'LB', 'RB', 'LWB', 'RWB', 'D', 'DC', 'DG', 'DD'] },
   { label: 'Milieux', roles: ['CDM', 'CM', 'CAM', 'LM', 'RM', 'M', 'MDC', 'MC', 'MO', 'MD', 'MG'] },
-  { label: 'Attaquants', roles: ['ST', 'LW', 'RW', 'CF', 'F', 'BU', 'A', 'WG'] }
+  { label: 'Attaquants', roles: ['ST', 'LW', 'RW', 'SS', 'CF', 'F', 'BU', 'A', 'WG'] }
 ];
 
 const getFormationPositions = (formation: string) => {

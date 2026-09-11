@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { Player } from '../types';
 import type { Inserts, Updates } from '../types/supabase';
 import { getMyClubId } from './_helpers';
+import { storageService } from './storageService';
 
 export const playerService = {
   async getPlayers(teamId?: string): Promise<Player[]> {
@@ -69,7 +70,6 @@ export const playerService = {
   /** Ajoute plusieurs joueurs en une seule opération */
   async bulkAddPlayers(players: Omit<Inserts<'players'>, 'id'>[]): Promise<void> {
     if (!players.length) return;
-    const { getMyClubId } = await import('./_helpers');
     const clubId = await getMyClubId();
     const rows = players.map(p => ({ ...p, club_id: clubId }));
     const { error } = await supabase.from('players').insert(rows);
@@ -90,7 +90,6 @@ export const playerService = {
     if (error) throw error;
 
     // Supprimer les photos du storage (en parallèle, erreurs ignorées)
-    const { storageService } = await import('./storageService');
     await Promise.allSettled(
       (rows ?? [])
         .filter(r => r.photo_url && r.photo_url !== 'null')

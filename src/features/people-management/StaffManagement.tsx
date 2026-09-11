@@ -59,13 +59,19 @@ const StaffManagement: React.FC = () => {
 
 
   const STAFF_ROLES = [
+    { value: 'technical_director', label: 'Directeur Technique' },
+    { value: 'manager', label: 'Directeur Sportif' },
     { value: 'coach', label: 'Entraîneur Principal' },
     { value: 'assistant_coach', label: 'Entraîneur Adjoint' },
+    { value: 'goalkeeper_coach', label: 'Entraîneur des Gardiens' },
+    { value: 'fitness_coach', label: 'Préparateur Physique' },
     { value: 'match_operator', label: 'Analyste Vidéo / Data' },
-    { value: 'medical', label: 'Staff Médical' },
-    { value: 'scout', label: 'Recruteur' },
-    { value: 'manager', label: 'Directeur Sportif' },
-    { value: 'physio', label: 'Kinésithérapeute' }
+    { value: 'doctor', label: 'Médecin' },
+    { value: 'nurse', label: 'Infirmier' },
+    { value: 'physio', label: 'Kinésithérapeute' },
+    { value: 'scout', label: 'Scout / Détecteur' },
+    { value: 'recruiter', label: 'Recruteur' },
+    { value: 'medical', label: 'Staff Médical' }
   ];
 
   const [formData, setFormData] = useState<Partial<StaffMember>>({

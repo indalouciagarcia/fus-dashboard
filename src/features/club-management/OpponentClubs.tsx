@@ -17,47 +17,22 @@ import {
   LayoutGrid,
   List as ListIcon,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Users,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Club } from '../../types';
 import { Skeleton } from '../../components/ui/skeleton';
 import { storageService } from '../../services/storageService';
+import { opponentPlayerService } from '../../services/opponentPlayerService';
+import { build22FakeOpponentPlayers } from '../../utils/generateFakeOpponentPlayers';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useMemo } from 'react';
-
-const GEOGRAPHY_DATA: Record<string, Record<string, string[]>> = {
-  "Afrique": {
-    "Maroc": ["Casablanca", "Rabat", "Marrakech", "Fès", "Tanger"],
-    "Sénégal": ["Dakar", "Saint-Louis", "Thiès", "Ziguinchor"],
-    "Côte d'Ivoire": ["Abidjan", "Yamoussoukro", "Bouaké", "San-Pédro"],
-    "Cameroun": ["Douala", "Yaoundé", "Garoua", "Bafoussam"],
-    "Tunisie": ["Tunis", "Sfax", "Sousse", "Kairouan"],
-    "Algérie": ["Alger", "Oran", "Constantine", "Annaba"]
-  },
-  "Europe": {
-    "France": ["Paris", "Marseille", "Lyon", "Lille", "Bordeaux", "Nantes"],
-    "Espagne": ["Madrid", "Barcelone", "Séville", "Valence", "Bilbao"],
-    "Italie": ["Rome", "Milan", "Naples", "Turin", "Florence"],
-    "Belgique": ["Bruxelles", "Anvers", "Gand", "Liège", "Namur"],
-    "Suisse": ["Zurich", "Genève", "Bâle", "Lausanne", "Berne"],
-    "Portugal": ["Lisbonne", "Porto", "Braga", "Coimbra"]
-  },
-  "Amérique": {
-    "Canada": ["Montréal", "Québec", "Toronto", "Vancouver", "Ottawa"],
-    "USA": ["New York", "Los Angeles", "Chicago", "Miami", "Boston"],
-    "Brésil": ["São Paulo", "Rio de Janeiro", "Brasília", "Salvador"],
-    "Argentine": ["Buenos Aires", "Córdoba", "Rosario"]
-  },
-  "Asie/Océanie": {
-    "Qatar": ["Doha", "Al Rayyan", "Al Wakrah", "Al Khor"],
-    "Japon": ["Tokyo", "Osaka", "Kyoto", "Yokohama"],
-    "Australie": ["Sydney", "Melbourne", "Brisbane", "Perth"],
-    "Arabie Saoudite": ["Riyad", "Djeddah", "La Mecque"]
-  }
-};
+import { OpponentSquadModal } from './components/OpponentSquadModal';
+import { GEOGRAPHY_DATA } from '../../constants/geography';
 
 const OpponentClubs: React.FC = () => {
   const { opponentClubs, mainClub, isLoading: clubsLoading, addOpponent, updateOpponent, deleteOpponent } = useClubData();
@@ -65,7 +40,9 @@ const OpponentClubs: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingClub, setEditingClub] = useState<Club | null>(null);
+  const [selectedSquadClub, setSelectedSquadClub] = useState<Club | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [autoGenerate22, setAutoGenerate22] = useState(true);
 
   // Settings sync
   const [displayMode, setDisplayMode] = useState<'grid' | 'list'>(mainClub?.preferred_view_mode || 'list');
@@ -148,6 +125,7 @@ const OpponentClubs: React.FC = () => {
       setFormData({ name: '', city: '', country: '', continent: '', logo_url: '' });
       setSelectedContinent('');
       setSelectedCountry('');
+      setAutoGenerate22(true);
     }
     setShowForm(true);
   };
@@ -161,7 +139,16 @@ const OpponentClubs: React.FC = () => {
     if (editingClub) {
       await updateOpponent({ id: editingClub.id, data: formData });
     } else {
-      await addOpponent(formData as Omit<Club, 'id'>);
+      const createdClub = await addOpponent(formData as Omit<Club, 'id'>);
+      if (autoGenerate22 && createdClub?.id) {
+        try {
+          const fakeSquad = build22FakeOpponentPlayers(createdClub.id, 'SENIOR');
+          await opponentPlayerService.addManyOpponentPlayers(fakeSquad);
+          toast.success(`Club créé et 22 joueurs fictifs générés avec succès !`);
+        } catch (e: any) {
+          console.error(e);
+        }
+      }
     }
     setShowForm(false);
   };
@@ -326,6 +313,16 @@ const OpponentClubs: React.FC = () => {
                                 </p>
                               </div>
                             </div>
+
+                            <Button 
+                              onClick={() => setSelectedSquadClub(club)} 
+                              variant="outline" 
+                              className="w-full h-10 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary hover:text-white font-black text-[10px] uppercase tracking-widest gap-2 transition-all"
+                            >
+                              <Users className="w-3.5 h-3.5" />
+                              Gérer l'Effectif
+                            </Button>
+
                             <div className="pt-4 border-t border-secondary/50 flex items-center justify-between">
                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest bg-secondary/30 px-2 py-0.5 rounded">ID: #{club.id.substr(0, 6)}</span>
                                <Badge variant="outline" className="text-[9px] font-black text-primary border-primary/20 uppercase tracking-widest italic">RIVAL</Badge>
@@ -365,6 +362,15 @@ const OpponentClubs: React.FC = () => {
                         </td>
                         <td className="px-8 py-3 text-right">
                            <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setSelectedSquadClub(club)}
+                                className="h-9 px-3 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary hover:text-white font-black text-[10px] uppercase gap-1.5 transition-all"
+                              >
+                                <Users className="w-3.5 h-3.5" />
+                                Effectif
+                              </Button>
                               <Button variant="ghost" size="icon" onClick={() => handleOpenForm(club)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
                                  <Edit2 className="w-4 h-4" />
                               </Button>
@@ -526,6 +532,29 @@ const OpponentClubs: React.FC = () => {
                       className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold focus:ring-2 ring-primary/20"
                     />
                   </div>
+                  {!editingClub && (
+                    <div className="bg-emerald-50 dark:bg-emerald-950/40 p-5 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between gap-4 my-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shrink-0">
+                          <Sparkles className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black uppercase text-emerald-950 dark:text-emerald-200">
+                            Générer un effectif de 22 joueurs fictifs
+                          </p>
+                          <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
+                            Génère immédiatement 22 joueurs avec leurs maillots (#1 à #22), postes, tailles et caractéristiques modulables.
+                          </p>
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={autoGenerate22}
+                        onChange={(e) => setAutoGenerate22(e.target.checked)}
+                        className="w-5 h-5 accent-emerald-600 rounded cursor-pointer shrink-0"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-4 pt-6 border-t border-secondary/50">
@@ -558,8 +587,17 @@ const OpponentClubs: React.FC = () => {
            <p className="text-muted-foreground font-medium italic uppercase tracking-widest text-[10px]">No opponents match your search criteria.</p>
         </div>
       )}
+
+      {selectedSquadClub && (
+        <OpponentSquadModal
+          isOpen={!!selectedSquadClub}
+          onClose={() => setSelectedSquadClub(null)}
+          club={selectedSquadClub}
+        />
+      )}
     </div>
   );
 };
 
 export default OpponentClubs;
+

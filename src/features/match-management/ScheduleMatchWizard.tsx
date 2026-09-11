@@ -7,6 +7,9 @@ import { useMatches } from '../../hooks/useMatches';
 import { useTeams } from '../../hooks/useTeams';
 import { useTouchDragAndDrop } from '../../hooks/useTouchDragAndDrop';
 import { useArbitres } from '../../hooks/useArbitres';
+import { useOpponentPlayers } from '../../hooks/useOpponentPlayers';
+import { usePermissions } from '../../context/PermissionsContext';
+import type { OpponentPlayer } from '../../types';
 import { PLAYER_CATEGORIES } from '../../constants';
 import { Skeleton } from '../../components/ui/skeleton';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,6 +29,7 @@ import type { Match, Player, MatchPhase } from '../../types';
 interface ScheduleMatchWizardProps {
   onBack: () => void;
   onSuccess?: () => void;
+  initialMatch?: Match | null;
 }
 
 type WizardStep = 'setup' | 'arbitres' | 'staff' | 'lineup' | 'opponent' | 'validate';
@@ -46,7 +50,7 @@ const POSITION_GROUPS = [
   { label: 'Gardiens',   roles: ['GK', 'G', 'GARDIEN', 'GKP'], color: 'from-amber-400 to-amber-600' },
   { label: 'Défenseurs', roles: ['CB', 'LB', 'RB', 'LWB', 'RWB', 'D', 'DC', 'DG', 'DD', 'DF', 'DEF', 'DEFENDER'], color: 'from-blue-500 to-blue-700' },
   { label: 'Milieux',    roles: ['CDM', 'CM', 'CAM', 'LM', 'RM', 'M', 'MDC', 'MC', 'MO', 'MD', 'MG', 'MF', 'MID', 'MILIEU'], color: 'from-emerald-500 to-emerald-700' },
-  { label: 'Attaquants', roles: ['ST', 'LW', 'RW', 'CF', 'F', 'BU', 'A', 'WG', 'FW', 'ATT', 'FOR', 'FORWARD'], color: 'from-rose-500 to-rose-700' }
+  { label: 'Attaquants', roles: ['ST', 'LW', 'RW', 'SS', 'CF', 'F', 'BU', 'A', 'WG', 'FW', 'ATT', 'FOR', 'FORWARD'], color: 'from-rose-500 to-rose-700' }
 ];
 
 const getPositionColor = (position: string) => {
@@ -67,7 +71,7 @@ const getPositionPriority = (position: string) => {
   if (['CM', 'MC', 'MID', 'MF', 'MILIEU'].includes(upperPos)) return 4;
   if (['CAM', 'MO'].includes(upperPos)) return 5;
   if (['LM', 'RM', 'MG', 'MD'].includes(upperPos)) return 6;
-  if (['ST', 'BU', 'CF', 'F', 'FOR', 'FORWARD'].includes(upperPos)) return 7;
+  if (['ST', 'SS', 'BU', 'CF', 'F', 'FOR', 'FORWARD'].includes(upperPos)) return 7;
   if (['LW', 'RW', 'WG', 'ATT'].includes(upperPos)) return 8;
   return 9;
 };
@@ -122,7 +126,7 @@ const getFormationPositions = (formation: string) => {
   return roles[formation] || roles['4-3-3'];
 };
 
-const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuccess }) => {
+const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuccess, initialMatch }) => {
   const { mainClub, opponentClubs: allOpponentClubs, isLoading: clubLoading } = useClubData();
   // Exclude any club with the same name as mainClub to prevent "FUS vs FUS"
   const opponentClubs = allOpponentClubs.filter(
@@ -133,7 +137,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
   const { staff, isLoading: staffLoading } = useStaff();
   const { arbitres } = useArbitres();
   const { teams } = useTeams();
-  const { addMatch } = useMatches();
+  const { addMatch, updateMatch } = useMatches();
 
   const isLoading = clubLoading || compLoading || playersLoading || staffLoading;
 
@@ -169,6 +173,8 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
     qualif_status: '' as 'won' | 'lost' | '',
   });
 
+  const { players: opponentSquad = [] } = useOpponentPlayers(setup.opponent_id, setup.category);
+
   // Match timing configuration
   const [halfDuration, setHalfDuration] = useState<30 | 35 | 40 | 45>(45);
   const [enableExtraTime, setEnableExtraTime] = useState(false);
@@ -187,9 +193,44 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
   const [opponentLineup, setOpponentLineup] = useState<string[]>(Array(11).fill(''));
   const [opponentSubs, setOpponentSubs] = useState<string[]>([]);
 
+  // Pre-fill wizard if editing an existing match
+  useEffect(() => {
+    if (initialMatch) {
+      setSetup({
+        match_type: initialMatch.league_id ? 'league' : 'amical',
+        opponent_id: initialMatch.opponent_id || '',
+        league_id: initialMatch.league_id || '',
+        stadium_id: initialMatch.stadium_id || '',
+        team_id: initialMatch.team_id || '',
+        match_date: initialMatch.match_date || new Date().toISOString().split('T')[0],
+        match_time: initialMatch.match_time || '18:00',
+        category: initialMatch.category || 'SENIOR',
+        is_home: initialMatch.is_home ?? true,
+        match_phase: (initialMatch.match_phase as MatchPhase) || '',
+        qualif_status: (initialMatch.match_phase as 'won' | 'lost' | '') || '',
+      });
+      if (initialMatch.formation) setFormation(initialMatch.formation);
+      if (initialMatch.half_duration_minutes) setHalfDuration(initialMatch.half_duration_minutes as any);
+      if (initialMatch.enable_extra_time !== undefined) setEnableExtraTime(initialMatch.enable_extra_time);
+      if (initialMatch.enable_penalties !== undefined) setEnablePenalties(initialMatch.enable_penalties);
+      if (initialMatch.referees_assigned) {
+        setSelectedReferees(initialMatch.referees_assigned as any);
+      }
+      if (initialMatch.starting_eleven) setStartingXI(initialMatch.starting_eleven);
+      if (initialMatch.substitutes) setSubstitutes(initialMatch.substitutes);
+    }
+  }, [initialMatch]);
+
+  // Check permissions
+  const { canManageCategory, authState } = usePermissions();
+  const ALLOWED_CATEGORIES = Array.from(new Set([
+    ...CATEGORIES.filter(c => canManageCategory(c)),
+    ...(authState.userCategories || [])
+  ]));
+
   // Auto-select team when category changes in wizard setup
   useEffect(() => {
-    if (currentStep === 'setup' && setup.category) {
+    if (!initialMatch && currentStep === 'setup' && setup.category) {
       const matchingTeams = teams.filter(t => t.category === setup.category);
       if (matchingTeams.length > 0) {
         // Auto-select the first team that belongs to this category
@@ -209,7 +250,15 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
         return prev;
       });
     }
-  }, [setup.category, teams, leagues, currentStep]);
+  }, [setup.category, teams, leagues, currentStep, initialMatch]);
+
+  // Auto-select staff when category changes in wizard setup
+  useEffect(() => {
+    if (!initialMatch && setup.category && staff.length > 0) {
+      const matchingStaff = staff.filter(s => s.category === setup.category);
+      setSelectedStaffIds(matchingStaff.map(s => s.id));
+    }
+  }, [setup.category, staff, initialMatch]);
 
   const stepIndex = STEPS.findIndex(s => s.key === currentStep);
 
@@ -474,9 +523,12 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
         added_time_first_half: 0,
         added_time_second_half: 0,
         penalty_score_home: 0,
-        penalty_score_away: 0
       };
-      await addMatch(matchPayload);
+      if (initialMatch) {
+        await updateMatch({ id: initialMatch.id, data: matchPayload });
+      } else {
+        await addMatch(matchPayload);
+      }
       onSuccess?.();
       onBack();
     } catch (e) {
@@ -610,7 +662,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Globe className="inline w-3.5 h-3.5 mr-2 text-primary" /> Catégorie Sportive</label>
                         <select className="w-full h-16 rounded-2xl bg-white border border-transparent px-8 font-black text-lg outline-none focus:ring-4 ring-primary/20 appearance-none shadow-sm transition-all"
                            value={setup.category} onChange={e => setSetup({ ...setup, category: e.target.value, team_id: '' })}>
-                           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                           {ALLOWED_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                      </div>
                      <div className="space-y-3">
@@ -725,67 +777,99 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
 
           {currentStep === 'arbitres' && (
             <motion.div key="arbitres" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="p-12 space-y-10 flex-1">
-              <SectionTitle icon={<UserCheck className="w-5 h-5 text-primary" />} title="Corps d'Arbitrage" subtitle="Désignez les arbitres officiels de la rencontre" />
-              <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 bg-secondary/10 p-10 rounded-[3.5rem] border-2 border-dashed border-secondary">
-                {/* Arbitre Central */}
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Arbitre Central</label>
-                  <select
-                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
-                    value={selectedReferees.central_id || ''}
-                    onChange={e => setSelectedReferees({ ...selectedReferees, central_id: e.target.value ? Number(e.target.value) : null })}
-                  >
-                    <option value="">Non assigné / À désigner</option>
-                    {arbitres.filter(a => a.statut === 'actif').map(a => (
-                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade} • {a.role_principal})</option>
-                    ))}
-                  </select>
-                </div>
+              <SectionTitle icon={<UserCheck className="w-5 h-5 text-primary" />} title="Corps d'Arbitrage" subtitle="Désignez les arbitres officiels de la rencontre (chaque arbitre ne peut être sélectionné qu'une seule fois)" />
+              
+              <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 bg-secondary/10 p-10 rounded-[3.5rem] border-2 border-dashed border-secondary">
+                {[
+                  { key: 'central_id', label: 'Arbitre Central', icon: UserCheck, required: true },
+                  { key: 'assistant1_id', label: 'Arbitre Assistant 1', icon: UserCheck, required: false },
+                  { key: 'assistant2_id', label: 'Arbitre Assistant 2', icon: UserCheck, required: false },
+                  { key: 'fourth_id', label: '4ème Arbitre / VAR', icon: UserCheck, required: false },
+                ].map((slot) => {
+                  const currentSelectedId = selectedReferees[slot.key as keyof typeof selectedReferees];
+                  const selectedArbitre = currentSelectedId ? arbitres.find(a => a.id === currentSelectedId) : null;
+                  
+                  // Filter available referees: exclude ones assigned to OTHER slots
+                  const otherAssignedIds = Object.entries(selectedReferees)
+                    .filter(([k, val]) => k !== slot.key && val !== null)
+                    .map(([_, val]) => Number(val));
 
-                {/* Assistant 1 */}
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Arbitre Assistant 1</label>
-                  <select
-                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
-                    value={selectedReferees.assistant1_id || ''}
-                    onChange={e => setSelectedReferees({ ...selectedReferees, assistant1_id: e.target.value ? Number(e.target.value) : null })}
-                  >
-                    <option value="">Non assigné</option>
-                    {arbitres.filter(a => a.statut === 'actif').map(a => (
-                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade})</option>
-                    ))}
-                  </select>
-                </div>
+                  const availableReferees = arbitres.filter(a => a.statut === 'actif' && !otherAssignedIds.includes(a.id));
 
-                {/* Assistant 2 */}
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Arbitre Assistant 2</label>
-                  <select
-                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
-                    value={selectedReferees.assistant2_id || ''}
-                    onChange={e => setSelectedReferees({ ...selectedReferees, assistant2_id: e.target.value ? Number(e.target.value) : null })}
-                  >
-                    <option value="">Non assigné</option>
-                    {arbitres.filter(a => a.statut === 'actif').map(a => (
-                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade})</option>
-                    ))}
-                  </select>
-                </div>
+                  return (
+                    <div key={slot.key} className="space-y-3 bg-white p-6 rounded-3xl border border-secondary/40 shadow-md">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+                          <UserCheck className="w-4 h-4" /> {slot.label} {slot.required && '*'}
+                        </label>
+                        {selectedArbitre && (
+                          <span className="text-[9px] font-bold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                            ✅ Assigné
+                          </span>
+                        )}
+                      </div>
 
-                {/* 4ème Arbitre */}
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">4ème Arbitre / VAR</label>
-                  <select
-                    className="w-full h-16 rounded-2xl bg-white border border-transparent px-6 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all"
-                    value={selectedReferees.fourth_id || ''}
-                    onChange={e => setSelectedReferees({ ...selectedReferees, fourth_id: e.target.value ? Number(e.target.value) : null })}
-                  >
-                    <option value="">Non assigné</option>
-                    {arbitres.filter(a => a.statut === 'actif').map(a => (
-                      <option key={a.id} value={a.id}>{a.prenom} {a.nom} ({a.grade})</option>
-                    ))}
-                  </select>
-                </div>
+                      <select
+                        className="w-full h-14 rounded-2xl bg-slate-50 border border-slate-200 px-5 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm transition-all cursor-pointer"
+                        value={currentSelectedId || ''}
+                        onChange={e => setSelectedReferees({
+                          ...selectedReferees,
+                          [slot.key]: e.target.value ? Number(e.target.value) : null
+                        })}
+                      >
+                        <option value="">-- Sélectionner un arbitre --</option>
+                        {availableReferees.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.prenom} {a.nom} ({a.grade} • {a.role_principal})
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Selected Referee Profile Photo & Details Preview */}
+                      {selectedArbitre ? (
+                        <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-slate-900 to-indigo-900 text-white p-3.5 rounded-2xl shadow-lg border border-slate-700 mt-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl bg-white/10 border-2 border-primary/40 overflow-hidden flex items-center justify-center shrink-0 shadow-inner">
+                              <img
+                                src={(selectedArbitre.photo_url && selectedArbitre.photo_url !== 'null')
+                                  ? selectedArbitre.photo_url
+                                  : `https://ui-avatars.com/api/?name=${encodeURIComponent(`${selectedArbitre.prenom} ${selectedArbitre.nom}`)}&background=10b981&color=fff&size=200`}
+                                alt={selectedArbitre.nom}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="space-y-0.5">
+                              <p className="font-black text-xs uppercase tracking-tight text-white">
+                                {selectedArbitre.prenom} {selectedArbitre.nom}
+                              </p>
+                              <div className="flex items-center gap-1.5 flex-wrap text-[9px]">
+                                <span className="bg-emerald-500/80 text-white px-2 py-0.5 rounded-md font-bold uppercase">
+                                  {selectedArbitre.grade}
+                                </span>
+                                <span className="text-white/60 font-medium">
+                                  {selectedArbitre.role_principal}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedReferees({ ...selectedReferees, [slot.key]: null })}
+                            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-red-500/80 text-white flex items-center justify-center transition-all shrink-0"
+                            title="Retirer cet arbitre"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center text-[10px] text-slate-400 font-bold">
+                          Aucun arbitre sélectionné pour ce poste
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </motion.div>
           )}
@@ -804,7 +888,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                         ${isSelected ? 'bg-primary scale-110' : 'bg-secondary group-hover:scale-105'}`}>
                         <img src={(member.photo_url && member.photo_url !== 'null') ? member.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(member.full_name)}&background=random&color=fff&size=200`} className="w-full h-full object-cover" />
                       </div>
-                      <p className="font-black text-sm uppercase tracking-tighter truncate leading-none">{member.full_name}</p>
+                      <p className="font-black text-sm uppercase tracking-tighter leading-none">{member.full_name}</p>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-2 font-bold opacity-60">{member.role}</p>
                       {isSelected && (
                         <div className="absolute top-5 right-5 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg border-2 border-white"><Check className="w-4 h-4 text-white stroke-[3]" /></div>
@@ -1086,29 +1170,47 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                              </button>
                           </div>
                           <div className="space-y-2 overflow-y-auto max-h-[280px] custom-scrollbar pr-2">
-                             {opponentPositions.map((pos, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-secondary/20 hover:bg-white hover:shadow-md transition-all group">
-                                   <div className="flex items-center gap-3">
-                                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-[9px] font-black ${opponentLineup[idx] ? 'bg-primary' : 'bg-slate-400'}`}>
-                                         {pos.label}
+                             {opponentPositions.map((pos, idx) => {
+                                const jersey = opponentLineup[idx];
+                                const oppP = jersey ? opponentSquad.find(op => String(op.jersey_number) === String(jersey) || op.id === jersey) : null;
+                                const name = oppP ? oppP.full_name : (jersey ? `Joueur #${jersey}` : 'Vide');
+                                const avatar = jersey ? ((oppP?.photo_url && oppP.photo_url !== 'null') ? oppP.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=020617&color=fff&size=200`) : null;
+
+                                return (
+                                   <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-secondary/20 hover:bg-white hover:shadow-md transition-all group">
+                                      <div className="flex items-center gap-3 min-w-0">
+                                         {avatar ? (
+                                            <img src={avatar} className="w-8 h-8 rounded-full object-cover border border-slate-300 shadow-sm shrink-0" alt="" />
+                                         ) : (
+                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-[9px] font-black shrink-0 ${jersey ? 'bg-primary' : 'bg-slate-400'}`}>
+                                               {pos.label}
+                                            </div>
+                                         )}
+                                         <div className="min-w-0">
+                                           <p className="text-[10px] font-black uppercase text-slate-800 truncate leading-tight">{name}</p>
+                                           {jersey ? (
+                                             <p className="text-[8px] font-bold text-slate-400 uppercase">Poste {pos.label} • Maillot #{jersey}</p>
+                                           ) : (
+                                             <p className="text-[8px] font-bold text-slate-400 uppercase">Poste {pos.label}</p>
+                                           )}
+                                         </div>
                                       </div>
-                                      <span className="text-[10px] font-bold uppercase text-slate-500">{opponentLineup[idx] ? `Joueur #${opponentLineup[idx]}` : 'Vide'}</span>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                         {jersey && (
+                                            <button
+                                               onClick={() => updateOpponentJersey(idx, '')}
+                                               className="w-6 h-6 rounded-lg bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+                                            >
+                                               <X className="w-3 h-3" />
+                                            </button>
+                                         )}
+                                         <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${jersey ? 'bg-primary text-white shadow' : 'bg-white border-2 border-slate-200 text-slate-300'}`}>
+                                            {jersey || '-'}
+                                         </span>
+                                      </div>
                                    </div>
-                                   <div className="flex items-center gap-2">
-                                      {opponentLineup[idx] && (
-                                         <button
-                                            onClick={() => updateOpponentJersey(idx, '')}
-                                            className="w-6 h-6 rounded-lg bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
-                                         >
-                                            <X className="w-3 h-3" />
-                                         </button>
-                                      )}
-                                      <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${opponentLineup[idx] ? 'bg-primary text-white' : 'bg-white border-2 border-slate-200 text-slate-300'}`}>
-                                         {opponentLineup[idx] || '-'}
-                                      </span>
-                                   </div>
-                                </div>
-                             ))}
+                                );
+                             })}
                           </div>
                        </div>
                     </Card>
@@ -1126,6 +1228,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                         positions={opponentPositions} 
                         isOpponent 
                         opponentJerseyNumbers={opponentLineup} 
+                        opponentSquad={opponentSquad}
                         onDropPlayer={handleOpponentSwap}
                         onClearSlot={handleOpponentClear}
                      />
@@ -1283,9 +1386,10 @@ const Pitch: React.FC<{
   getPlayerById?: (id: string) => any; 
   isOpponent?: boolean; 
   opponentJerseyNumbers?: string[];
+  opponentSquad?: OpponentPlayer[];
   onDropPlayer?: (playerId: string, posIndex: number) => void;
   onClearSlot?: (posIndex: number) => void;
-}> = ({ positions, startingXI = [], getPlayerById, isOpponent, opponentJerseyNumbers, onDropPlayer, onClearSlot }) => {
+}> = ({ positions, startingXI = [], getPlayerById, isOpponent, opponentJerseyNumbers, opponentSquad = [], onDropPlayer, onClearSlot }) => {
   const {
     isDragging,
     draggedItem,
@@ -1356,6 +1460,16 @@ const Pitch: React.FC<{
         const displayTop = isOpponent ? (100 - parseFloat(pos.top)) + '%' : pos.top;
         const displayLeft = isOpponent ? (100 - parseFloat(pos.left)) + '%' : pos.left;
         const oppJersey = opponentJerseyNumbers?.[idx] || '';
+        const oppPlayer = (isOpponent && oppJersey) 
+          ? opponentSquad.find(op => String(op.jersey_number) === String(oppJersey) || op.id === oppJersey) 
+          : null;
+        const oppName = oppPlayer ? oppPlayer.full_name : (oppJersey ? `Joueur #${oppJersey}` : pos.label);
+        const oppAvatar = (isOpponent && oppJersey)
+          ? ((oppPlayer?.photo_url && oppPlayer.photo_url !== 'null') 
+              ? oppPlayer.photo_url 
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(oppName)}&background=020617&color=fff&size=200`)
+          : null;
+
         const isBeingDragged = draggedItem?.id === (p?.id || '');
 
         return (
@@ -1431,7 +1545,14 @@ const Pitch: React.FC<{
                   <Badge className="absolute -top-1 -right-1 bg-black text-white h-6 w-6 rounded-full flex items-center justify-center p-0 border-2 border-white text-[10px] font-black">{p.jersey_number}</Badge>
                  </>
                ) : (isOpponent && oppJersey) ? (
-                  <span className="text-xl font-black text-white">{oppJersey}</span>
+                 <>
+                  <img 
+                    src={oppAvatar!} 
+                    className="w-full h-full rounded-full object-cover p-0.5 shadow-md" 
+                    alt=""
+                  />
+                  <Badge className="absolute -top-1 -right-1 bg-slate-900 text-white h-6 w-6 rounded-full flex items-center justify-center p-0 border-2 border-white text-[10px] font-black shadow-md">{oppJersey}</Badge>
+                 </>
                ) : (
                   <span className="text-[10px] font-black text-white/40">{pos.label}</span>
                )}
@@ -1450,9 +1571,9 @@ const Pitch: React.FC<{
           </div>
 
           <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase backdrop-blur-md border shadow-lg transition-all
-            ${p ? 'bg-black/80 text-white border-white/20 scale-105 max-w-[120px]' : (isOpponent && oppJersey) ? 'bg-slate-900/80 text-white border-white/10 shadow-xl max-w-[120px]' : 'bg-white/10 text-white/30 border-white/10 max-w-[90px]'}`}
-            title={p ? p.full_name : (isOpponent && oppJersey) ? `Adversaire #${oppJersey}` : pos.label}>
-            {p ? (p.full_name.length > 12 ? p.full_name.substring(0, 12) + '...' : p.full_name) : (isOpponent && oppJersey) ? `#${oppJersey}` : pos.label}
+            ${p ? 'bg-black/80 text-white border-white/20 scale-105 max-w-[120px]' : (isOpponent && oppJersey) ? 'bg-slate-900/90 text-white border-white/20 scale-105 max-w-[130px]' : 'bg-white/10 text-white/30 border-white/10 max-w-[90px]'}`}
+            title={p ? p.full_name : (isOpponent && oppJersey) ? oppName : pos.label}>
+            {p ? (p.full_name.length > 12 ? p.full_name.substring(0, 12) + '...' : p.full_name) : (isOpponent && oppJersey) ? (oppName.length > 13 ? oppName.substring(0, 13) + '...' : oppName) : pos.label}
           </div>
         </motion.div>
       );

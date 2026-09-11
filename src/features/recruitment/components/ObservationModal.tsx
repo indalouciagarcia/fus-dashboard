@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { ScoutObservation, TrialCandidate, Scout } from '../types/recruitment';
 import { X, FileText, Sparkles, Video, FileCheck, Shield, CheckCircle2 } from 'lucide-react';
+import { UNIFIED_POSITION_OPTIONS, formatUnifiedPosition } from '../../../constants/positions';
 
 interface ObservationModalProps {
   isOpen: boolean;
@@ -23,7 +24,7 @@ export const ObservationModal: React.FC<ObservationModalProps> = ({
   const [matchName, setMatchName] = useState('');
   const [opponentName, setOpponentName] = useState('');
   const [location, setLocation] = useState('');
-  const [observedPosition, setObservedPosition] = useState(candidate.primary_position);
+  const [observedPosition, setObservedPosition] = useState(formatUnifiedPosition(candidate.primary_position));
   const [minutesObserved, setMinutesObserved] = useState(90);
   const [generalImpression, setGeneralImpression] = useState('');
   const [strengths, setStrengths] = useState('');
@@ -135,13 +136,18 @@ export const ObservationModal: React.FC<ObservationModalProps> = ({
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Poste Observé</label>
-              <input
-                type="text"
+              <label className="block text-xs font-medium text-slate-700 mb-1">Poste Observé *</label>
+              <select
                 value={observedPosition}
                 onChange={(e) => setObservedPosition(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs"
-              />
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white font-bold text-slate-800 cursor-pointer"
+              >
+                {UNIFIED_POSITION_OPTIONS.map(p => (
+                  <option key={p.code} value={p.full}>
+                    {p.full}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Minutes Jouées</label>

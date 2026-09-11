@@ -6,12 +6,15 @@ export interface AuthState {
   email: string | null;
   isAuthenticated: boolean;
   user: UserProfile | null;
+  roles: string[];
+  userCategories: string[];
   loading: boolean;
 }
 
 interface PermissionsContextType {
   authState: AuthState;
   can: (action: string, scopeType?: string, scopeId?: string) => boolean;
+  canManageCategory: (category: string | null | undefined) => boolean;
   logout: () => Promise<void>;
 }
 
@@ -27,6 +30,8 @@ const EMPTY_STATE: AuthState = {
   email: null,
   isAuthenticated: false,
   user: null,
+  roles: [],
+  userCategories: [],
   loading: true,
 };
 
@@ -41,10 +46,22 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         .eq('id', userId)
         .single();
 
+      const { data: catAssignments } = await supabase
+        .from('user_category_assignments')
+        .select('category')
+        .eq('user_id', userId);
+
+      const roles: string[] = [];
+      if (profile?.system_role) {
+        roles.push(profile.system_role);
+      }
+
       setAuthState({
         email,
         isAuthenticated: true,
         user: (profile as UserProfile) ?? null,
+        roles,
+        userCategories: catAssignments?.map(c => c.category) || [],
         loading: false,
       });
     } catch (err) {
@@ -53,6 +70,8 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         email,
         isAuthenticated: true,
         user: null,
+        roles: [],
+        userCategories: [],
         loading: false,
       });
     }
@@ -92,8 +111,19 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return true; 
   };
 
+  const canManageCategory = (category: string | null | undefined): boolean => {
+    const role = authState.user?.system_role?.toLowerCase() || '';
+    if (role === 'super_admin' || role === 'admin') return true;
+    
+    if (!category) return false;
+    const normCategory = category.trim().toUpperCase();
+    return authState.userCategories.some(c => 
+      c.trim().toUpperCase() === normCategory || normCategory.includes(c.trim().toUpperCase())
+    );
+  };
+
   return (
-    <PermissionsContext.Provider value={{ authState, can, logout }}>
+    <PermissionsContext.Provider value={{ authState, can, canManageCategory, logout }}>
       {children}
     </PermissionsContext.Provider>
   );

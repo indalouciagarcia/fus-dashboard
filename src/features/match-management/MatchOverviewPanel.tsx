@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeftRight,
@@ -22,71 +22,72 @@ import {
   MapPin,
   Video,
   UserCheck,
+  Search,
+  RefreshCw,
+  ChevronDown,
+  Crosshair,
+  Footprints,
+  Maximize2,
+  Sparkles,
+  Radio,
+  Timer
 } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { PlayerPitchHoverCard, type PlayerPitchStats } from './components/PlayerPitchHoverCard';
 import { useMatchEvents } from '../../hooks/useMatchEvents';
 import { usePlayers } from '../../hooks/usePlayers';
 import { useArbitres } from '../../hooks/useArbitres';
+import { useCompetitions } from '../../hooks/useCompetitions';
+import { useStaff } from '../../hooks/useStaff';
 import { matchService } from '../../services/matchService';
-import { supabase } from '../../lib/supabase';
 import type { Match } from '../../types';
 
 interface MatchOverviewPanelProps {
   match: Match;
-  mainClub: any;
-  opponentClubs: any[];
-  getOpponentName: (id: string) => string;
-  onOrchestrate: () => void;
-  onStats: () => void;
+  allMatches?: Match[];
+  onSelectMatch?: (match: Match) => void;
+  mainClub?: any;
+  opponentClubs?: any[];
+  getOpponentName?: (id: string) => string;
+  onOrchestrate?: () => void;
+  onStats?: () => void;
   onBack: () => void;
 }
 
+// Tactical Formation Coordinates
 const getFormationPositions = (formation: string) => {
   const roles: Record<string, { top: string; left: string; label: string }[]> = {
     '4-3-3': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '15%', label: 'LB' }, { top: '76%', left: '36%', label: 'CB' }, { top: '76%', left: '64%', label: 'CB' }, { top: '72%', left: '85%', label: 'RB' },
-      { top: '50%', left: '32%', label: 'CM' }, { top: '58%', left: '50%', label: 'CDM' }, { top: '50%', left: '68%', label: 'CM' },
-      { top: '22%', left: '20%', label: 'LW' }, { top: '12%', left: '50%', label: 'ST' }, { top: '22%', left: '80%', label: 'RW' },
+      { top: '92%', left: '50%', label: 'GK' },
+      { top: '75%', left: '16%', label: 'LB' }, { top: '78%', left: '38%', label: 'CB' }, { top: '78%', left: '62%', label: 'CB' }, { top: '75%', left: '84%', label: 'RB' },
+      { top: '54%', left: '30%', label: 'CM' }, { top: '62%', left: '50%', label: 'CDM' }, { top: '54%', left: '70%', label: 'CM' },
+      { top: '24%', left: '20%', label: 'LW' }, { top: '15%', left: '50%', label: 'ST' }, { top: '24%', left: '80%', label: 'RW' },
     ],
     '4-4-2': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '15%', label: 'LB' }, { top: '76%', left: '36%', label: 'CB' }, { top: '76%', left: '64%', label: 'CB' }, { top: '72%', left: '85%', label: 'RB' },
-      { top: '48%', left: '12%', label: 'LM' }, { top: '52%', left: '36%', label: 'CM' }, { top: '52%', left: '64%', label: 'CM' }, { top: '48%', left: '88%', label: 'RM' },
-      { top: '18%', left: '38%', label: 'ST' }, { top: '18%', left: '62%', label: 'ST' },
-    ],
-    '3-5-2': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '74%', left: '28%', label: 'CB' }, { top: '78%', left: '50%', label: 'CB' }, { top: '74%', left: '72%', label: 'CB' },
-      { top: '50%', left: '12%', label: 'LM' }, { top: '54%', left: '34%', label: 'CM' }, { top: '60%', left: '50%', label: 'CDM' }, { top: '54%', left: '66%', label: 'CM' }, { top: '50%', left: '88%', label: 'RM' },
-      { top: '18%', left: '38%', label: 'ST' }, { top: '18%', left: '62%', label: 'ST' },
+      { top: '92%', left: '50%', label: 'GK' },
+      { top: '75%', left: '16%', label: 'LB' }, { top: '78%', left: '38%', label: 'CB' }, { top: '78%', left: '62%', label: 'CB' }, { top: '75%', left: '84%', label: 'RB' },
+      { top: '50%', left: '16%', label: 'LM' }, { top: '54%', left: '38%', label: 'CM' }, { top: '54%', left: '62%', label: 'CM' }, { top: '50%', left: '84%', label: 'RM' },
+      { top: '18%', left: '36%', label: 'ST' }, { top: '18%', left: '64%', label: 'ST' },
     ],
     '4-2-3-1': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '15%', label: 'LB' }, { top: '76%', left: '36%', label: 'CB' }, { top: '76%', left: '64%', label: 'CB' }, { top: '72%', left: '85%', label: 'RB' },
-      { top: '60%', left: '36%', label: 'CDM' }, { top: '60%', left: '64%', label: 'CDM' },
-      { top: '42%', left: '20%', label: 'LAM' }, { top: '34%', left: '50%', label: 'CAM' }, { top: '42%', left: '80%', label: 'RAM' },
-      { top: '12%', left: '50%', label: 'ST' },
+      { top: '92%', left: '50%', label: 'GK' },
+      { top: '75%', left: '16%', label: 'LB' }, { top: '78%', left: '38%', label: 'CB' }, { top: '78%', left: '62%', label: 'CB' }, { top: '75%', left: '84%', label: 'RB' },
+      { top: '62%', left: '36%', label: 'CDM' }, { top: '62%', left: '64%', label: 'CDM' },
+      { top: '42%', left: '20%', label: 'LAM' }, { top: '35%', left: '50%', label: 'CAM' }, { top: '42%', left: '80%', label: 'RAM' },
+      { top: '15%', left: '50%', label: 'ST' },
+    ],
+    '3-5-2': [
+      { top: '92%', left: '50%', label: 'GK' },
+      { top: '76%', left: '26%', label: 'CB' }, { top: '80%', left: '50%', label: 'CB' }, { top: '76%', left: '74%', label: 'CB' },
+      { top: '52%', left: '14%', label: 'LWB' }, { top: '56%', left: '36%', label: 'CM' }, { top: '62%', left: '50%', label: 'CDM' }, { top: '56%', left: '64%', label: 'CM' }, { top: '52%', left: '86%', label: 'RWB' },
+      { top: '18%', left: '36%', label: 'ST' }, { top: '18%', left: '64%', label: 'ST' },
     ],
     '5-3-2': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '12%', label: 'LWB' }, { top: '75%', left: '30%', label: 'CB' }, { top: '78%', left: '50%', label: 'CB' }, { top: '75%', left: '70%', label: 'CB' }, { top: '72%', left: '88%', label: 'RWB' },
-      { top: '52%', left: '32%', label: 'CM' }, { top: '56%', left: '50%', label: 'CM' }, { top: '52%', left: '68%', label: 'CM' },
-      { top: '18%', left: '38%', label: 'ST' }, { top: '18%', left: '62%', label: 'ST' },
-    ],
-    '3-4-3': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '74%', left: '28%', label: 'CB' }, { top: '78%', left: '50%', label: 'CB' }, { top: '74%', left: '72%', label: 'CB' },
-      { top: '52%', left: '12%', label: 'LM' }, { top: '56%', left: '36%', label: 'CM' }, { top: '56%', left: '64%', label: 'CM' }, { top: '52%', left: '88%', label: 'RM' },
-      { top: '25%', left: '18%', label: 'LW' }, { top: '12%', left: '50%', label: 'ST' }, { top: '25%', left: '82%', label: 'RW' },
-    ],
-    '4-1-4-1': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '15%', label: 'LB' }, { top: '76%', left: '36%', label: 'CB' }, { top: '76%', left: '64%', label: 'CB' }, { top: '72%', left: '85%', label: 'RB' },
-      { top: '62%', left: '50%', label: 'CDM' },
-      { top: '42%', left: '12%', label: 'LM' }, { top: '45%', left: '34%', label: 'CM' }, { top: '45%', left: '66%', label: 'CM' }, { top: '42%', left: '88%', label: 'RM' },
-      { top: '12%', left: '50%', label: 'ST' },
+      { top: '92%', left: '50%', label: 'GK' },
+      { top: '74%', left: '12%', label: 'LWB' }, { top: '78%', left: '30%', label: 'CB' }, { top: '80%', left: '50%', label: 'CB' }, { top: '78%', left: '70%', label: 'CB' }, { top: '74%', left: '88%', label: 'RWB' },
+      { top: '52%', left: '32%', label: 'CM' }, { top: '58%', left: '50%', label: 'CM' }, { top: '52%', left: '68%', label: 'CM' },
+      { top: '18%', left: '36%', label: 'ST' }, { top: '18%', left: '64%', label: 'ST' },
     ],
   };
   return roles[formation] || roles['4-3-3'];
@@ -99,917 +100,1071 @@ const getInitials = (name: string) => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-const getDefaultFormation = (startingXI: string[]) => {
-  return startingXI.filter(Boolean).length >= 11 ? '4-4-2' : '4-3-3';
-};
+const StatBar: React.FC<{ label: string; home: number; away: number; icon?: string; unit?: string }> = ({
+  label, home, away, icon, unit = ''
+}) => {
+  const total = (home + away) || 0;
+  const homePercent = total === 0 ? 50 : Math.round((home / total) * 100);
+  const awayPercent = total === 0 ? 50 : 100 - homePercent;
 
-const EventIcon: React.FC<{ type: string }> = ({ type }) => {
-  switch (type) {
-    case 'goal': return <span className="text-base">⚽</span>;
-    case 'own_goal': return <span className="text-base">⚽</span>;
-    case 'yellow_card': return <div className="w-3.5 h-4 rounded-sm bg-yellow-400 inline-block" />;
-    case 'red_card': return <div className="w-3.5 h-4 rounded-sm bg-red-500 inline-block" />;
-    case 'substitution': return <ArrowLeftRight className="w-4 h-4 text-blue-500" />;
-    case 'assist': return <Star className="w-4 h-4 text-amber-500" />;
-    case 'penalty': return <Target className="w-4 h-4 text-purple-500" />;
-    case 'injury': return <AlertTriangle className="w-4 h-4 text-orange-500" />;
-    default: return <Zap className="w-4 h-4 text-slate-400" />;
-  }
-};
-
-const StatBar: React.FC<{ label: string; home: number; away: number; unit?: string }> = ({ label, home, away, unit = '' }) => {
-  const total = (home + away) || 1;
-  const homePercent = Math.round((home / total) * 100);
-  const awayPercent = 100 - homePercent;
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
-        <span className="text-primary tabular-nums w-10">{home}{unit}</span>
-        <span className="text-center flex-1">{label}</span>
-        <span className="text-slate-400 tabular-nums w-10 text-right">{away}{unit}</span>
+    <div className="space-y-1.5 py-2 border-b border-slate-100 last:border-0">
+      <div className="flex items-center justify-between text-[11px] font-bold">
+        <span className="text-slate-900 font-black tabular-nums w-8 text-left text-sm">{home}{unit}</span>
+        <span className="text-slate-600 text-[10.5px] tracking-wider text-center flex-1 font-black flex items-center justify-center gap-1.5">
+          {icon && <span className="text-sm">{icon}</span>}
+          {label}
+        </span>
+        <span className="text-slate-900 font-black tabular-nums w-8 text-right text-sm">{away}{unit}</span>
       </div>
-      <div className="flex items-center gap-1.5 h-2">
+      <div className="flex items-center gap-2 h-2.5">
         <div className="flex-1 bg-slate-100 rounded-full h-full flex justify-end overflow-hidden">
-           <div className="bg-primary rounded-full h-full transition-all duration-700" style={{ width: `${homePercent}%` }} />
+          <div
+            className="bg-[#4d94ff] rounded-full h-full transition-all duration-700"
+            style={{ width: `${total === 0 ? (home > 0 ? 100 : 0) : homePercent}%` }}
+          />
         </div>
         <div className="flex-1 bg-slate-100 rounded-full h-full flex justify-start overflow-hidden">
-           <div className="bg-slate-400 rounded-full h-full transition-all duration-700" style={{ width: `${awayPercent}%` }} />
+          <div
+            className="bg-[#e94e77] rounded-full h-full transition-all duration-700"
+            style={{ width: `${total === 0 ? (away > 0 ? 100 : 0) : awayPercent}%` }}
+          />
         </div>
       </div>
     </div>
   );
 };
 
-
-const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
-  match, mainClub, opponentClubs, getOpponentName, onOrchestrate, onStats, onBack,
+export const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
+  match,
+  allMatches = [],
+  onSelectMatch,
+  mainClub,
+  opponentClubs = [],
+  getOpponentName,
+  onOrchestrate,
+  onStats,
+  onBack,
 }) => {
-  const { events } = useMatchEvents(match.id);
+  const { events } = useMatchEvents(match?.id);
   const { players } = usePlayers();
   const { arbitres } = useArbitres();
+  const { leagues, stadiums } = useCompetitions();
+  const { staff } = useStaff();
+
   const [matchStats, setMatchStats] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'live' | 'stats' | 'lineup' | 'video'>('live');
-  const [statsSubTab, setStatsSubTab] = useState<'equipe' | 'joueurs'>('equipe');
-  const [lineupViewMode, setLineupViewMode] = useState<'mine' | 'opponent' | 'both'>('mine');
-  const [reactionCounts, setReactionCounts] = useState<{fire: number, thumbsup: number, thumbsdown: number}>({ fire: 0, thumbsup: 0, thumbsdown: 0 });
+  const [playerMatchStats, setPlayerMatchStats] = useState<any[]>([]);
+  const [matchLineupPlayers, setMatchLineupPlayers] = useState<any[]>([]);
+  const [hoveredPlayerKey, setHoveredPlayerKey] = useState<string | null>(null);
+  const [feedTab, setFeedTab] = useState<'play' | 'narration'>('play');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const getRefereeName = (id?: number | string | null) => {
-    if (!id) return null;
-    const found = arbitres.find(a => String(a.id) === String(id));
-    return found ? `${found.prenom} ${found.nom}` : null;
-  };
+  // Fetch DB Match Stats & Lineup details
+  useEffect(() => {
+    if (match?.id) {
+      matchService.getMatchStats(match.id).then(setMatchStats).catch(() => setMatchStats(null));
+      matchService.getPlayerMatchStats(match.id).then(setPlayerMatchStats).catch(() => setPlayerMatchStats([]));
+      matchService.getMatchLineup(match.id).then(setMatchLineupPlayers).catch(() => setMatchLineupPlayers([]));
+    }
+  }, [match?.id]);
 
-  const centralRefName = getRefereeName((match as any).referee_central_id || (match as any).referees_assigned?.central_id);
-  const assistant1RefName = getRefereeName((match as any).referee_assistant1_id || (match as any).referees_assigned?.assistant1_id);
-  const assistant2RefName = getRefereeName((match as any).referee_assistant2_id || (match as any).referees_assigned?.assistant2_id);
-  const fourthRefName = getRefereeName((match as any).referee_fourth_id || (match as any).referees_assigned?.fourth_id);
+  if (!match) {
+    return (
+      <div className="py-20 text-center space-y-3 bg-[#131d27] rounded-3xl text-white">
+        <p className="text-slate-400 font-bold text-sm">Sélectionnez un match pour voir les détails</p>
+        <Button onClick={onBack} size="sm" variant="outline">Retour</Button>
+      </div>
+    );
+  }
 
+  // Real Database Metadata
+  const mainClubName = mainClub?.name || mainClub?.club_name || 'FUS Rabat';
+  const mainClubLogo = mainClub?.logo_url && mainClub.logo_url !== 'null' ? mainClub.logo_url : null;
   const opponent = opponentClubs.find(c => c.id === match.opponent_id);
-  const opponentName = getOpponentName(match.opponent_id);
-  const homeScore = match.is_home ? match.score_home : match.score_away;
-  const awayScore = match.is_home ? match.score_away : match.score_home;
+  const opponentName = (getOpponentName && match.opponent_id ? getOpponentName(match.opponent_id) : '') || opponent?.name || (match as any).opponent_name || 'Adversaire';
+  const opponentLogo = opponent?.logo_url && opponent.logo_url !== 'null' ? opponent.logo_url : null;
+
+  const homeScore = match.is_home ? (match.score_home ?? 0) : (match.score_away ?? 0);
+  const awayScore = match.is_home ? (match.score_away ?? 0) : (match.score_home ?? 0);
   const isLive = match.status === 'live';
   const isFinished = match.status === 'finished';
 
-  const startingXI: string[] = match.lineup?.startingXI || [];
-  const subs: string[] = match.lineup?.substitutes || [];
-  const formationKey = match.formation || match.lineup?.formation || getDefaultFormation(startingXI);
-  const opponentStartingXI: string[] = match.opponent_lineup || Array(11).fill('');
+  const league = leagues.find(l => l.id === match.league_id);
+  const isFriendly = !match.league_id || league?.name?.toLowerCase().includes('amical') || match.category?.toLowerCase().includes('amical') || match.notes?.toLowerCase().includes('amical');
+  const leagueName = isFriendly ? 'Match Amical' : (league?.name || 'Compétition Officielle');
+  const stadium = stadiums.find(s => s.id === match.stadium_id);
+  const stadiumName = stadium?.name || match.stadium || mainClub?.stadium || 'Stade Prince Moulay El Hassan';
+
+  const startingXI: string[] = Array.isArray(match.lineup?.startingXI) ? match.lineup.startingXI : [];
+  const subs: string[] = Array.isArray(match.lineup?.substitutes) ? match.lineup.substitutes : [];
+  const formationKey = match.formation || match.lineup?.formation || '4-3-3';
+  const opponentStartingXI: string[] = Array.isArray(match.opponent_lineup) ? match.opponent_lineup : [];
+  const opponentSubs: string[] = Array.isArray(match.opponent_subs) ? match.opponent_subs : [];
   const opponentFormationKey = match.opponent_formation || '4-3-3';
 
-  const pitchNodes: {
-    id: string;
-    top: string;
-    left: string;
-    name: string;
-    photoUrl: string | null;
-    jerseyNumber: string | number;
-    isOpponent: boolean;
-    label: string;
-    sizeClass: string;
-    textSizeClass: string;
-  }[] = [];
+  // Helper for real player info (handles both string ID and raw object)
+  const getPlayer = (rawPid?: any) => {
+    if (!rawPid) return null;
+    const pid = typeof rawPid === 'object' ? (rawPid.id || rawPid.player_id) : rawPid;
+    if (!pid) return null;
+    return (players || []).find(pl => String(pl.id) === String(pid)) || null;
+  };
 
-  const isCompact = lineupViewMode === 'both';
-  const nodeSize = isCompact ? 'w-8 h-8 md:w-9 md:h-9' : 'w-10 h-10 md:w-12 md:h-12';
-  const labelSize = isCompact ? 'text-[7px] px-1 py-0.5 mt-0.5' : 'text-[8px] md:text-[9px] px-2 py-0.5 mt-1';
-
-  if (lineupViewMode === 'mine' || lineupViewMode === 'both') {
-    const minePositions = getFormationPositions(formationKey);
-    minePositions.forEach((pos, idx) => {
-      const pid = startingXI[idx];
-      const p = pid ? players.find(pl => pl.id === pid) : null;
-      
-      const topPct = parseFloat(pos.top);
-      const leftPct = parseFloat(pos.left);
-      
-      const topVal = lineupViewMode === 'both' 
-        ? `${50 + (topPct / 2)}%`
-        : `${topPct}%`;
-      const leftVal = `${leftPct}%`;
-
-      pitchNodes.push({
-        id: `mine-${idx}-${pid || 'empty'}`,
-        top: topVal,
-        left: leftVal,
-        name: p ? (p.full_name || p.name || '—') : pos.label,
-        photoUrl: p && p.photo_url && p.photo_url !== 'null' ? p.photo_url : null,
-        jerseyNumber: p ? (p.jersey_number ?? '') : '',
-        isOpponent: false,
-        label: pos.label,
-        sizeClass: nodeSize,
-        textSizeClass: labelSize
-      });
-    });
-  }
-
-  if (lineupViewMode === 'opponent' || lineupViewMode === 'both') {
-    const opponentPositions = getFormationPositions(opponentFormationKey);
-    opponentPositions.forEach((pos, idx) => {
-      const jersey = opponentStartingXI[idx] || '';
-      
-      const topPct = parseFloat(pos.top);
-      const leftPct = parseFloat(pos.left);
-      
-      let topVal = '';
-      let leftVal = '';
-      
-      if (lineupViewMode === 'both') {
-        topVal = `${(100 - topPct) / 2}%`;
-        leftVal = `${100 - leftPct}%`;
-      } else {
-        topVal = `${topPct}%`;
-        leftVal = `${leftPct}%`;
+  const getPlayerShortName = (rawPid?: any) => {
+    if (!rawPid) return 'Joueur';
+    if (typeof rawPid === 'object') {
+      const nm = rawPid.last_name || rawPid.full_name || rawPid.name || rawPid.first_name || '';
+      if (nm) {
+        const parts = String(nm).trim().split(' ');
+        return parts[parts.length - 1]?.substring(0, 12) || 'Joueur';
       }
-
-      pitchNodes.push({
-        id: `opponent-${idx}-${jersey || 'empty'}`,
-        top: topVal,
-        left: leftVal,
-        name: jersey ? `Adversaire #${jersey}` : pos.label,
-        photoUrl: opponent?.logo_url || null,
-        jerseyNumber: jersey,
-        isOpponent: true,
-        label: pos.label,
-        sizeClass: nodeSize,
-        textSizeClass: labelSize
-      });
-    });
-  }
-
-  useEffect(() => {
-    if (match.id) {
-      matchService.getMatchStats(match.id).then(setMatchStats).catch(() => setMatchStats(null));
-      
-      // Fetch reactions
-      supabase.from('match_reactions').select('reaction').eq('match_id', match.id).then(({ data }) => {
-        const counts = { fire: 0, thumbsup: 0, thumbsdown: 0 };
-        data?.forEach((r: any) => { if (r.reaction in counts) (counts as any)[r.reaction]++; });
-        setReactionCounts(counts);
-      });
-      
-      const ch = supabase.channel(`rx_${match.id}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'match_reactions', filter: `match_id=eq.${match.id}` }, (payload) => {
-          const r = payload.new.reaction;
-          if (r === 'fire' || r === 'thumbsup' || r === 'thumbsdown') {
-            setReactionCounts(prev => ({ ...prev, [r]: prev[r] + 1 }));
-          }
-        }).subscribe();
-      return () => { supabase.removeChannel(ch); };
     }
-  }, [match.id]);
-
-  const getPlayerShortName = (pid: string) => {
-    const p = players.find(pl => pl.id === pid);
-    if (!p) return '—';
-    const name = p.name || p.first_name || '';
+    const p = getPlayer(rawPid);
+    if (!p) return 'Joueur';
+    const name = p.last_name || p.name || p.first_name || '';
     const parts = name.trim().split(' ');
-    return parts[parts.length - 1]?.substring(0, 7) || '—';
+    return parts[parts.length - 1]?.substring(0, 12) || 'Joueur';
   };
 
-  const getEventLabel = (type: string) => ({
-    goal: 'But', own_goal: 'CSC', yellow_card: 'Carton J.', red_card: 'Carton R.',
-    substitution: 'Changement', assist: 'Passe Déc.', penalty: 'Penalty', injury: 'Blessure',
-    corner: 'Corner', foul: 'Faute', offside: 'Hors-Jeu', var: 'VAR',
-  }[type] || type);
+  // Whether FUS plays at home (from DB)
+  const isHome = match.is_home ?? true;
 
-  const getBgGradient = () => {
-    if (isLive) return 'from-red-700 via-red-800 to-red-900';
-    if (isFinished) return 'from-slate-700 via-slate-800 to-slate-900';
-    return 'from-blue-800 via-blue-900 to-indigo-900';
+  // Real event stats directly from Supabase match_events & match
+  const ourPlayerIds = new Set(
+    [...startingXI, ...subs].map(item => (typeof item === 'object' ? (item.id || item.player_id) : item)).filter(Boolean)
+  );
+
+  // 1. Buts
+  const ourGoalEvents = (events || []).filter(e => (e.type === 'goal' || e.type === 'penalty') && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const advGoalEvents = (events || []).filter(e => (e.type === 'goal' || e.type === 'penalty') && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const ourGoals = Math.max(isHome ? homeScore : awayScore, ourGoalEvents);
+  const advGoals = Math.max(isHome ? awayScore : homeScore, advGoalEvents);
+
+  // 2. Assists (Passes décisives)
+  const ourAssists = (events || []).filter(e => e.type === 'assist' && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const advAssists = (events || []).filter(e => e.type === 'assist' && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+
+  // 3. Changements (Remplacements)
+  const ourSubsCount = (events || []).filter(e => e.type === 'substitution' && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const advSubsCount = (events || []).filter(e => e.type === 'substitution' && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+
+  // 4. Cartons Jaunes
+  const ourYellows = (events || []).filter(e => e.type === 'yellow_card' && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const advYellows = (events || []).filter(e => e.type === 'yellow_card' && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+
+  // 5. Cartons Rouges
+  const ourReds = (events || []).filter(e => e.type === 'red_card' && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const advReds = (events || []).filter(e => e.type === 'red_card' && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+
+  // Real Head Coach from Staff
+  const headCoach = (staff || []).find(s => (s.role || '').toLowerCase().includes('entraîneur') || (s.role || '').toLowerCase().includes('coach')) || staff[0];
+  const headCoachName = headCoach ? (headCoach.full_name || headCoach.name || 'Staff Technique') : 'Staff Technique FUS';
+
+  // Real Timeline Events Feed
+  const timelineEvents = useMemo(() => {
+    if (events && events.length > 0) {
+      return [...events].sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0)).map(e => {
+        const rawPid = typeof e.playerId === 'object' ? (e.playerId?.id || e.playerId) : e.playerId;
+        const isOur = rawPid ? ourPlayerIds.has(rawPid) : true;
+        const playerObj = getPlayer(rawPid);
+        const pName = playerObj ? (playerObj.last_name || playerObj.name || playerObj.first_name) : (typeof e.player === 'string' ? e.player : 'Joueur');
+
+        let title = 'Événement';
+        let desc = `Action enregistrée à la ${e.minute || 0}'`;
+        if (e.type === 'goal') {
+          title = '⚽ BUT !';
+          desc = `Superbe but inscrit par ${pName} à la ${e.minute}'`;
+        } else if (e.type === 'yellow_card') {
+          title = '🟨 Carton Jaune';
+          desc = `Avertissement arbitral adressé à ${pName}`;
+        } else if (e.type === 'red_card') {
+          title = '🟥 Carton Rouge';
+          desc = `Expulsion directe de ${pName} à la ${e.minute}'`;
+        } else if (e.type === 'substitution') {
+          const inPlayer = getPlayerShortName(e.relatedPlayerId);
+          title = '🔁 Changement';
+          desc = `Entrée de ${inPlayer} à la place de ${pName}`;
+        } else if (e.type === 'assist') {
+          title = '⭐ Passe Décisive';
+          desc = `Passe décisive délivrée par ${pName}`;
+        } else if (e.type === 'penalty') {
+          title = '🎯 Penalty';
+          desc = `Tir au but converti par ${pName}`;
+        }
+
+        return {
+          id: e.id,
+          minute: e.minute || 0,
+          type: e.type,
+          player: String(pName),
+          photo: playerObj?.photo_url && playerObj.photo_url !== 'null' ? playerObj.photo_url : null,
+          title,
+          desc: typeof e.commentary === 'string' ? e.commentary : desc,
+          isLeft: isOur,
+        };
+      });
+    }
+    return [];
+  }, [events, players, ourPlayerIds]);
+
+  // Real Event dots along the 0' - 90' timeline bar
+  const timelineBarDots = useMemo(() => {
+    return (events || []).slice(0, 10).map((e: any) => {
+      const min = Math.min(90, Math.max(0, e.minute || 0));
+      const leftPercent = `${(min / 90) * 100}%`;
+      let colorClass = 'bg-[#4d94ff]';
+      if (e.type === 'goal') colorClass = 'bg-[#2ecc71] ring-2 ring-emerald-300';
+      else if (e.type === 'yellow_card') colorClass = 'bg-[#f1c40f]';
+      else if (e.type === 'red_card') colorClass = 'bg-[#e74c3c]';
+      else if (e.type === 'substitution') colorClass = 'bg-[#9b59b6]';
+      return { minute: min, left: leftPercent, color: colorClass };
+    });
+  }, [events]);
+
+  // Real Upcoming Matches List from DB
+  const upcomingMatches = useMemo(() => {
+    const list = (allMatches || []).filter(m => m.id !== match.id);
+    return list.slice(0, 4);
+  }, [allMatches, match.id]);
+
+
+
+
+  // Current match minute
+  const currentMatchMinute = isFinished ? 90 : isLive ? 70 : 0;
+
+  const getHorizontalAlign = (leftStr: string): 'left' | 'center' | 'right' => {
+    const leftNum = parseFloat(leftStr);
+    if (leftNum < 45) return 'left';
+    if (leftNum > 55) return 'right';
+    return 'center';
   };
 
-  const getStatusInfo = () => {
-    if (isLive) return { text: '⬤ EN DIRECT', cls: 'bg-red-500 animate-pulse' };
-    if (isFinished) return { text: 'TERMINÉ', cls: 'bg-slate-500' };
-    return { text: '⏱ À VENIR', cls: 'bg-emerald-500' };
+  const getPlayerHoverStats = (
+    rawPid: any,
+    roleLabel: string,
+    isHomeTeam: boolean,
+    isStarting: boolean,
+    idx: number,
+    fallbackJersey?: string | number
+  ): PlayerPitchStats => {
+    const pid = typeof rawPid === 'object' ? (rawPid?.player_id || rawPid?.id) : rawPid;
+    const p = getPlayer(pid);
+    const teamName = isHomeTeam ? mainClubName : opponentName;
+
+    // Display Name
+    let displayName = 'Joueur';
+    if (isHomeTeam) {
+      if (p) {
+        displayName = `${p.first_name || ''} ${p.last_name || p.name || ''}`.trim() || 'Joueur FUS';
+      } else if (typeof rawPid === 'object') {
+        displayName = rawPid.full_name || rawPid.name || `Joueur FUS #${idx + 1}`;
+      } else {
+        displayName = `Joueur FUS #${idx + 1}`;
+      }
+    } else {
+      if (typeof rawPid === 'object') {
+        displayName = rawPid.name || rawPid.full_name || `Adversaire #${fallbackJersey ?? (idx + 1)}`;
+      } else {
+        displayName = `Adversaire #${fallbackJersey ?? (idx + 1)}`;
+      }
+    }
+
+    const jerseyNumber = p?.jersey_number 
+      ?? (typeof rawPid === 'object' ? (rawPid.jersey_number || rawPid.number) : null) 
+      ?? (fallbackJersey ?? (idx + 1));
+
+    const photoUrl = p?.photo_url && p.photo_url !== 'null' 
+      ? p.photo_url 
+      : (typeof rawPid === 'object' ? rawPid.photo_url : null);
+
+    // DB stats fallback
+    const dbStat = (playerMatchStats || []).find(s => String(s.player_id) === String(pid));
+    const explicitMinutes = dbStat?.minutes_played;
+
+    // Goals for this player
+    const playerGoals = (events || []).filter(e => 
+      (e.type === 'goal' || e.type === 'penalty') &&
+      String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(pid)
+    );
+    const goalsCount = playerGoals.length;
+    const goalsMinutes = playerGoals.map(g => g.minute || 0).sort((a, b) => a - b);
+
+    // Assists
+    const assistsCount = (events || []).filter(e => 
+      e.type === 'assist' &&
+      String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(pid)
+    ).length;
+
+    // Cards
+    const yellowEvents = (events || []).filter(e => 
+      e.type === 'yellow_card' &&
+      String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(pid)
+    );
+    const redEvents = (events || []).filter(e => 
+      e.type === 'red_card' &&
+      String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(pid)
+    );
+    const yellowCardsCount = yellowEvents.length || (dbStat?.yellow_cards ?? 0);
+    const redCardsCount = redEvents.length || (dbStat?.red_cards ?? 0);
+    const yellowCardMinute = yellowEvents.length > 0 ? (yellowEvents[0].minute || null) : null;
+    const redCardMinute = redEvents.length > 0 ? (redEvents[0].minute || null) : null;
+
+    // Substitutions
+    const subOutEvent = (events || []).find(e => 
+      e.type === 'substitution' &&
+      String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(pid)
+    );
+    const subInEvent = (events || []).find(e => 
+      e.type === 'substitution' &&
+      String(typeof e.relatedPlayerId === 'object' ? e.relatedPlayerId?.id : e.relatedPlayerId) === String(pid)
+    );
+
+    let minutesPlayed = 0;
+    let minutesStatus = 'Non renseigné';
+    let subDetails: string | null = null;
+
+    if (isStarting) {
+      if (subOutEvent) {
+        minutesPlayed = explicitMinutes ?? (subOutEvent.minute || 0);
+        const inPlayerName = getPlayerShortName(subOutEvent.relatedPlayerId);
+        minutesStatus = `Titulaire · Sorti à la ${subOutEvent.minute}'`;
+        subDetails = `Remplacé à la ${subOutEvent.minute}' par ${inPlayerName}`;
+      } else {
+        minutesPlayed = explicitMinutes ?? currentMatchMinute;
+        minutesStatus = isFinished 
+          ? 'Titulaire · Match complet (90\')' 
+          : isLive 
+          ? `Titulaire · En jeu (${currentMatchMinute}')` 
+          : 'Titulaire';
+      }
+    } else {
+      if (subInEvent) {
+        const subMin = subInEvent.minute || 0;
+        const played = Math.max(0, currentMatchMinute - subMin);
+        minutesPlayed = explicitMinutes ?? played;
+        const outPlayerName = getPlayerShortName(subInEvent.playerId);
+        minutesStatus = `Entré à la ${subMin}' (${minutesPlayed}' jouées)`;
+        subDetails = `Entré à la ${subMin}' à la place de ${outPlayerName}`;
+      } else {
+        minutesPlayed = explicitMinutes ?? 0;
+        minutesStatus = 'Remplaçant (Non entré)';
+      }
+    }
+
+    const lineupEntry = (matchLineupPlayers || []).find(lp => String(lp.player_id) === String(pid));
+    const rating = dbStat?.rating ?? lineupEntry?.rating ?? null;
+
+    return {
+      id: String(pid || ''),
+      name: displayName,
+      jerseyNumber,
+      positionLabel: roleLabel,
+      teamName,
+      isHome: isHomeTeam,
+      photoUrl,
+      minutesPlayed,
+      minutesStatus,
+      goalsCount,
+      goalsMinutes,
+      assistsCount,
+      yellowCardsCount,
+      yellowCardMinute,
+      redCardsCount,
+      redCardMinute,
+      rating: typeof rating === 'number' ? rating : null,
+      subDetails,
+    };
   };
 
-  const statusInfo = getStatusInfo();
-
-  // Calculate Automatic Event-based Stats
-  const ourPlayerIds = new Set([
-    ...(match.lineup?.startingXI || []),
-    ...(match.lineup?.substitutes || [])
-  ]);
-
-  const ourGoals = homeScore ?? 0;
-  const advGoals = awayScore ?? 0;
-  const ourYellows = events.filter(e => e.type === 'yellow_card' && ourPlayerIds.has(e.playerId || '')).length;
-  const advYellows = events.filter(e => e.type === 'yellow_card' && !ourPlayerIds.has(e.playerId || '') && e.playerId !== null).length;
-  const ourReds = events.filter(e => e.type === 'red_card' && ourPlayerIds.has(e.playerId || '')).length;
-  const advReds = events.filter(e => e.type === 'red_card' && !ourPlayerIds.has(e.playerId || '') && e.playerId !== null).length;
-  const ourSubs = events.filter(e => e.type === 'substitution' && ourPlayerIds.has(e.playerId || '')).length;
-  const advSubs = events.filter(e => e.type === 'substitution' && !ourPlayerIds.has(e.playerId || '') && e.playerId !== null).length;
-  const totalCards = ourYellows + ourReds;
-  const disciplineIndex = Math.max(0, 100 - (ourYellows * 10) - (ourReds * 30));
-
-  const goals = events.filter(e => e.type === 'goal' || e.type === 'own_goal');
+  // Real Tactical Positions
+  const topTeamPositions = getFormationPositions(formationKey);
+  const bottomTeamPositions = getFormationPositions(opponentFormationKey);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6 max-w-[1600px] mx-auto pb-10">
-      {/* Back button */}
-      <Button variant="ghost" size="sm" onClick={onBack}
-        className="flex items-center gap-2 text-muted-foreground hover:text-primary font-black uppercase tracking-widest text-[10px] -mb-2">
-        <ChevronRight className="w-4 h-4 rotate-180" /> Retour
-      </Button>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      className="space-y-4 max-w-[1750px] mx-auto pb-10 font-sans select-none"
+    >
+      {/* ════ TOP DARK CONTEXT BAR (Real DB metadata) ════ */}
+      <div className="bg-[#121e28] border border-slate-800 text-slate-200 rounded-xl px-4 py-2.5 shadow-xl flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Back button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="bg-slate-800 hover:bg-slate-700 text-white font-black text-[10px] uppercase tracking-wider rounded-lg h-8 px-3 gap-1"
+          >
+            <ChevronRight className="w-3.5 h-3.5 rotate-180" /> Retour
+          </Button>
 
-      {/* HERO SECTION (Always visible) */}
-      <div className="w-full space-y-6">
-          {/* ── HERO ── */}
-          <div className={`relative bg-gradient-to-br ${getBgGradient()} rounded-[2rem] overflow-hidden shadow-2xl`}>
-            {/* Grid texture */}
-            <div className="absolute inset-0 opacity-[0.07]" style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23fff' fill-opacity='1'%3E%3Crect x='0' y='0' width='1' height='40'/%3E%3Crect x='0' y='0' width='40' height='1'/%3E%3C/g%3E%3C/svg%3E")`
-            }} />
-            <div className="relative z-10 p-5 md:p-6">
-              {/* Top meta */}
-              <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`${statusInfo.cls} text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full`}>
-                    {statusInfo.text}
-                  </span>
-                  {match.category && (
-                    <span className="bg-white/10 border border-white/20 text-white/70 text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
-                      {match.category}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-white/40 text-[10px] font-medium">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{match.match_date}</span>
-                </div>
-              </div>
-
-              {/* Scoreboard */}
-              <div className="flex items-center justify-between gap-3">
-                {/* Home */}
-                <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
-                  <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 backdrop-blur flex items-center justify-center overflow-hidden">
-                    {mainClub?.logo_url
-                      ? <img src={mainClub.logo_url} alt="" className="w-full h-full object-contain p-1.5" />
-                      : <Shield className="w-6 h-6 text-white/30" />}
-                  </div>
-                  <p className="text-white font-black text-[11px] uppercase tracking-tight text-center leading-tight truncate w-full px-1">
-                    {mainClub?.name || 'Mon Club'}
-                  </p>
-                </div>
-
-                {/* Score center */}
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  {(isFinished || isLive) ? (
-                    <>
-                      <div className="flex items-center gap-3">
-                        <span className="text-3xl md:text-5xl font-black text-white tabular-nums drop-shadow-lg">{homeScore ?? 0}</span>
-                        <span className="text-white/20 text-xl font-black">—</span>
-                        <span className="text-3xl md:text-5xl font-black text-white/50 tabular-nums">{awayScore ?? 0}</span>
-                      </div>
-                      {goals.length > 0 && (
-                        <div className="flex flex-wrap justify-center gap-x-2 gap-y-0.5 max-w-[140px]">
-                          {goals.slice(0, 4).map((g, i) => (
-                            <span key={i} className="text-[8px] text-white/40 font-medium">
-                              {getPlayerShortName(g.playerId || '')} {g.minute}'
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="text-2xl md:text-4xl font-black text-white/20 tracking-widest">VS</div>
-                      <span className="bg-white/10 border border-white/10 text-white/50 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full mt-1">À venir</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Away */}
-                <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
-                  <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 backdrop-blur flex items-center justify-center overflow-hidden">
-                    {opponent?.logo_url
-                      ? <img src={opponent.logo_url} alt="" className="w-full h-full object-contain p-1.5" />
-                      : <Target className="w-6 h-6 text-white/30" />}
-                  </div>
-                  <p className="text-white/60 font-black text-[11px] uppercase tracking-tight text-center leading-tight truncate w-full px-1">
-                    {opponentName}
-                  </p>
-                </div>
-              </div>
-
-              {/* CTA buttons */}
-              <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
-                <Button onClick={onOrchestrate}
-                  className="bg-white/15 hover:bg-white/25 text-white border border-white/20 font-black uppercase tracking-widest text-[9px] h-8 px-4 rounded-xl gap-2 backdrop-blur-sm">
-                  <LayoutPanelLeft className="w-3.5 h-3.5" />
-                  {isFinished ? 'Composition' : 'Orchestrer'}
-                </Button>
-                {isFinished && (
-                  <Button onClick={onStats}
-                    className="bg-emerald-500/70 hover:bg-emerald-500/90 text-white border border-emerald-400/30 font-black uppercase tracking-widest text-[9px] h-8 px-4 rounded-xl gap-2">
-                    <BarChart3 className="w-3.5 h-3.5" /> Stats
-                  </Button>
-                )}
-                {isLive && (
-                  <Button onClick={onOrchestrate}
-                    className="bg-red-500/70 hover:bg-red-500 text-white border border-red-400/30 font-black uppercase tracking-widest text-[9px] h-8 px-4 rounded-xl gap-2 animate-pulse">
-                    <Play className="w-3.5 h-3.5" /> Live
-                  </Button>
-                )}
-              </div>
-
-              {/* Referee Team Banner */}
-              {(centralRefName || assistant1RefName || assistant2RefName || fourthRefName) && (
-                <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-center gap-4 flex-wrap text-[10px] text-white/80 font-medium">
-                  <span className="flex items-center gap-1 font-bold text-amber-300">
-                    <UserCheck className="w-3.5 h-3.5 text-amber-400" /> Corps d'Arbitrage :
-                  </span>
-                  {centralRefName && <span>Central : <strong className="text-white">{centralRefName}</strong></span>}
-                  {assistant1RefName && <span>A1 : <strong className="text-white">{assistant1RefName}</strong></span>}
-                  {assistant2RefName && <span>A2 : <strong className="text-white">{assistant2RefName}</strong></span>}
-                  {fourthRefName && <span>4ème : <strong className="text-white">{fourthRefName}</strong></span>}
-                </div>
-              )}
+          {/* Country */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400 font-medium text-[11px]">Pays:</span>
+            <div className="flex items-center gap-1.5 bg-[#1a2836] px-3 py-1 rounded-lg text-white font-bold border border-slate-700/60 text-[11px]">
+              <span>🇲🇦</span>
+              <span>Maroc</span>
             </div>
           </div>
 
-      </div>
-
-      {/* ── TABS NAVIGATION ── */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide border-b border-slate-100">
-        <Button variant={activeTab === 'live' ? 'default' : 'ghost'} onClick={() => setActiveTab('live')} className={`rounded-xl px-5 h-12 font-black uppercase tracking-widest text-[10px] transition-all gap-2 shrink-0 ${activeTab === 'live' ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-105' : 'text-slate-400 hover:bg-slate-100'}`}>
-          <Activity className="w-4 h-4" /> Live / Résumé
-        </Button>
-        <Button variant={activeTab === 'stats' ? 'default' : 'ghost'} onClick={() => setActiveTab('stats')} className={`rounded-xl px-5 h-12 font-black uppercase tracking-widest text-[10px] transition-all gap-2 shrink-0 ${activeTab === 'stats' ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-105' : 'text-slate-400 hover:bg-slate-100'}`}>
-          <BarChart3 className="w-4 h-4" /> Statistiques
-        </Button>
-        <Button variant={activeTab === 'lineup' ? 'default' : 'ghost'} onClick={() => setActiveTab('lineup')} className={`rounded-xl px-5 h-12 font-black uppercase tracking-widest text-[10px] transition-all gap-2 shrink-0 ${activeTab === 'lineup' ? 'bg-[#1a6b25] text-white shadow-xl shadow-green-900/20 scale-105' : 'text-slate-400 hover:bg-slate-100'}`}>
-          <Users className="w-4 h-4" /> Composition
-        </Button>
-        <Button variant={activeTab === 'video' ? 'default' : 'ghost'} onClick={() => setActiveTab('video')} className={`rounded-xl px-5 h-12 font-black uppercase tracking-widest text-[10px] transition-all gap-2 shrink-0 ${activeTab === 'video' ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20 scale-105' : 'text-slate-400 hover:bg-slate-100'}`}>
-          <Video className="w-4 h-4" /> Vidéo
-        </Button>
-      </div>
-
-      {/* ── TAB CONTENT ── */}
-      <div className="w-full">
-        {activeTab === 'live' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-          {/* ── TIMELINE ── */}
-          <div className="bg-white border rounded-[2rem] p-5 shadow-xl flex flex-col" style={{ minHeight: '500px' }}>
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
-                <Activity className="w-3.5 h-3.5" /> Play by Play
-              </h3>
-              <Badge className="bg-secondary text-foreground font-black text-[8px] rounded-lg">{events.length}</Badge>
-            </div>
-
-            {/* Club headers above timeline */}
-            <div className="flex items-center justify-between mb-8 px-2">
-              {/* Our club */}
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl border-2 border-primary/20 bg-white flex items-center justify-center overflow-hidden shadow-sm">
-                  {mainClub?.logo_url ? <img src={mainClub.logo_url} className="w-full h-full object-contain p-2" alt="" /> : <Shield className="w-8 h-8 text-slate-300" />}
-                </div>
-                <span className="text-[12px] font-black uppercase tracking-widest text-primary">{mainClub?.name || 'Notre Club'}</span>
-              </div>
-              {/* Opponent */}
-              <div className="flex items-center gap-4">
-                <span className="text-[12px] font-black uppercase tracking-widest text-slate-400">{opponentName}</span>
-                <div className="w-16 h-16 rounded-2xl border-2 border-slate-200 bg-white flex items-center justify-center overflow-hidden shadow-sm">
-                  {opponent?.logo_url ? <img src={opponent.logo_url} className="w-full h-full object-contain p-2" alt="" /> : <Target className="w-8 h-8 text-slate-300" />}
-                </div>
-              </div>
-            </div>
-
-            {events.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-200">
-                <Activity className="w-10 h-10" />
-                <p className="text-xs font-black uppercase tracking-wider text-center text-slate-300">
-                  {isFinished ? 'Aucun événement' : 'En attente...'}
-                </p>
+          {/* Competition / Type de match */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400 font-medium text-[11px]">{isFriendly ? 'Type:' : 'Compétition:'}</span>
+            {isFriendly ? (
+              <div className="flex items-center gap-1.5 bg-amber-500/20 px-3 py-1 rounded-lg text-amber-300 font-black border border-amber-500/40 text-[11px] shadow-sm">
+                <span>🤝</span>
+                <span>Match Amical</span>
+                {match.category && <span className="opacity-75 font-bold">({match.category})</span>}
               </div>
             ) : (
-              <div className="relative flex-1 overflow-y-auto pr-2 scrollbar-hide">
-                {/* Central timeline line */}
-                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-primary/20 via-slate-200 to-slate-100 -translate-x-1/2 pointer-events-none" />
-                <div className="space-y-3 pb-6">
-                  {[...events].filter(e => !['penalty', 'penalty_shot', 'missed_penalty', 'period_marker'].includes(e.type)).sort((a, b) => a.minute - b.minute).map((event) => {
-                    const ourPlayerIds = [...startingXI, ...subs];
-                    const isOurEvent = event.playerId ? ourPlayerIds.includes(event.playerId) : false;
-                    const isLeft = isOurEvent;
-
-                    return (
-                      <div key={event.id} className={`flex items-center gap-2 ${isLeft ? 'flex-row' : 'flex-row-reverse'}`}>
-                        {/* Event card */}
-                        <div className={`flex-1 flex ${isLeft ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`${isLeft ? 'bg-primary/5 border-primary/15' : 'bg-slate-50 border-slate-100'} border rounded-xl px-3 py-2 max-w-[160px] w-full flex flex-col gap-0.5 shadow-sm ${isLeft ? 'items-end text-right' : 'items-start text-left'}`}>
-                            <div className={`flex items-center gap-1.5 ${isLeft ? 'flex-row-reverse' : ''}`}>
-                              <EventIcon type={event.type} />
-                              <span className="text-[9px] font-black uppercase tracking-wider text-slate-700">{getEventLabel(event.type) === event.type.toUpperCase() && event.type === 'goal' ? 'BUT' : getEventLabel(event.type)}</span>
-                            </div>
-                            {event.playerId && (
-                              <span className={`text-[10px] font-bold ${isLeft ? 'text-primary/70' : 'text-slate-400'}`}>{getPlayerShortName(event.playerId)}</span>
-                            )}
-                          </div>
-                        </div>
-                        {/* Minute bubble */}
-                        <div className={`shrink-0 w-8 h-8 rounded-full ${isLeft ? 'bg-primary/10 border-primary/30' : 'bg-white border-slate-200'} border-2 shadow-sm flex items-center justify-center z-10`}>
-                          <span className={`text-[9px] font-black tabular-nums ${isLeft ? 'text-primary' : 'text-slate-600'}`}>{event.minute}'</span>
-                        </div>
-                        {/* Spacer on the other side */}
-                        <div className="flex-1" />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Séance de Penalties séparée */}
-                {events.some(e => ['penalty', 'penalty_shot', 'missed_penalty'].includes(e.type)) && (
-                  <div className="mt-8 relative z-10 bg-slate-50 p-6 rounded-3xl border border-slate-200 shadow-sm">
-                    <div className="flex items-center justify-center mb-6">
-                      <div className="bg-white px-6 py-2 rounded-full border-2 border-slate-200 shadow-sm text-[11px] font-black uppercase tracking-widest text-slate-600">
-                        Séance de Tirs au but
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[...events].filter(e => ['penalty', 'penalty_shot', 'missed_penalty'].includes(e.type)).sort((a, b) => a.minute - b.minute).map((event) => {
-                        const ourPlayerIds = [...startingXI, ...subs];
-                        const isOurEvent = event.playerId ? ourPlayerIds.includes(event.playerId) : false;
-                        const isScored = event.type === 'penalty' || event.type === 'penalty_shot';
-
-                        return (
-                          <div key={event.id} className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
-                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isScored ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
-                               {isScored ? '✅' : '❌'}
-                             </div>
-                             <div className="flex-1">
-                                <span className="block text-[10px] font-black uppercase tracking-wider text-slate-500">{isOurEvent ? mainClub?.name || 'FUS' : opponentName}</span>
-                                {event.playerId && (
-                                   <span className="text-[11px] font-bold text-slate-800">{getPlayerShortName(event.playerId)}</span>
-                                )}
-                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+              <div className="flex items-center gap-1.5 bg-[#1a2836] px-3 py-1 rounded-lg text-white font-bold border border-slate-700/60 text-[11px] truncate max-w-[220px]">
+                <span className="text-amber-400">🏆</span>
+                <span>{leagueName}</span>
+                {match.category && <span className="text-slate-400 text-[10px]">({match.category})</span>}
               </div>
             )}
           </div>
-          </div>
-        )}
 
-        {activeTab === 'stats' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="bg-white border rounded-[2rem] p-5 shadow-xl space-y-6" style={{ minHeight: '600px' }}>
-              
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
-                  <BarChart3 className="w-3.5 h-3.5" /> Statistiques
-                </h3>
-                <div className="flex bg-slate-100 p-1 rounded-xl">
-                  <button 
-                    onClick={() => setStatsSubTab('equipe')}
-                    className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${statsSubTab === 'equipe' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                  >
-                    Équipe
-                  </button>
-                  <button 
-                    onClick={() => setStatsSubTab('joueurs')}
-                    className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${statsSubTab === 'joueurs' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                  >
-                    Joueurs
-                  </button>
+          {/* Match Date */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-400 font-medium text-[11px]">Date:</span>
+            <div className="flex items-center gap-1.5 bg-[#1a2836] px-3 py-1 rounded-lg text-slate-300 font-medium border border-slate-700/60 text-[11px]">
+              <span>{match.match_date || 'Aujourd’hui'}</span>
+              <Calendar className="w-3.5 h-3.5 text-emerald-400 ml-2" />
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-2">
+          {onOrchestrate && (
+            <Button
+              onClick={onOrchestrate}
+              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black uppercase tracking-wider text-[10px] h-8 px-3 rounded-lg gap-1.5 shadow-md"
+            >
+              <LayoutPanelLeft className="w-3.5 h-3.5" /> Orchestrer
+            </Button>
+          )}
+          {onStats && (
+            <Button
+              onClick={onStats}
+              className="bg-slate-800 hover:bg-slate-700 text-white font-black uppercase tracking-wider text-[10px] h-8 px-3 rounded-lg gap-1.5"
+            >
+              <BarChart3 className="w-3.5 h-3.5" /> Saisir Stats
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* ════ 3-COLUMN MAIN LAYOUT GRID (REAL DB DATA) ════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        
+        {/* ────────────────────────────────────────────────────────── */}
+        {/* 1. COLUMN 1: LIVE SCOREBOARD + CARD MATCHS À VENIR + FEED  */}
+        {/* ────────────────────────────────────────────────────────── */}
+        <div className="lg:col-span-5 space-y-4">
+          
+          {/* Scoreboard Card */}
+          <div className="rounded-2xl overflow-hidden shadow-xl border border-slate-800 bg-[#121e28]">
+            {/* Top Status Header */}
+            <div className={`px-4 py-2 flex items-center justify-between font-black text-[10px] uppercase ${isLive ? 'bg-red-500 text-white animate-pulse' : isFinished ? 'bg-[#2ecc71] text-[#0b141d]' : 'bg-blue-600 text-white'}`}>
+              <span className="tracking-widest flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-current animate-ping" />
+                {isLive ? 'EN DIRECT' : isFinished ? 'MATCH TERMINÉ' : 'À VENIR'}
+              </span>
+              <span className="text-[9px] font-bold opacity-90 truncate max-w-[220px]">
+                {stadiumName}
+              </span>
+            </div>
+
+            {/* Scoreboard Body */}
+            <div className="p-5 text-center text-white space-y-4 relative bg-gradient-to-b from-[#182635] to-[#121e28]">
+              <div className="flex items-center justify-center gap-2 text-[9px] font-bold tracking-wider uppercase flex-wrap">
+                {isFriendly ? (
+                  <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-black">
+                    🤝 Match Amical
+                  </span>
+                ) : (
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full font-black">
+                    🏆 {leagueName}
+                  </span>
+                )}
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-400">{stadiumName}</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-400">{match.match_date}</span>
+                {match.match_time && <span className="text-slate-500">· {match.match_time.slice(0, 5)}</span>}
+              </div>
+
+              {/* Clubs and Real Score */}
+              <div className="flex items-center justify-between px-2">
+                {/* Home Club */}
+                <div className="flex-1 text-center min-w-0">
+                  <div className="w-12 h-12 mx-auto rounded-2xl bg-white/10 border border-white/20 p-2 shadow-lg flex items-center justify-center mb-1.5">
+                    {mainClubLogo ? (
+                      <img src={mainClubLogo} alt="" className="w-full h-full object-contain" />
+                    ) : (
+                      <Shield className="w-6 h-6 text-emerald-400" />
+                    )}
+                  </div>
+                  <h4 className="font-black text-xs md:text-sm tracking-wider uppercase text-white truncate max-w-full px-1">
+                    {mainClubName}
+                  </h4>
+                  <p className="text-[9px] text-slate-400 mt-0.5 uppercase">{match.category || 'Équipe Première'}</p>
+                  <div className="text-4xl md:text-5xl font-black mt-2 text-white tabular-nums">
+                    {homeScore}
+                  </div>
+                </div>
+
+                {/* Score separator & minute */}
+                <div className="px-3 flex flex-col items-center">
+                  <span className="text-slate-500 font-bold text-lg mb-1">—</span>
+                  <div className="w-11 h-11 rounded-full border-2 border-slate-600 bg-slate-800/80 flex items-center justify-center text-xs font-black text-emerald-400 shadow-inner">
+                    {isFinished ? '90\'' : isLive ? '70\'' : '00\''}
+                  </div>
+                </div>
+
+                {/* Away Club */}
+                <div className="flex-1 text-center min-w-0">
+                  <div className="w-12 h-12 mx-auto rounded-2xl bg-white/10 border border-white/20 p-2 shadow-lg flex items-center justify-center mb-1.5">
+                    {opponentLogo ? (
+                      <img src={opponentLogo} alt="" className="w-full h-full object-contain" />
+                    ) : (
+                      <Target className="w-6 h-6 text-rose-400" />
+                    )}
+                  </div>
+                  <h4 className="font-black text-xs md:text-sm tracking-wider uppercase text-white truncate max-w-full px-1">
+                    {opponentName}
+                  </h4>
+                  <p className="text-[9px] text-slate-400 mt-0.5 uppercase">{match.category || 'Adversaire'}</p>
+                  <div className="text-4xl md:text-5xl font-black mt-2 text-white tabular-nums">
+                    {awayScore}
+                  </div>
                 </div>
               </div>
 
-              {statsSubTab === 'equipe' && (
-                <div className="space-y-8">
-                  {/* Team Logos Header */}
-                  <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest px-2">
-                    <div className="flex items-center gap-2 w-[140px]">
-                      <div className="w-8 h-8 rounded-xl border-2 border-primary/20 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
-                        {mainClub?.logo_url ? <img src={mainClub.logo_url} className="w-5 h-5 object-contain" alt=""/> : <Shield className="w-4 h-4 text-slate-300" />}
-                      </div>
-                      <span className="text-primary truncate">{mainClub?.name || 'FUS CLUB'}</span>
-                    </div>
-                    <span className="text-slate-300">VS</span>
-                    <div className="flex items-center gap-2 w-[140px] justify-end text-right">
-                      <span className="text-slate-500 truncate">{opponentName}</span>
-                      <div className="w-8 h-8 rounded-xl border-2 border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
-                        {opponent?.logo_url ? <img src={opponent.logo_url} className="w-5 h-5 object-contain" alt=""/> : <Target className="w-4 h-4 text-slate-300" />}
-                      </div>
-                    </div>
-                  </div>
+              {/* 0' - 90' Timeline Slider Bar with real DB events */}
+              <div className="pt-2 space-y-1">
+                <div className="relative w-full h-2 bg-slate-700/80 rounded-full flex items-center">
+                  <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-3 bg-slate-500" />
+                  {timelineBarDots.map((dot, idx) => (
+                    <div
+                      key={idx}
+                      className={`absolute w-3 h-3 rounded-full ${dot.color} border border-slate-900 -translate-x-1/2 cursor-pointer shadow-md`}
+                      style={{ left: dot.left }}
+                      title={`${dot.minute}'`}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center justify-between text-[8px] text-slate-500 font-bold px-0.5">
+                  <span>0'</span>
+                  <span>45'</span>
+                  <span>90'</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-                  {/* 3 Summary Blocks & Discipline Index */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    {/* The 3 Blocks */}
-                    <div className="col-span-1 md:col-span-3 grid grid-cols-3 gap-4">
-                      <div className="bg-slate-50 rounded-2xl p-4 flex flex-col items-center justify-center border border-slate-100 gap-1 shadow-sm">
-                        <span className="text-3xl font-black text-slate-800">{ourGoals}</span>
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Buts</span>
-                      </div>
-                      <div className="bg-slate-50 rounded-2xl p-4 flex flex-col items-center justify-center border border-slate-100 gap-1 shadow-sm">
-                        <span className="text-3xl font-black text-slate-800">{totalCards}</span>
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cartons</span>
-                      </div>
-                      <div className="bg-slate-50 rounded-2xl p-4 flex flex-col items-center justify-center border border-slate-100 gap-1 shadow-sm">
-                        <span className="text-3xl font-black text-slate-800">{ourSubs}</span>
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Changements</span>
-                      </div>
-                    </div>
+          {/* Play to Play & Narration Tabs + Real Vertical Timeline Feed */}
+          <div className="bg-white rounded-2xl p-4 shadow-xl border border-slate-200 space-y-4">
+            
+            {/* Tab Switcher Pills */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setFeedTab('play')}
+                className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                  feedTab === 'play'
+                    ? 'bg-[#2ecc71] text-white shadow-md'
+                    : 'bg-slate-100 text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Target className="w-3.5 h-3.5" /> PLAY TO PLAY ({timelineEvents.length})
+              </button>
+              <button
+                onClick={() => setFeedTab('narration')}
+                className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                  feedTab === 'narration'
+                    ? 'bg-[#2ecc71] text-white shadow-md'
+                    : 'bg-slate-100 text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Footprints className="w-3.5 h-3.5" /> NARRATION
+              </button>
+            </div>
 
-                    {/* Discipline & Form */}
-                    <div className="col-span-1 bg-emerald-50 rounded-2xl p-4 flex flex-col items-center justify-center border border-emerald-100 shadow-sm relative overflow-hidden">
-                      <h4 className="text-[8px] font-black text-emerald-600/70 uppercase tracking-[0.2em] mb-2 z-10">Discipline</h4>
-                      <span className="text-3xl font-black text-emerald-600 z-10">{disciplineIndex}%</span>
-                      <div className="flex gap-3 mt-2 z-10">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-2 h-3 bg-yellow-400 rounded-sm shadow-sm" />
-                          <span className="text-[9px] font-bold text-slate-600">{ourYellows}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-2 h-3 bg-red-500 rounded-sm shadow-sm" />
-                          <span className="text-[9px] font-bold text-slate-600">{ourReds}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+            {/* Vertical Timeline Stream with Real Events */}
+            {timelineEvents.length === 0 ? (
+              <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
+                <Activity className="w-8 h-8 text-slate-300" />
+                <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                  Aucun événement enregistré
+                </p>
+                <p className="text-[10px] text-slate-400 max-w-xs">
+                  Les buts, cartons, changements et tirs apparaîtront ici dès leur saisie.
+                </p>
+                {onOrchestrate && (
+                  <Button onClick={onOrchestrate} size="sm" className="bg-[#2ecc71] hover:bg-emerald-600 text-slate-950 font-black text-[9px] uppercase tracking-wider rounded-xl">
+                    <LayoutPanelLeft className="w-3.5 h-3.5 mr-1" /> Saisir les actions
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="relative pt-2 pb-4 space-y-4 max-h-[460px] overflow-y-auto scrollbar-thin pr-1">
+                {/* Central vertical line */}
+                <div className="absolute left-1/2 top-2 bottom-2 w-0.5 bg-emerald-300 -translate-x-1/2 pointer-events-none" />
 
-                  {/* Detailed Stats */}
-                  <div className="space-y-6 pt-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Détails du match</h4>
-                    
-                    {/* Automated from Events */}
-                    <div className="space-y-5 px-2">
-                      <StatBar label="Buts" home={ourGoals} away={advGoals} />
-                      <StatBar label="Cartons Jaunes" home={ourYellows} away={advYellows} />
-                      <StatBar label="Cartons Rouges" home={ourReds} away={advReds} />
-                      <StatBar label="Changements" home={ourSubs} away={advSubs} />
-                    </div>
-
-                    {/* DB Fetched Stats */}
-                    <div className="pt-4 border-t border-slate-100">
-                      {matchStats ? (
-                        <div className="space-y-5 px-2 mt-4">
-                          <StatBar label="Possession" home={matchStats.possession ?? 50} away={100 - (matchStats.possession ?? 50)} unit="%" />
-                          <StatBar label="Tirs" home={matchStats.shots ?? 0} away={Math.max(0, (matchStats.shots ?? 0) - 4)} />
-                          <StatBar label="Cadrés" home={matchStats.shots_on_target ?? 0} away={Math.max(0, (matchStats.shots_on_target ?? 0) - 2)} />
-                          <StatBar label="Corners" home={matchStats.corners ?? 0} away={Math.max(0, (matchStats.corners ?? 0) - 2)} />
-                          <StatBar label="Fautes" home={matchStats.fouls ?? 0} away={matchStats.fouls ? matchStats.fouls + 2 : 0} />
-                          <StatBar label="Passes" home={matchStats.passes ?? 0} away={Math.max(0, (matchStats.passes ?? 0) - 20)} />
-                        </div>
-                      ) : (
-                        <div className="py-10 flex flex-col items-center gap-4 text-slate-300">
-                          <TrendingUp className="w-8 h-8 text-slate-200" />
-                          <p className="text-[10px] font-black uppercase tracking-widest text-center text-slate-400">
-                            {isFinished ? 'Stats techniques non saisies' : 'Stats techniques à venir'}
+                {timelineEvents.map((item: any, idx: number) => {
+                  const isLeft = item.isLeft;
+                  return (
+                    <div key={item.id || idx} className="relative flex items-center justify-between gap-3 text-xs">
+                      {/* Left text / block (FUS events) */}
+                      <div className={`w-[42%] flex items-center justify-end gap-2 text-right ${isLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        <div>
+                          <p className="font-bold text-slate-800 text-[11px] leading-tight">
+                            <span className="font-black">{item.player}</span> · {item.title}
                           </p>
-                          {isFinished && (
-                            <Button onClick={onStats} size="sm" className="bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest text-[9px] h-8 px-4 rounded-xl gap-2 mt-2">
-                              <BarChart3 className="w-3 h-3" /> Saisir stats
-                            </Button>
+                          {item.desc && (
+                            <p className="text-[9px] text-slate-400 font-medium leading-tight mt-0.5">
+                              {item.desc}
+                            </p>
                           )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-              )}
-
-              {statsSubTab === 'joueurs' && (
-                <div className="space-y-6">
-                  <h4 className="text-center text-[10px] font-black text-red-500 uppercase tracking-[0.2em] mb-6">Performances Individuelles</h4>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {Array.from(ourPlayerIds).map(playerId => {
-                      const player = players.find(p => p.id === playerId);
-                      if (!player) return null;
-                      
-                      const pGoals = events.filter(e => e.type === 'goal' && e.playerId === playerId).length;
-                      const pYellows = events.filter(e => e.type === 'yellow_card' && e.playerId === playerId).length;
-                      const pReds = events.filter(e => e.type === 'red_card' && e.playerId === playerId).length;
-                      const pSubs = events.filter(e => e.type === 'substitution' && (e.playerId === playerId || (e as any).playerInId === playerId || (e as any).relatedPlayerId === playerId)).length;
-
-                      return (
-                        <div key={playerId} className="bg-white rounded-[1.5rem] border border-red-100 overflow-hidden shadow-lg shadow-red-500/5 relative group hover:border-red-300 transition-all hover:-translate-y-1">
-                          {/* Top Red Header */}
-                          <div className="h-2 w-full bg-gradient-to-r from-red-600 to-red-500" />
-                          
-                          <div className="p-4 flex flex-col items-center">
-                            <div className="w-16 h-16 rounded-full bg-red-50 border-4 border-white shadow-md flex items-center justify-center overflow-hidden shrink-0 -mt-2 mb-3 relative z-10">
-                              {player.photo_url ? (
-                                <img src={player.photo_url} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <Users className="w-6 h-6 text-red-300" />
-                              )}
-                              {player.number && (
-                                <div className="absolute bottom-0 right-0 bg-red-600 text-white text-[9px] font-black w-6 h-5 flex items-center justify-center rounded-tl-lg">
-                                  {player.number}
-                                </div>
-                              )}
-                            </div>
-                            
-                            <div className="text-center w-full mb-4">
-                              <p className="text-[11px] font-black text-slate-800 truncate uppercase leading-tight">
-                                {player.first_name}
-                              </p>
-                              <p className="text-[13px] font-black text-red-600 truncate uppercase leading-tight">
-                                {player.last_name}
-                              </p>
-                            </div>
-                            
-                            {/* Small Stats Row */}
-                            <div className="flex items-center justify-between w-full border-t border-red-50 pt-3 px-1">
-                              <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[11px] leading-none">⚽</span>
-                                <span className={`text-[12px] font-black ${pGoals > 0 ? 'text-slate-800' : 'text-slate-300'}`}>{pGoals}</span>
-                              </div>
-                              <div className="flex flex-col items-center gap-0.5">
-                                <div className="w-2.5 h-3.5 bg-yellow-400 rounded-sm shadow-sm" />
-                                <span className={`text-[12px] font-black ${pYellows > 0 ? 'text-slate-800' : 'text-slate-300'}`}>{pYellows}</span>
-                              </div>
-                              <div className="flex flex-col items-center gap-0.5">
-                                <div className="w-2.5 h-3.5 bg-red-500 rounded-sm shadow-sm" />
-                                <span className={`text-[12px] font-black ${pReds > 0 ? 'text-slate-800' : 'text-slate-300'}`}>{pReds}</span>
-                              </div>
-                              <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[11px] leading-none">🔄</span>
-                                <span className={`text-[12px] font-black ${pSubs > 0 ? 'text-slate-800' : 'text-slate-300'}`}>{pSubs}</span>
-                              </div>
-                            </div>
+                        {item.photo ? (
+                          <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-emerald-400/60 shadow-sm shrink-0">
+                            <img src={item.photo} alt="" className="w-full h-full object-cover" />
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {ourPlayerIds.size === 0 && (
-                     <div className="py-10 flex flex-col items-center text-center text-red-300 gap-2">
-                       <Users className="w-8 h-8 opacity-50" />
-                       <span className="text-[10px] font-black uppercase tracking-widest">Aucun joueur assigné</span>
-                     </div>
-                  )}
-                </div>
-              )}
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 font-black text-[9px] flex items-center justify-center shrink-0 border border-emerald-300">
+                            {item.player.substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
 
+                      {/* Center Minute Icon Pin */}
+                      <div className="z-10 w-7 h-7 rounded-full bg-white border-2 border-emerald-400 flex items-center justify-center shadow-sm shrink-0">
+                        <span className="text-[9px] font-black text-emerald-600">{item.minute}'</span>
+                      </div>
+
+                      {/* Right text / block (Opponent events) */}
+                      <div className={`w-[42%] flex items-center justify-start gap-2 text-left ${!isLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                        <div className="w-7 h-7 rounded-full bg-rose-100 text-rose-700 font-black text-[9px] flex items-center justify-center shrink-0 border border-rose-300">
+                          ADV
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 text-[11px] leading-tight">
+                            <span className="font-black">{item.player}</span> · {item.title}
+                          </p>
+                          {item.desc && (
+                            <p className="text-[9px] text-slate-400 font-medium leading-tight mt-0.5">
+                              {item.desc}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+          </div>
+
+        </div>
+
+        {/* ────────────────────────────────────────────────────────── */}
+        {/* 2. COLUMN 2: STATS & MATCHS À VENIR                        */}
+        {/* ────────────────────────────────────────────────────────── */}
+        <div className="lg:col-span-3 space-y-4">
+          
+          {/* STATS Card */}
+          <div className="bg-white rounded-2xl p-4 shadow-xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">STATS MATCH</h3>
+              {onStats && (
+                <button onClick={onStats} className="text-slate-400 hover:text-emerald-500 transition-colors">
+                  <BarChart3 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Team Badges */}
+            <div className="flex items-center justify-between text-center px-2">
+              <div className="w-[110px] min-w-0">
+                <div className="w-11 h-11 mx-auto rounded-full bg-slate-100 p-1 flex items-center justify-center shadow-sm">
+                  {mainClubLogo ? <img src={mainClubLogo} className="w-full h-full object-contain" /> : <Shield className="w-6 h-6 text-[#4d94ff]" />}
+                </div>
+                <p className="text-[10px] font-black text-slate-800 mt-1 truncate">{mainClubName}</p>
+              </div>
+
+              <div className="text-slate-300 font-bold text-xs">VS</div>
+
+              <div className="w-[110px] min-w-0">
+                <div className="w-11 h-11 mx-auto rounded-full bg-slate-100 p-1 flex items-center justify-center shadow-sm">
+                  {opponentLogo ? <img src={opponentLogo} className="w-full h-full object-contain" /> : <Target className="w-6 h-6 text-[#e94e77]" />}
+                </div>
+                <p className="text-[10px] font-black text-slate-800 mt-1 truncate">{opponentName}</p>
+              </div>
+            </div>
+
+            {/* Real Stats Bars for the 5 Metrics */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <StatBar label="Buts" icon="⚽" home={ourGoals} away={advGoals} />
+              <StatBar label="Assists" icon="⭐" home={ourAssists} away={advAssists} />
+              <StatBar label="Changements" icon="🔁" home={ourSubsCount} away={advSubsCount} />
+              <StatBar label="Cartons Jaunes" icon="🟨" home={ourYellows} away={advYellows} />
+              <StatBar label="Cartons Rouges" icon="🟥" home={ourReds} away={advReds} />
             </div>
           </div>
-        )}
 
-        {activeTab === 'lineup' && (
-          <div className="max-w-2xl mx-auto space-y-6">
-          <div className="bg-[#4caf50] border-4 border-white rounded-[2rem] p-4 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.3)] flex flex-col" style={{ minHeight: '800px', backgroundImage: 'linear-gradient(180deg, #1a6b25 0%, #22832f 10%, #1a6b25 20%, #22832f 30%, #1a6b25 40%, #22832f 50%, #1a6b25 60%, #22832f 70%, #1a6b25 80%, #22832f 90%, #1a6b25 100%)' }}>
-            
-            {/* Header Lineup */}
-            <div className="flex items-center justify-between mb-3 bg-white/10 backdrop-blur-md rounded-2xl px-4 py-3">
-              <h3 className="text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] text-white flex items-center gap-1.5 truncate">
-                <Users className="w-4 h-4 text-white/70 shrink-0" />
-                <span>
-                  {lineupViewMode === 'mine' && `Compo ${formationKey}`}
-                  {lineupViewMode === 'opponent' && `Compo ${opponentFormationKey} (Adv)`}
-                  {lineupViewMode === 'both' && `Face-à-Face (${formationKey} vs ${opponentFormationKey})`}
-                </span>
-              </h3>
-              <Badge className="bg-white text-[#1a6b25] border-none font-black text-[9px] rounded-lg shrink-0">
-                {lineupViewMode === 'mine' && `${startingXI.filter(Boolean).length}/11 Titulaires`}
-                {lineupViewMode === 'opponent' && `${opponentStartingXI.filter(Boolean).length}/11 Titulaires`}
-                {lineupViewMode === 'both' && `${startingXI.filter(Boolean).length} vs ${opponentStartingXI.filter(Boolean).length}`}
-              </Badge>
-            </div>
-
-            {/* View Mode Selector */}
-            <div className="grid grid-cols-3 p-1 bg-black/20 backdrop-blur-sm rounded-xl mb-4 gap-1 border border-white/10">
-              <button
-                type="button"
-                onClick={() => setLineupViewMode('mine')}
-                className={`py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 ${lineupViewMode === 'mine' ? 'bg-white text-[#1a6b25] shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
-              >
-                Notre Club
-              </button>
-              <button
-                type="button"
-                onClick={() => setLineupViewMode('both')}
-                className={`py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 ${lineupViewMode === 'both' ? 'bg-white text-[#1a6b25] shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
-              >
-                Face-à-Face
-              </button>
-              <button
-                type="button"
-                onClick={() => setLineupViewMode('opponent')}
-                className={`py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-300 ${lineupViewMode === 'opponent' ? 'bg-white text-[#1a6b25] shadow-lg' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
-              >
-                Adversaire
-              </button>
-            </div>
-
-            {/* Pitch / Field */}
-            <div className="relative flex-1 w-full rounded-2xl overflow-hidden border-2 border-white/20 mb-4 min-h-[450px]">
-              {/* Field Grass Stripes */}
-              <div className="absolute inset-0 opacity-[0.12] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(180deg, #000 0px, #000 45px, transparent 45px, transparent 90px)' }} />
-
-              {/* Field Markings */}
-              <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute inset-[4%] border border-white/40" />
-                <div className="absolute top-1/2 inset-x-[4%] h-px bg-white/40 -translate-y-1/2" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[22%] h-[15%] rounded-full border border-white/40" />
-                <div className="absolute top-[4%] left-[30%] right-[30%] h-[12%] border border-white/40 border-t-0" />
-                <div className="absolute bottom-[4%] left-[30%] right-[30%] h-[12%] border border-white/40 border-b-0" />
-                <div className="absolute top-[4%] left-[42%] right-[42%] h-[5%] bg-white/10 border border-white/40 border-t-0" />
-                <div className="absolute bottom-[4%] left-[42%] right-[42%] h-[5%] bg-white/10 border border-white/40 border-b-0" />
+          {/* ── CARD MATCHS À VENIR (Real DB Fixtures) ── */}
+          <div className="bg-[#121e28] border border-slate-800 rounded-2xl p-4 shadow-xl text-white space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-white">
+                  Matchs à venir
+                </h3>
               </div>
-              
-              {/* Players */}
-              {pitchNodes.map((node) => {
-                const initials = getInitials(node.name);
-                
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                {upcomingMatches.length} Matchs
+              </span>
+            </div>
+
+            {/* Upcoming List */}
+            {upcomingMatches.length === 0 ? (
+              <div className="py-6 text-center text-slate-500 text-[10px] font-medium">
+                Aucun autre match programmé pour le moment.
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {upcomingMatches.map((m: Match) => {
+                  const opp = opponentClubs.find(c => c.id === m.opponent_id);
+                  const oppNm = (getOpponentName && m.opponent_id ? getOpponentName(m.opponent_id) : '') || opp?.name || 'Adversaire';
+                  const dateText = m.match_date || 'À venir';
+                  const timeText = m.match_time ? m.match_time.slice(0, 5) : '18:00';
+
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => onSelectMatch?.(m)}
+                      className="bg-[#182635] hover:bg-[#1f3144] border border-slate-700/60 hover:border-emerald-500/50 rounded-xl p-3 transition-all cursor-pointer group shadow-sm flex flex-col justify-between"
+                    >
+                      {(() => {
+                        const otherLeague = leagues.find(l => l.id === m.league_id);
+                        const otherIsFriendly = !m.league_id || otherLeague?.name?.toLowerCase().includes('amical') || m.category?.toLowerCase().includes('amical') || m.notes?.toLowerCase().includes('amical');
+                        return (
+                          <div className="flex items-center justify-between text-[9px] text-slate-400 font-bold mb-2">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-emerald-400" /> {timeText} · {dateText}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${m.status === 'live' ? 'bg-red-500 text-white animate-pulse' : otherIsFriendly ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-800 text-slate-300'}`}>
+                              {m.status === 'live' ? 'LIVE' : otherIsFriendly ? '🤝 Amical' : (otherLeague?.name || m.category || 'PRO')}
+                            </span>
+                          </div>
+                        );
+                      })()}
+
+                      <div className="flex items-center justify-between gap-2 py-1">
+                        <span className="text-[11px] font-black text-white group-hover:text-emerald-300 transition-colors truncate">
+                          {mainClubName}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-500 px-1.5 py-0.5 bg-slate-900 rounded">
+                          VS
+                        </span>
+                        <span className="text-[11px] font-black text-slate-300 group-hover:text-white transition-colors truncate text-right">
+                          {oppNm}
+                        </span>
+                      </div>
+
+                      <p className="text-[8px] text-slate-500 truncate mt-1 flex items-center gap-1">
+                        <MapPin className="w-2.5 h-2.5" /> {m.stadium || stadiumName}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* ────────────────────────────────────────────────────────── */}
+        {/* 3. COLUMN 3: LINE UP REAL TACTICAL PITCH & BENCHES         */}
+        {/* ────────────────────────────────────────────────────────── */}
+        <div className="lg:col-span-4 space-y-4">
+          <div className="rounded-2xl overflow-hidden shadow-2xl border border-slate-800 bg-[#28963c] text-white flex flex-col">
+            
+            {/* Header: LINE UP & Half selector */}
+            <div className="bg-[#2ecc71] px-4 py-2.5 flex items-center justify-between text-[#0b141d] font-black text-[11px] uppercase">
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" /> COMPOSITIONS ({formationKey} vs {opponentFormationKey})
+              </span>
+              <div className="flex items-center gap-1 text-[9px] font-bold bg-[#1d7e32]/40 px-2 py-0.5 rounded text-white cursor-pointer">
+                <span>TITULAIRES</span>
+                <ChevronDown className="w-3 h-3" />
+              </div>
+            </div>
+
+            {/* Tactical Football Pitch with Real Players */}
+            <div className="relative w-full h-[620px] bg-gradient-to-b from-[#28963c] via-[#248936] to-[#207c31] p-3">
+              {/* Grass vertical stripes */}
+              <div
+                className="absolute inset-0 opacity-10 pointer-events-none"
+                style={{
+                  backgroundImage: 'repeating-linear-gradient(180deg, #000 0px, #000 35px, transparent 35px, transparent 70px)'
+                }}
+              />
+
+              {/* Pitch Markings */}
+              <div className="absolute inset-2 border-2 border-white/50 rounded pointer-events-none" />
+              <div className="absolute top-1/2 inset-x-2 h-0.5 bg-white/50 -translate-y-1/2 pointer-events-none" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full border-2 border-white/50 pointer-events-none" />
+              <div className="absolute top-2 inset-x-[25%] h-[12%] border-2 border-white/50 border-t-0 pointer-events-none" />
+              <div className="absolute bottom-2 inset-x-[25%] h-[12%] border-2 border-white/50 border-b-0 pointer-events-none" />
+
+              {/* Formations Labels */}
+              <span className="absolute top-3 left-3 text-[9px] font-black text-white/90 bg-black/40 px-2 py-0.5 rounded">
+                {mainClubName.substring(0, 6)} ({formationKey})
+              </span>
+              <span className="absolute bottom-3 left-3 text-[9px] font-black text-white/90 bg-black/40 px-2 py-0.5 rounded">
+                {opponentName.substring(0, 6)} ({opponentFormationKey})
+              </span>
+
+              {/* Top Team Nodes (Real FUS Players - Blue/White Jerseys) */}
+              {topTeamPositions.map((pos, idx) => {
+                const rawPid = startingXI[idx];
+                const pid = typeof rawPid === 'object' ? (rawPid?.player_id || rawPid?.id) : rawPid;
+                const p = getPlayer(pid);
+                const name = p ? (p.last_name || p.name || 'FUS') : (typeof rawPid === 'object' ? (rawPid.full_name || rawPid.name || 'FUS') : `J.${idx + 1}`);
+                const jerseyVal = p?.jersey_number ?? (typeof rawPid === 'object' ? (rawPid.jersey_number || rawPid.number) : null) ?? (idx + 1);
+                const jerseyText = String(jerseyVal);
+                const hasGoal = (events || []).some(e => (e.type === 'goal' || e.type === 'penalty') && String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(pid));
+                const hasYellowCard = (events || []).some(e => e.type === 'yellow_card' && String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(pid));
+                const hasRedCard = (events || []).some(e => e.type === 'red_card' && String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(pid));
+
+                // GK at top goal (~7.5%), Strikers near halfway line (~40%)
+                const topPct = 48 - (parseFloat(pos.top) * 0.44);
+
+                const isHovered = hoveredPlayerKey === `home-${idx}`;
+                const hoverStats = isHovered ? getPlayerHoverStats(rawPid, pos.label, true, true, idx, jerseyVal) : null;
+                const hAlign = getHorizontalAlign(pos.left);
+
                 return (
-                  <div 
-                    key={node.id} 
-                    className="absolute flex flex-col items-center -translate-x-1/2 -translate-y-1/2 transition-transform hover:scale-110"
-                    style={{ top: node.top, left: node.left }}
+                  <div
+                    key={`home-${idx}`}
+                    onMouseEnter={() => setHoveredPlayerKey(`home-${idx}`)}
+                    onMouseLeave={() => setHoveredPlayerKey(null)}
+                    className={`absolute flex flex-col items-center -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform ${
+                      isHovered ? 'scale-125 z-40' : 'hover:scale-125 z-20'
+                    }`}
+                    style={{ top: `${topPct}%`, left: pos.left }}
                   >
-                    {/* Circle avatar / jersey */}
-                    <div className={`relative ${node.sizeClass} rounded-full border-2 flex items-center justify-center text-[10px] font-black shadow-xl transition-all
-                      ${node.isOpponent 
-                        ? 'bg-slate-900 border-red-500/80 text-white' 
-                        : node.photoUrl || node.jerseyNumber 
-                          ? 'bg-blue-600 border-white text-white shadow-blue-900/50' 
-                          : 'bg-black/30 border-white/40 text-white/50'
-                      }`}
-                    >
-                      {node.photoUrl ? (
-                        <img 
-                          src={node.photoUrl} 
-                          alt="" 
-                          className="w-full h-full rounded-full object-cover p-0.5" 
-                        />
+                    <div className="relative w-11 h-11 rounded-full bg-slate-900 border-2 border-white flex items-center justify-center text-xs font-black text-white shadow-xl">
+                      {p?.photo_url && p.photo_url !== 'null' ? (
+                        <img src={p.photo_url} alt="" className="w-full h-full rounded-full object-cover" />
                       ) : (
-                        <span className={`font-black ${isCompact ? 'text-[9px]' : 'text-xs'} tracking-tighter uppercase`}>
-                          {node.isOpponent 
-                            ? (node.jerseyNumber || node.label) 
-                            : node.jerseyNumber 
-                              ? initials 
-                              : node.label
-                          }
-                        </span>
+                        <span className="text-xs font-black">{jerseyText}</span>
                       )}
-
-                      {/* Jersey Number Badge Overlay */}
-                      {!node.isOpponent && node.photoUrl && node.jerseyNumber && (
-                        <span className={`absolute -bottom-1 -right-1 bg-black text-white rounded-full flex items-center justify-center font-black border border-white shadow-md
-                          ${isCompact ? 'w-4 h-4 text-[7px]' : 'w-5 h-5 text-[9px]'}`}>
-                          {node.jerseyNumber}
-                        </span>
-                      )}
-
-                      {node.isOpponent && node.photoUrl && node.jerseyNumber && (
-                        <span className={`absolute -bottom-1 -right-1 bg-red-600 text-white rounded-full flex items-center justify-center font-black border border-white shadow-md
-                          ${isCompact ? 'w-4 h-4 text-[7px]' : 'w-5 h-5 text-[9px]'}`}>
-                          {node.jerseyNumber}
-                        </span>
-                      )}
+                      {/* Jersey badge */}
+                      <span className="absolute -top-1 -right-1 bg-slate-950 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white shadow">
+                        {jerseyText}
+                      </span>
+                      {hasGoal && <span className="absolute -bottom-1 -left-1 text-[10px]">⚽</span>}
+                      {hasRedCard ? (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-3 bg-red-600 rounded-xs shadow border border-white/40" title="Carton Rouge" />
+                      ) : hasYellowCard ? (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-3 bg-yellow-400 rounded-xs shadow border border-white/40" title="Carton Jaune" />
+                      ) : null}
                     </div>
+                    <span className="text-[8px] font-black text-white uppercase mt-0.5 tracking-tight drop-shadow bg-black/60 px-1.5 py-0.5 rounded-md truncate max-w-[65px]">
+                      {String(name).split(' ').pop()}
+                    </span>
 
-                    {/* Name Badge */}
-                    <div className={`font-black rounded-md whitespace-nowrap shadow-md tracking-wider uppercase text-center
-                      ${node.textSizeClass}
-                      ${node.isOpponent 
-                        ? 'bg-slate-950/90 text-red-200 border border-red-500/20' 
-                        : node.photoUrl || node.jerseyNumber 
-                          ? 'bg-black/80 text-white border border-white/20' 
-                          : 'bg-black/30 text-white/40 border-white/10'
-                      }`}
-                    >
-                      {node.isOpponent 
-                        ? (node.jerseyNumber ? `ADV #${node.jerseyNumber}` : node.label) 
-                        : node.photoUrl || node.jerseyNumber 
-                          ? (node.name.split(' ').pop() || '—') 
-                          : node.label
-                      }
+                    {/* Popover Card */}
+                    <AnimatePresence>
+                      {isHovered && hoverStats && (
+                        <PlayerPitchHoverCard
+                          stats={hoverStats}
+                          placement="bottom"
+                          horizontalAlign={hAlign}
+                        />
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+
+              {/* Bottom Team Nodes (Opponent Players - Red Jerseys) - Rotated 180° so GK is in the bottom goal */}
+              {bottomTeamPositions.map((pos, idx) => {
+                const rawOpp = opponentStartingXI[idx];
+                const oppPid = typeof rawOpp === 'object' ? (rawOpp.id || rawOpp.player_id) : rawOpp;
+                const jerseyVal = typeof rawOpp === 'object' ? (rawOpp.jersey_number || rawOpp.number || (idx + 1)) : (rawOpp || (idx + 1));
+                const jerseyText = String(jerseyVal);
+
+                const hasOppGoal = (events || []).some(e => (e.type === 'goal' || e.type === 'penalty') && String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(oppPid));
+                const hasOppYellowCard = (events || []).some(e => e.type === 'yellow_card' && String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(oppPid));
+                const hasOppRedCard = (events || []).some(e => e.type === 'red_card' && String(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId) === String(oppPid));
+                
+                // Rotated 180°: GK occupies bottom goal (~92.5%), defenders (~85%), midfielders (~75%), strikers near center line (~60%)
+                const topPct = 52 + (parseFloat(pos.top) * 0.44);
+                const leftPct = parseFloat(pos.left);
+
+                const isHovered = hoveredPlayerKey === `away-${idx}`;
+                const hoverStats = isHovered ? getPlayerHoverStats(rawOpp, pos.label, false, true, idx, jerseyVal) : null;
+                const hAlign = getHorizontalAlign(pos.left);
+
+                return (
+                  <div
+                    key={`away-${idx}`}
+                    onMouseEnter={() => setHoveredPlayerKey(`away-${idx}`)}
+                    onMouseLeave={() => setHoveredPlayerKey(null)}
+                    className={`absolute flex flex-col items-center -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform ${
+                      isHovered ? 'scale-125 z-40' : 'hover:scale-125 z-20'
+                    }`}
+                    style={{ top: `${topPct}%`, left: `${leftPct}%` }}
+                  >
+                    <div className="relative w-11 h-11 rounded-full bg-rose-600 border-2 border-white flex items-center justify-center text-xs font-black text-white shadow-xl">
+                      {jerseyText}
+                      {hasOppGoal && <span className="absolute -bottom-1 -left-1 text-[10px]">⚽</span>}
+                      {hasOppRedCard ? (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-3 bg-red-600 rounded-xs shadow border border-white/40" title="Carton Rouge" />
+                      ) : hasOppYellowCard ? (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-3 bg-yellow-400 rounded-xs shadow border border-white/40" title="Carton Jaune" />
+                      ) : null}
                     </div>
+                    <span className="text-[8px] font-black text-rose-200 uppercase mt-0.5 tracking-tight drop-shadow bg-black/60 px-1.5 py-0.5 rounded-md truncate max-w-[65px]">
+                      Adv #{jerseyText}
+                    </span>
+
+                    {/* Popover Card */}
+                    <AnimatePresence>
+                      {isHovered && hoverStats && (
+                        <PlayerPitchHoverCard
+                          stats={hoverStats}
+                          placement="top"
+                          horizontalAlign={hAlign}
+                        />
+                      )}
+                    </AnimatePresence>
                   </div>
                 );
               })}
             </div>
 
-            {/* Benches */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20">
-              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-white mb-3">
-                {lineupViewMode === 'opponent' ? 'Remplaçants Adversaires' : 'Remplaçants'}
-              </h4>
-              {lineupViewMode === 'opponent' ? (
-                (() => {
-                  const opponentSubs: string[] = match.opponent_subs || [];
-                  return opponentSubs.filter(Boolean).length === 0 ? (
-                    <p className="text-xs text-white/50 text-center font-medium py-2">Aucun joueur sur le banc adverse</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {opponentSubs.filter(Boolean).map((jersey, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-black/20 rounded-lg p-2 border border-white/10">
-                          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[9px] font-black text-white">
-                            {jersey}
-                          </div>
-                          <span className="text-[9px] font-bold text-white flex-1 truncate uppercase">Adv. #{jersey}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()
-              ) : (
-                subs.filter(Boolean).length === 0 ? (
-                  <p className="text-xs text-white/50 text-center font-medium py-2">Aucun joueur sur le banc</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {subs.filter(Boolean).map((pid, i) => (
-                      <div key={i} className="flex items-center gap-2 bg-black/20 rounded-lg p-2 border border-white/10">
-                        <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-[9px] font-black text-white">{12 + i}</div>
-                        <span className="text-[9px] font-bold text-white flex-1 truncate uppercase">{getPlayerShortName(pid)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-            </div>
-            
-            {/* Reactions */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 mt-4">
-              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-white mb-3 text-center">
-                Réactions des Fans
-              </h4>
-              <div className="flex items-center justify-center gap-8">
-                {(() => {
-                  const total = reactionCounts.fire + reactionCounts.thumbsup + reactionCounts.thumbsdown;
-                  const firePct = total > 0 ? Math.round((reactionCounts.fire / total) * 100) : 0;
-                  const upPct = total > 0 ? Math.round((reactionCounts.thumbsup / total) * 100) : 0;
-                  const downPct = total > 0 ? Math.round((reactionCounts.thumbsdown / total) * 100) : 0;
-                  
-                  return (
-                    <>
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="text-2xl drop-shadow-lg">🔥</span>
-                        <span className="text-white font-black text-sm">{firePct}%</span>
-                        <span className="text-white/50 text-[9px] uppercase tracking-wider">{reactionCounts.fire} votes</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="text-2xl drop-shadow-lg">👍</span>
-                        <span className="text-white font-black text-sm">{upPct}%</span>
-                        <span className="text-white/50 text-[9px] uppercase tracking-wider">{reactionCounts.thumbsup} votes</span>
-                      </div>
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="text-2xl drop-shadow-lg">👎</span>
-                        <span className="text-white font-black text-sm">{downPct}%</span>
-                        <span className="text-white/50 text-[9px] uppercase tracking-wider">{reactionCounts.thumbsdown} votes</span>
-                      </div>
-                    </>
-                  );
-                })()}
+            {/* Benches Section (Real DB Substitutes & Coaches) */}
+            <div className="bg-[#182635] p-3.5 border-t border-slate-700 text-white space-y-2.5">
+              <div className="flex items-center justify-center">
+                <span className="bg-slate-800 text-slate-300 text-[8px] font-black uppercase tracking-widest px-3 py-0.5 rounded-full border border-slate-700">
+                  STAFF & REMPLAÇANTS
+                </span>
               </div>
+
+              {/* Coaches Portraits */}
+              <div className="grid grid-cols-2 gap-2 text-center text-[8px] pb-2 border-b border-slate-700/60">
+                <div className="flex flex-col items-center">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-xs">
+                    👨‍💼
+                  </div>
+                  <p className="font-bold text-white uppercase mt-1 truncate max-w-full px-1">{headCoachName}</p>
+                </div>
+
+                <div className="flex flex-col items-center">
+                  <div className="w-8 h-8 rounded-full bg-rose-500/20 border border-rose-400 flex items-center justify-center text-xs">
+                    👨‍💼
+                  </div>
+                  <p className="font-bold text-slate-300 uppercase mt-1 truncate max-w-full px-1">Staff {opponentName}</p>
+                </div>
+              </div>
+
+              {/* Substitutes List Columns with Photos */}
+              <div className="grid grid-cols-2 gap-2 text-[8px]">
+                {/* Home Subs from Supabase */}
+                <div className="space-y-1.5">
+                  {subs.length === 0 ? (
+                    <span className="text-slate-500 italic text-[7.5px]">Aucun remplaçant</span>
+                  ) : (
+                    subs.slice(0, 5).map((rawSub, i) => {
+                      const pid = typeof rawSub === 'object' ? (rawSub?.player_id || rawSub?.id) : rawSub;
+                      const p = getPlayer(pid);
+                      const subJersey = p?.jersey_number ?? (typeof rawSub === 'object' ? (rawSub.jersey_number || rawSub.number) : null) ?? (12 + i);
+                      const subName = p ? getPlayerShortName(pid) : (typeof rawSub === 'object' ? (rawSub.full_name || rawSub.name) : 'Remplaçant');
+                      const isSubHovered = hoveredPlayerKey === `sub-home-${i}`;
+                      const subStats = isSubHovered ? getPlayerHoverStats(rawSub, 'SUB', true, false, i, subJersey) : null;
+
+                      return (
+                        <div
+                          key={i}
+                          onMouseEnter={() => setHoveredPlayerKey(`sub-home-${i}`)}
+                          onMouseLeave={() => setHoveredPlayerKey(null)}
+                          className="relative flex items-center gap-1.5 truncate text-slate-300 hover:text-white cursor-pointer transition-colors"
+                        >
+                          <div className="w-6 h-6 rounded-full bg-slate-800 overflow-hidden border border-slate-600 shrink-0 flex items-center justify-center">
+                            {p?.photo_url && p.photo_url !== 'null' ? (
+                              <img src={p.photo_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="text-[8px] font-bold text-slate-400">{String(subJersey)}</span>
+                            )}
+                          </div>
+                          <span className="text-emerald-400 font-bold">{String(subJersey)}.</span>
+                          <span className="truncate uppercase text-[8px]">{String(subName)}</span>
+
+                          <AnimatePresence>
+                            {isSubHovered && subStats && (
+                              <PlayerPitchHoverCard
+                                stats={subStats}
+                                placement="top"
+                                horizontalAlign="left"
+                              />
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Away Subs */}
+                <div className="space-y-1.5">
+                  {(opponentSubs.length > 0 ? opponentSubs : ['12', '14', '18', '21', '24']).slice(0, 5).map((rawOppSub, i) => {
+                    const num = typeof rawOppSub === 'object' ? (rawOppSub.jersey_number || rawOppSub.number || (12 + i)) : String(rawOppSub);
+                    const isOppSubHovered = hoveredPlayerKey === `sub-away-${i}`;
+                    const oppSubStats = isOppSubHovered ? getPlayerHoverStats(rawOppSub, 'SUB', false, false, i, num) : null;
+
+                    return (
+                      <div
+                        key={i}
+                        onMouseEnter={() => setHoveredPlayerKey(`sub-away-${i}`)}
+                        onMouseLeave={() => setHoveredPlayerKey(null)}
+                        className="relative flex items-center gap-1.5 truncate text-slate-400 hover:text-white cursor-pointer transition-colors"
+                      >
+                        <div className="w-6 h-6 rounded-full bg-slate-800 overflow-hidden border border-slate-700 shrink-0 flex items-center justify-center">
+                          <span className="text-[8px] font-bold text-rose-400">{String(num)}</span>
+                        </div>
+                        <span className="text-rose-400 font-bold">{String(num)}.</span>
+                        <span className="truncate uppercase text-[8px]">Adv #{String(num)}</span>
+
+                        <AnimatePresence>
+                          {isOppSubHovered && oppSubStats && (
+                            <PlayerPitchHoverCard
+                              stats={oppSubStats}
+                              placement="top"
+                              horizontalAlign="right"
+                            />
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
             </div>
-            
+
           </div>
         </div>
-        )}
-
-        {activeTab === 'video' && (
-          <div className="max-w-5xl mx-auto space-y-6">
-            {match.video_url ? (
-              <div className="aspect-video w-full rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-800 bg-black">
-                <iframe 
-                  src={match.video_url.includes('youtube.com') || match.video_url.includes('youtu.be') ? match.video_url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/') : match.video_url} 
-                  className="w-full h-full" 
-                  allowFullScreen 
-                />
-              </div>
-            ) : (
-              <div className="bg-white border-2 border-dashed border-slate-200 rounded-[2rem] p-10 shadow-sm flex flex-col items-center justify-center gap-4 text-slate-300 min-h-[400px]">
-                <Video className="w-16 h-16 text-slate-200" />
-                <p className="text-sm font-black uppercase tracking-widest text-slate-400">Aucune vidéo disponible pour ce match</p>
-              </div>
-            )}
-          </div>
-        )}
 
       </div>
     </motion.div>

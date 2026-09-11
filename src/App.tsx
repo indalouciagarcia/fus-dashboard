@@ -32,6 +32,7 @@ import LeagueManagement from './features/league-management/LeagueManagement';
 import ClubSettings from './features/club-management/ClubSettings';
 import OpponentClubs from './features/club-management/OpponentClubs';
 import TeamManagement from './features/squad-management/TeamManagement';
+import ClubRosterPage from './features/squad-management/ClubRosterPage';
 import StadiumManagement from './features/club-management/StadiumManagement';
 import BlogManagement from './features/blog-management/BlogManagement';
 import StoreManagement from './features/store-management/StoreManagement';
@@ -39,16 +40,22 @@ import UserManagement from './features/user-management/UserManagement';
 import ArbitresPage from './features/people-management/ArbitresPage';
 import AuditLogsPage from './features/audit-logs/AuditLogsPage';
 import RecruitmentPage from './features/recruitment/RecruitmentPage';
+import TrainingsPage from './features/trainings/TrainingsPage';
+import OfficialShortlistPage from './features/match-management/OfficialShortlistPage';
 
 const pageTitles: Record<string, string> = {
   '/': 'Tableau de Bord',
   '/dashboard': 'Tableau de Bord',
   '/matches': 'Calendrier des Matchs',
   '/matchday': 'Match Day',
+  '/official-shortlist': 'Shortlist Officielle — Placement Tactique',
+  '/club': 'Mon Club — Effectif FUS',
   '/players': 'Gestion de l\'Effectif',
   '/teams': 'Unités d\'Équipe',
   '/staff': 'Staff Technique',
   '/arbitres': 'Rubrique Arbitres',
+  '/trainings': 'Gestion des Entraînements',
+  '/trainings/*': 'Gestion des Entraînements',
   '/recruitment': 'Cellule Détection & Recrutement',
   '/recruitment/*': 'Cellule Détection & Recrutement',
   '/leagues': 'Gestion des Compétitions',
@@ -85,8 +92,8 @@ const AppContent: React.FC = () => {
         sidebarCollapsed={sidebarCollapsed}
       />
 
-      <main className={cn("pt-[72px] transition-all duration-300 md:pl-[72px]", sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-64")}>
-        <div className="p-3 sm:p-4 md:p-6 lg:p-6 xl:p-10 max-w-[1600px] mx-auto">
+      <main className={cn("pt-20 transition-all duration-300 md:pl-20", sidebarCollapsed ? "lg:pl-20" : "lg:pl-72")}>
+        <div className="p-4 sm:p-6 md:p-8 lg:p-8 xl:p-10 max-w-[1750px] mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -105,6 +112,7 @@ const AppContent: React.FC = () => {
                   </ProtectedRoute>
                 } />
                 <Route path="/players"   element={<PlayerManagement />} />
+                <Route path="/club"      element={<Navigate to="/players" replace />} />
                 <Route path="/teams"     element={
                   <ProtectedRoute requiredPermission="manage_teams">
                     <TeamManagement />
@@ -115,7 +123,10 @@ const AppContent: React.FC = () => {
                     <StaffManagement />
                   </ProtectedRoute>
                 } />
-                <Route path="/arbitres"      element={<ArbitresPage />} />
+                <Route path="/arbitres"           element={<ArbitresPage />} />
+                <Route path="/official-shortlist" element={<OfficialShortlistPage />} />
+                <Route path="/trainings"          element={<TrainingsPage />} />
+                <Route path="/trainings/*"   element={<TrainingsPage />} />
                 <Route path="/recruitment"   element={<RecruitmentPage />} />
                 <Route path="/recruitment/*" element={<RecruitmentPage />} />
                 <Route path="/leagues"       element={

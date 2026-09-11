@@ -8,6 +8,7 @@ import { usePermissions } from '../../context/PermissionsContext';
 import { useSurclassements } from '../../hooks/useSurclassements';
 import { useTouchDragAndDrop } from '../../hooks/useTouchDragAndDrop';
 import { useArbitres } from '../../hooks/useArbitres';
+import { useOpponentPlayers } from '../../hooks/useOpponentPlayers';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
@@ -15,9 +16,10 @@ import { Badge } from '../../components/ui/badge';
 import {
   ChevronRight, ChevronLeft, Check,
   Briefcase, Users, Target, Shield, Star, Save, Gamepad2, Settings, Clock, MapPin,
-  Calendar, Search, Filter, Loader2, UserPlus, X, Trophy, CheckCircle2, Edit2, UserCheck
+  Calendar, Search, Filter, Loader2, UserPlus, X, Trophy, CheckCircle2, Edit2, UserCheck, User
 } from 'lucide-react';
-import type { Match, Player, MatchPhase } from '../../types';
+import type { Match, Player, MatchPhase, OpponentPlayer } from '../../types';
+
 
 interface MatchPreparationProps {
   matchId: string;
@@ -40,7 +42,7 @@ const POSITION_GROUPS = [
   { label: 'Gardien', roles: ['GK', 'G'] },
   { label: 'Défenseurs', roles: ['CB', 'LB', 'RB', 'LWB', 'RWB', 'D'] },
   { label: 'Milieux', roles: ['CDM', 'CM', 'CAM', 'LM', 'RM', 'M'] },
-  { label: 'Attaquants', roles: ['ST', 'LW', 'RW', 'CF', 'F'] }
+  { label: 'Attaquants', roles: ['ST', 'LW', 'RW', 'SS', 'CF', 'F'] }
 ];
 
 const getFormationPositions = (formation: string) => {
@@ -103,38 +105,39 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
   const { surclassements } = useSurclassements();
   const { arbitres } = useArbitres();
 
-  const match = matches.find(m => m.id === matchId);
+  const match = matches.find(m => String(m.id) === String(matchId));
 
-  const [currentStep, setCurrentStep] = useState<PrepStep>('setup');
-  const [saving, setSaving] = useState(false);
-  const [autoSaved, setAutoSaved] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<string>('ALL');
-  const [editingJerseyId, setEditingJerseyId] = useState<string | null>(null);
-  const [editingJerseyValue, setEditingJerseyValue] = useState<string>('');
-  const isFirstRender = useRef(true);
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isDirty = useRef(false);
+  const sanitizeId = (item: any): string => {
+    if (!item) return '';
+    if (typeof item === 'object') return String(item.player_id || item.id || item.jersey_number || '');
+    return String(item);
+  };
+
+  const sanitizeOpponentNumber = (item: any): string => {
+    if (!item) return '';
+    if (typeof item === 'object') return String(item.jersey_number || item.number || item.id || '');
+    return String(item);
+  };
 
   const buildFormData = (m: any) => {
     const formation = m?.lineup?.formation ?? m?.formation ?? '4-3-3';
     return {
       ...(m || {}),
       lineup: {
-        startingXI: m?.lineup?.startingXI || Array(11).fill(''),
-        substitutes: m?.lineup?.substitutes || [],
+        startingXI: (m?.lineup?.startingXI || Array(11).fill('')).map(sanitizeId),
+        substitutes: (m?.lineup?.substitutes || []).map(sanitizeId),
         formation,
         jerseyOverrides: m?.lineup?.jerseyOverrides || {},
       },
       formation,
-      staff_ids: m?.staff_ids || [],
+      staff_ids: (m?.staff_ids || []).map(sanitizeId),
       referee_central_id: m?.referee_central_id ?? m?.referees_assigned?.central_id ?? null,
       referee_assistant1_id: m?.referee_assistant1_id ?? m?.referees_assigned?.assistant1_id ?? null,
       referee_assistant2_id: m?.referee_assistant2_id ?? m?.referees_assigned?.assistant2_id ?? null,
       referee_fourth_id: m?.referee_fourth_id ?? m?.referees_assigned?.fourth_id ?? null,
       opponent_formation: m?.opponent_formation || '4-4-2',
-      opponent_lineup: m?.opponent_lineup || Array(11).fill(''),
-      opponent_subs: m?.opponent_subs || [],
+      opponent_lineup: (m?.opponent_lineup || Array(11).fill('')).map(sanitizeOpponentNumber),
+      opponent_subs: (m?.opponent_subs || []).map(sanitizeOpponentNumber),
       is_home: m?.is_home ?? true
     };
   };
@@ -144,6 +147,20 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
     isDirty.current = true;
     setFormDataRaw(value);
   }, []);
+
+  const { players: registeredOpponentPlayers } = useOpponentPlayers(formData?.opponent_id || match?.opponent_id, match?.category);
+
+  const [currentStep, setCurrentStep] = useState<PrepStep>('setup');
+
+  const [saving, setSaving] = useState(false);
+  const [autoSaved, setAutoSaved] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<string>('ALL');
+  const [editingJerseyId, setEditingJerseyId] = useState<string | null>(null);
+  const [editingJerseyValue, setEditingJerseyValue] = useState<string>('');
+  const isFirstRender = useRef(true);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDirty = useRef(false);
 
   // Re-sync formData when navigating back to this match (matchId change or fresh server data)
   const prevMatchId = useRef(matchId);
@@ -682,7 +699,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                                     animate={{ opacity: 1, scale: 1 }}
                                     className={`flex items-center gap-4 p-4 rounded-3xl border-2 transition-all cursor-grab active:cursor-grabbing group ${isStarter ? 'border-primary bg-primary/5 shadow-md' : isSub ? 'border-emerald-400 bg-emerald-50/20' : isSurclasse ? 'border-orange-300 bg-orange-50/30 hover:border-orange-400' : 'border-slate-100 bg-white hover:border-primary/20'}`}
                                  >
-                                    <div className="w-12 h-12 rounded-2xl bg-slate-200 overflow-hidden border-2 border-white shadow-sm shrink-0">
+                                    <div className="w-16 h-16 rounded-2xl bg-slate-200 overflow-hidden border-2 border-white shadow-sm shrink-0">
                                        <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} className="w-full h-full object-cover" />
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -874,46 +891,96 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                              {FORMATIONS.map(f => (
                                <button key={f} onClick={() => setFormData({...formData, opponent_formation: f})} className={`h-10 rounded-xl text-[9px] font-black uppercase transition-all border-2 ${formData.opponent_formation === f ? 'bg-primary border-primary text-white shadow-lg' : 'bg-slate-50 border-transparent text-muted-foreground hover:border-primary/20'}`}>{f}</button>
                              ))}
-                          </div>
-                       </CardContent>
-                    </Card>
+                             {/* Effectif Répertorié (Adversaire par Catégorie) */}
+                             {registeredOpponentPlayers.length > 0 && (
+                                <Card className="rounded-[2.5rem] border-primary/20 shadow-lg overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 text-white">
+                                   <CardContent className="p-5">
+                                      <h4 className="text-[10px] font-black uppercase tracking-widest text-primary-foreground mb-1 flex items-center gap-2">
+                                         <Users className="w-3.5 h-3.5 text-primary" /> Effectif Répertorié ({match?.category})
+                                      </h4>
+                                      <p className="text-[9px] text-slate-400 mb-3">Cliquez pour insérer dans la composition</p>
+                                      <div className="grid grid-cols-2 gap-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
+                                         {registeredOpponentPlayers.map(op => {
+                                            const opJersey = op.jersey_number?.toString() || op.full_name;
+                                            const isUsed = (formData.opponent_lineup || []).includes(opJersey) || (formData.opponent_subs || []).includes(opJersey);
+                                            const avatar = (op.photo_url && op.photo_url !== 'null')
+                                               ? op.photo_url
+                                               : `https://ui-avatars.com/api/?name=${encodeURIComponent(op.full_name)}&background=020617&color=fff&size=128`;
 
-                    {/* Banque de numéros 1-22 */}
-                    <Card className="rounded-[2.5rem] border-primary/20 shadow-lg overflow-hidden bg-gradient-to-br from-primary/5 to-white">
-                       <CardContent className="p-5">
-                          <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
-                             <Users className="w-3.5 h-3.5" /> Banque de Numéros (1-22)
-                          </h4>
-                          <p className="text-[9px] text-muted-foreground mb-3">Cliquez pour placer sur le terrain</p>
-                          <div className="grid grid-cols-7 gap-2">
-                             {Array.from({ length: 22 }, (_, i) => i + 1).map(num => {
-                                const isUsed = (formData.opponent_lineup || []).includes(num.toString()) || (formData.opponent_subs || []).includes(num.toString());
-                                return (
-                                   <button
-                                      key={num}
-                                      onClick={() => {
-                                         if (isUsed) return;
-                                         // Find first empty slot
-                                         const emptySlot = (formData.opponent_lineup || []).findIndex((slot: string) => slot === '');
-                                         if (emptySlot !== -1) {
-                                            updateOpponentJersey(emptySlot, num.toString());
-                                         } else {
-                                            // If no empty slot in lineup, add to subs
-                                            addOpponentSubstitute();
-                                            updateOpponentSubstitute((formData.opponent_subs || []).length, num.toString());
-                                         }
-                                      }}
-                                      disabled={isUsed}
-                                      className={`w-9 h-9 rounded-xl font-black text-xs transition-all ${
-                                         isUsed 
-                                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                                            : 'bg-white border-2 border-primary/30 text-primary hover:bg-primary hover:text-white hover:shadow-lg hover:scale-110'
-                                      }`}
-                                   >
-                                      {num}
-                                   </button>
-                                );
-                             })}
+                                            return (
+                                               <button
+                                                  key={op.id}
+                                                  disabled={isUsed}
+                                                  onClick={() => {
+                                                     if (isUsed) return;
+                                                     const emptySlot = (formData.opponent_lineup || []).findIndex((slot: string) => slot === '');
+                                                     if (emptySlot !== -1) {
+                                                        updateOpponentJersey(emptySlot, opJersey);
+                                                     } else {
+                                                        addOpponentSubstitute();
+                                                        updateOpponentSubstitute((formData.opponent_subs || []).length, opJersey);
+                                                     }
+                                                  }}
+                                                  className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all ${
+                                                     isUsed
+                                                        ? 'bg-slate-800/50 border-slate-700 opacity-40 cursor-not-allowed'
+                                                        : 'bg-slate-800 border-slate-700 hover:border-primary hover:bg-slate-700 cursor-pointer'
+                                                  }`}
+                                               >
+                                                  <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 border border-slate-600">
+                                                     <img src={avatar} alt={op.full_name} className="w-full h-full object-cover" />
+                                                  </div>
+                                                  <div className="min-w-0 flex-1">
+                                                     <p className="text-[10px] font-black uppercase truncate leading-none">{op.full_name}</p>
+                                                     <p className="text-[8px] font-bold text-primary mt-0.5">#{op.jersey_number ?? '?'} • {op.position || 'ST'}</p>
+                                                  </div>
+                                               </button>
+                                            );
+                                         })}
+                                      </div>
+                                   </CardContent>
+                                </Card>
+                             )}
+
+                             {/* Banque de numéros 1-22 */}
+                             <Card className="rounded-[2.5rem] border-primary/20 shadow-lg overflow-hidden bg-gradient-to-br from-primary/5 to-white">
+                                <CardContent className="p-5">
+                                   <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+                                      <Users className="w-3.5 h-3.5" /> Banque de Numéros (1-22)
+                                   </h4>
+                                   <p className="text-[9px] text-muted-foreground mb-3">Cliquez pour placer sur le terrain</p>
+                                   <div className="grid grid-cols-7 gap-2">
+                                      {Array.from({ length: 22 }, (_, i) => i + 1).map(num => {
+                                         const isUsed = (formData.opponent_lineup || []).includes(num.toString()) || (formData.opponent_subs || []).includes(num.toString());
+                                         return (
+                                            <button
+                                               key={num}
+                                               onClick={() => {
+                                                  if (isUsed) return;
+                                                  // Find first empty slot
+                                                  const emptySlot = (formData.opponent_lineup || []).findIndex((slot: string) => slot === '');
+                                                  if (emptySlot !== -1) {
+                                                     updateOpponentJersey(emptySlot, num.toString());
+                                                  } else {
+                                                     // If no empty slot in lineup, add to subs
+                                                     addOpponentSubstitute();
+                                                     updateOpponentSubstitute((formData.opponent_subs || []).length, num.toString());
+                                                  }
+                                               }}
+                                               disabled={isUsed}
+                                               className={`w-9 h-9 rounded-xl font-black text-xs transition-all ${
+                                                  isUsed 
+                                                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                                                     : 'bg-white border-2 border-primary/30 text-primary hover:bg-primary hover:text-white hover:shadow-lg hover:scale-110'
+                                               }`}
+                                            >
+                                               {num}
+                                            </button>
+                                         );
+                                      })}
+                                   </div>
+                                </CardContent>
+                             </Card>
                           </div>
                        </CardContent>
                     </Card>
@@ -978,6 +1045,7 @@ const MatchPreparation: React.FC<MatchPreparationProps> = ({ matchId, onBack }) 
                          positions={opponentPositions} 
                          isOpponent 
                          opponentJerseyNumbers={formData.opponent_lineup}
+                         opponentPlayers={registeredOpponentPlayers}
                          onUpdateOpponentJersey={updateOpponentJersey}
                        />
                     </div>
@@ -1132,11 +1200,12 @@ const Pitch: React.FC<{
   getPlayerById?: (id: string) => any;
   isOpponent?: boolean;
   opponentJerseyNumbers?: string[];
+  opponentPlayers?: OpponentPlayer[];
   onUpdateOpponentJersey?: (slotIndex: number, jersey: string) => void;
   onSwap?: (playerId: string, slotIndex: number) => void;
   onRemove?: (slotIndex: number) => void;
   jerseyOverrides?: Record<string, number>;
-}> = ({ positions, startingXI = [], getPlayerById, isOpponent, opponentJerseyNumbers, onUpdateOpponentJersey, onSwap, onRemove, jerseyOverrides = {} }) => {
+}> = ({ positions, startingXI = [], getPlayerById, isOpponent, opponentJerseyNumbers, opponentPlayers = [], onUpdateOpponentJersey, onSwap, onRemove, jerseyOverrides = {} }) => {
   const {
     isDragging,
     draggedItem,
@@ -1210,8 +1279,13 @@ const Pitch: React.FC<{
         const pFieldJersey = p ? (jerseyOverrides[p.id] ?? p.jersey_number) : null;
         const displayTop = isOpponent ? (100 - parseFloat(pos.top)) + '%' : pos.top;
         const displayLeft = isOpponent ? (100 - parseFloat(pos.left)) + '%' : pos.left;
-        const opponentJersey = opponentJerseyNumbers?.[idx] || '';
+        const opponentJerseyRaw = opponentJerseyNumbers?.[idx] || '';
+        const opponentJersey = typeof opponentJerseyRaw === 'object' ? (opponentJerseyRaw?.jersey_number || opponentJerseyRaw?.number || (idx + 1)) : (opponentJerseyRaw || '');
+        const oppJerseyStr = String(opponentJersey || (idx + 1));
         const isBeingDragged = draggedItem?.id === (p?.id || '');
+
+        const oppPlayer = isOpponent ? opponentPlayers.find(op => op.jersey_number?.toString() === oppJerseyStr || op.id === oppJerseyStr || op.full_name === oppJerseyStr) : null;
+        const oppAvatar = oppPlayer ? ((oppPlayer.photo_url && oppPlayer.photo_url !== 'null') ? oppPlayer.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(oppPlayer.full_name)}&background=020617&color=fff&size=200`) : null;
         
         return (
           <motion.div 
@@ -1268,7 +1342,7 @@ const Pitch: React.FC<{
                 }
               }}
               whileHover={(p || isOpponent) ? { scale: 1.15, rotate: 8, y: -8 } : { scale: 1.1 }}
-              className={`w-20 h-20 rounded-full border-[6px] flex items-center justify-center shadow-2xl transition-all duration-500 relative group/player touch-manipulation
+              className={`w-24 h-24 rounded-full border-[6px] flex items-center justify-center shadow-2xl transition-all duration-500 relative group/player touch-manipulation
                 ${p ? 'bg-primary border-white ring-8 ring-primary/20' : isOpponent ? 'bg-slate-950 border-white/30 hover:bg-slate-900 border-white cursor-pointer' : 'bg-white/10 border-white/20 hover:bg-white/40 hover:border-white shadow-inner cursor-crosshair'}
                 ${isBeingDragged ? 'scale-50 opacity-30' : ''}
                 ${longPressProgress > 0 ? 'scale-110' : ''}`}
@@ -1295,9 +1369,19 @@ const Pitch: React.FC<{
                      </button>
                   )}
                  </>
+               ) : oppPlayer ? (
+                 <>
+                    <img 
+                      src={oppAvatar!} 
+                      className="w-full h-full rounded-full object-cover p-1" 
+                    />
+                    <Badge className="absolute -top-1 -right-1 bg-primary text-white h-7 w-7 rounded-full flex items-center justify-center p-0 border-2 border-white text-[11px] font-black shadow-xl">
+                      #{oppPlayer.jersey_number ?? oppJerseyStr}
+                    </Badge>
+                 </>
                ) : isOpponent ? (
                  <div className="flex flex-col items-center">
-                    <span className="text-3xl font-black text-white leading-none">{opponentJersey || idx + 1}</span>
+                    <span className="text-3xl font-black text-white leading-none">{oppJerseyStr}</span>
                     <span className="text-[8px] font-bold text-white/40 uppercase mt-1">POS: {pos.label}</span>
                  </div>
                ) : (
@@ -1307,7 +1391,7 @@ const Pitch: React.FC<{
             <div className={`px-4 py-2 rounded-2xl text-[11px] font-black uppercase backdrop-blur-md truncate max-w-[110px] border shadow-2xl transition-all duration-500
               ${p ? 'bg-black/90 text-white border-white/20 scale-105' : isOpponent ? 'bg-slate-900/80 text-white border-white/10' : 'bg-white/10 text-white/40 border-white/10'}
               ${isBeingDragged ? 'opacity-50' : ''}`}>
-              {p ? p.full_name.split(' ').pop() : isOpponent ? `Adversaire #${opponentJersey || idx + 1}` : pos.label}
+              {p ? p.full_name.split(' ').pop() : oppPlayer ? oppPlayer.full_name.split(' ').pop() : isOpponent ? `Adversaire #${oppJerseyStr}` : pos.label}
             </div>
           </motion.div>
         );
@@ -1316,5 +1400,6 @@ const Pitch: React.FC<{
     </div>
   );
 };
+
 
 export default MatchPreparation;

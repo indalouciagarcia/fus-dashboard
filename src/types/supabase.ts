@@ -13,7 +13,7 @@ export type BackupStatus      = 'pending' | 'running' | 'completed' | 'failed';
 export type BackupType        = 'full' | 'database_only' | 'storage_only';
 export type BackupDestination = 'local' | 'google_drive' | 'onedrive' | 'desktop';
 export type BlogPostStatus    = 'draft' | 'published';
-export type AgeCategory       = 'U7' | 'U9' | 'U11' | 'U13' | 'U15' | 'U16' | 'U17' | 'U19' | 'U21' | 'U23' | 'SENIOR' | 'PRO' | 'OTHER';
+export type AgeCategory       = 'U7' | 'U9' | 'U11' | 'U13' | 'U14' | 'U15' | 'U16' | 'U17' | 'U18' | 'U19' | 'U21' | 'U23' | 'SENIOR' | 'PRO' | 'OTHER';
 export type PreferredFoot     = 'left' | 'right' | 'both';
 export type MatchEventType    =
   | 'goal' | 'own_goal' | 'assist'
@@ -243,6 +243,44 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['players']['Insert']>;
       };
 
+      opponent_players: {
+        Row: {
+          id: string;
+          opponent_id: string;
+          full_name: string;
+          jersey_number: number | null;
+          position: string | null;
+          category: string;
+          height: number | null;
+          weight: number | null;
+          preferred_foot: string | null;
+          nationality: string | null;
+          photo_url: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          opponent_id: string;
+          full_name: string;
+          jersey_number?: number | null;
+          position?: string | null;
+          category?: string;
+          height?: number | null;
+          weight?: number | null;
+          preferred_foot?: string | null;
+          nationality?: string | null;
+          photo_url?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['opponent_players']['Insert']>;
+      };
+
+
+
       matches: {
         Row: {
           id: string;
@@ -327,6 +365,8 @@ export interface Database {
           position_index: number | null;
           position_x: number | null;
           position_y: number | null;
+          rating: number | null;
+          rating_comment: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -338,6 +378,8 @@ export interface Database {
           position_index?: number | null;
           position_x?: number | null;
           position_y?: number | null;
+          rating?: number | null;
+          rating_comment?: string | null;
           created_at?: string;
           updated_at?: string;
         };

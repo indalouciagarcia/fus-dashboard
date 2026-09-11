@@ -67,28 +67,46 @@ export async function syncQueue(): Promise<{ synced: number; failed: number }> {
   return { synced, failed };
 }
 
+// -------------------------------------------------------
+// Command Pattern: Extensible Offline Operation Registry
+// -------------------------------------------------------
+
+export type CommandExecutor<T extends QueuedOperation = QueuedOperation> = (op: T) => Promise<void>;
+
+const commandRegistry: {
+  [K in QueuedOperation['kind']]: CommandExecutor<Extract<QueuedOperation, { kind: K }>>;
+} = {
+  insert_event: async (op) => {
+    const { localId: _, ...payload } = op.payload;
+    const { error } = await supabase.from('match_events').insert([payload]);
+    if (error) throw error;
+  },
+  update_event: async (op) => {
+    const { error } = await supabase.from('match_events').update(op.updates).eq('id', op.eventId);
+    if (error) throw error;
+  },
+  delete_event: async (op) => {
+    const { error } = await supabase.from('match_events').delete().eq('id', op.eventId);
+    if (error) throw error;
+  },
+  update_match: async (op) => {
+    const { error } = await supabase.from('matches').update(op.updates).eq('id', op.matchId);
+    if (error) throw error;
+  },
+};
+
+/** Enregistre ou remplace un exécuteur de commande (Open/Closed Principle) */
+export function registerCommandExecutor<K extends QueuedOperation['kind']>(
+  kind: K,
+  executor: CommandExecutor<Extract<QueuedOperation, { kind: K }>>
+): void {
+  commandRegistry[kind] = executor;
+}
+
 async function applyOperation(op: QueuedOperation): Promise<void> {
-  switch (op.kind) {
-    case 'insert_event': {
-      const { localId: _, ...payload } = op.payload;
-      const { error } = await supabase.from('match_events').insert([payload]);
-      if (error) throw error;
-      break;
-    }
-    case 'update_event': {
-      const { error } = await supabase.from('match_events').update(op.updates).eq('id', op.eventId);
-      if (error) throw error;
-      break;
-    }
-    case 'delete_event': {
-      const { error } = await supabase.from('match_events').delete().eq('id', op.eventId);
-      if (error) throw error;
-      break;
-    }
-    case 'update_match': {
-      const { error } = await supabase.from('matches').update(op.updates).eq('id', op.matchId);
-      if (error) throw error;
-      break;
-    }
+  const handler = commandRegistry[op.kind] as CommandExecutor<QueuedOperation> | undefined;
+  if (!handler) {
+    throw new Error(`Aucun exécuteur de commande enregistré pour le type : ${op.kind}`);
   }
+  await handler(op);
 }

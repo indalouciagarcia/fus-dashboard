@@ -13,7 +13,9 @@ Les fichiers SQL principaux se trouvent à la racine et dans `supabase/` :
 - `supabase_app_public_read.sql` : Configuration des accès lecture publique / RLS.
 - `supabase_rbac_migration.sql` : Système de rôles et permissions (RBAC).
 - `supabase_arbitres_migration.sql` : Table `arbitres` (corps arbitral), index, RLS et triggers.
+- `20260901_create_opponent_players.sql` : Table `opponent_players` (effectif des clubs adversaires par catégorie, RLS & index).
 - `supabase_mock_data.sql` / `fake_data_maroc.sql` : Données de test.
+
 
 ---
 

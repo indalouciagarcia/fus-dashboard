@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuditLogger } from '../../services/auditLogger';
+import { PLAYER_CATEGORIES } from '../../constants';
 
 interface SystemUser {
   id: string;
@@ -36,42 +37,42 @@ interface SystemUser {
   is_active: boolean;
   avatar_url?: string | null;
   categories: string[];
+  phone_number?: string | null;
+  permissions_overrides?: Record<string, boolean>;
 }
 
 const SYSTEM_ROLES = [
   { value: 'super_admin', label: 'Super Administrateur' },
-  { value: 'technical_director', label: 'Directeur Technique' },
-  { value: 'coach', label: 'Coach / Entraîneur' },
-  { value: 'assistant_coach', label: 'Entraîneur Adjoint' },
-  { value: 'doctor', label: 'Médecin du Club' },
-  { value: 'physical_trainer', label: 'Préparateur Physique' },
-  { value: 'mental_trainer', label: 'Préparateur Mental' },
-  { value: 'staff', label: 'Staff Général' }
+  { value: 'admin', label: 'Administrateur' }
 ];
 
 const JOB_TITLE_SUGGESTIONS = [
-  'Entraîneur Principal U15',
   'Directeur Technique',
-  'Médecin du Club',
+  'Entraîneur Principal',
+  'Entraîneur Adjoint',
+  'Entraîneur des Gardiens',
   'Préparateur Physique',
   'Analyste Vidéo',
-  'Responsable Équipements',
-  'Secrétaire Général',
-  'Observateur / Scout'
+  'Médecin',
+  'Infirmier',
+  'Kinésithérapeute',
+  'Scout',
+  'Recruteur'
 ];
 
 const AVAILABLE_PERMISSIONS = [
-  { key: 'manage_teams', label: 'Gérer les équipes' },
-  { key: 'create_match', label: 'Créer des matchs' },
-  { key: 'track_live_match', label: 'Tracking de match en direct' },
-  { key: 'manage_users', label: 'Gérer les utilisateurs' },
-  { key: 'view_medical', label: 'Données Médicales' },
-  { key: 'view_physical', label: 'Données Physiques' },
-  { key: 'manage_referees', label: 'Rubrique Arbitres' },
-  { key: 'manage_blog', label: 'Rubrique Actualités' }
+  { key: 'schedule_match', label: 'Planification des matchs' },
+  { key: 'modify_match', label: 'Modification des matchs' },
+  { key: 'postpone_match', label: 'Reporter un match' },
+  { key: 'change_formation', label: 'Changement du système de jeu' },
+  { key: 'live_tracking', label: 'Live Tracking' },
+  { key: 'evaluate_players', label: 'Évaluation des joueurs' },
+  { key: 'surclass_players', label: 'Surclassement des joueurs' },
+  { key: 'medical_records', label: 'Dossier Médical & Blessures' },
+  { key: 'manage_recruitment', label: 'Détection & Recrutement' }
 ];
 
-const AGE_CATEGORIES = ['U7', 'U8', 'U9', 'U10', 'U11', 'U12', 'U13', 'U14', 'U15', 'U16', 'U17', 'U18', 'U19', 'U21', 'SENIOR', 'PRO'];
+const AGE_CATEGORIES = PLAYER_CATEGORIES;
 
 const UserManagement: React.FC = () => {
   const { authState, can } = usePermissions();
@@ -85,12 +86,14 @@ const UserManagement: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [dbErrors, setDbErrors] = useState<string[]>([]);
   
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     full_name: '',
-    system_role: 'coach',
+    phone_number: '',
+    system_role: 'admin',
     job_title: '',
     avatar_url: '' as string | null,
     categories: [] as string[],
@@ -130,13 +133,37 @@ const UserManagement: React.FC = () => {
       const { data: profiles, error } = await supabase.rpc('get_all_users');
       if (error) throw error;
 
-      const { data: rawProfiles } = await supabase.from('user_profiles').select('id, avatar_url, job_title, system_role');
+      // Fetch all profiles via Edge Function (service_role) to bypass RLS and get job_title/phone_number
+      const { data: session } = await supabase.auth.getSession();
+      const efRes = await fetch('https://fuhrxfhszttvpkmjydca.supabase.co/functions/v1/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session?.access_token}`
+        },
+        body: JSON.stringify({ action: 'get_all_profiles' })
+      });
+
       const avatarMap = new Map();
       const jobTitleMap = new Map();
-      rawProfiles?.forEach(p => {
-         avatarMap.set(p.id, p.avatar_url);
-         if (p.job_title) jobTitleMap.set(p.id, p.job_title);
-      });
+      const phoneMap = new Map();
+
+      if (efRes.ok) {
+        const efData = await efRes.json();
+        efData.profiles?.forEach((p: any) => {
+          if (p.avatar_url) avatarMap.set(p.id, p.avatar_url);
+          if (p.job_title) jobTitleMap.set(p.id, p.job_title);
+          if (p.phone_number) phoneMap.set(p.id, p.phone_number);
+        });
+      } else {
+        // Fallback: direct query (works only for own profile due to RLS)
+        const { data: rawProfiles } = await supabase.from('user_profiles').select('id, avatar_url, job_title, system_role, phone_number');
+        rawProfiles?.forEach(p => {
+           if (p.avatar_url) avatarMap.set(p.id, p.avatar_url);
+           if (p.job_title) jobTitleMap.set(p.id, p.job_title);
+           if (p.phone_number) phoneMap.set(p.id, p.phone_number);
+        });
+      }
 
       const { data: catAssignments, error: catError } = await supabase
         .from('user_category_assignments')
@@ -144,16 +171,30 @@ const UserManagement: React.FC = () => {
 
       if (catError) console.warn('Cat assignments query warning:', catError);
 
-      const mappedUsers = profiles?.map((p: any) => ({
-        id: p.id,
-        email: p.email,
-        full_name: p.full_name || 'Utilisateur',
-        avatar_url: p.avatar_url || avatarMap.get(p.id),
-        system_role: p.system_role || 'viewer',
-        job_title: p.job_title || jobTitleMap.get(p.id) || null,
-        is_active: p.is_active,
-        categories: catAssignments?.filter(c => c.user_id === p.id).map(c => c.category) || []
-      })) || [];
+      const { data: permAssignments } = await supabase
+        .from('user_permissions_overrides')
+        .select('*');
+
+      const mappedUsers = profiles?.map((p: any) => {
+        const userPerms: Record<string, boolean> = {};
+        permAssignments?.filter(pa => pa.user_id === p.id).forEach(pa => {
+          userPerms[pa.permission_id] = true;
+        });
+
+        return {
+          id: p.id,
+          email: p.email,
+          full_name: p.full_name || 'Utilisateur',
+          avatar_url: p.avatar_url || avatarMap.get(p.id),
+          system_role: p.system_role || 'viewer',
+          // job_title: prioritize from Edge Function (service_role read), then RPC (after migration), then null
+          job_title: jobTitleMap.get(p.id) || p.job_title || null,
+          phone_number: phoneMap.get(p.id) || p.phone_number || null,
+          is_active: p.is_active,
+          categories: catAssignments?.filter(c => c.user_id === p.id).map(c => c.category) || [],
+          permissions_overrides: userPerms
+        };
+      }) || [];
 
       setUsers(mappedUsers as any);
     } catch (err: any) {
@@ -165,6 +206,11 @@ const UserManagement: React.FC = () => {
   };
 
   const handleCreateUser = async () => {
+    if ((formData.system_role === 'coach' || formData.system_role === 'assistant_coach') && formData.categories.length === 0) {
+      toast.error("Vous devez assigner au moins une catégorie pour un coach ou un entraîneur adjoint.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -198,16 +244,28 @@ const UserManagement: React.FC = () => {
         }
       }
 
-      // Update user_profiles table with job_title & avatar_url
+      // Update user_profiles table with job_title, phone_number & avatar_url
       if (result.user?.id) {
         await supabase
           .from('user_profiles')
           .update({ 
             job_title: formData.job_title || null,
+            phone_number: formData.phone_number || null,
             system_role: formData.system_role,
             ...(createdAvatarUrl ? { avatar_url: createdAvatarUrl } : {})
           })
           .eq('id', result.user.id);
+      }
+
+      // Save permissions overrides
+      if (result.user?.id) {
+        const permsToInsert = Object.keys(formData.permissions_overrides)
+          .filter(key => formData.permissions_overrides[key])
+          .map(key => ({ user_id: result.user!.id, permission_id: key }));
+        
+        if (permsToInsert.length > 0) {
+          await supabase.from('user_permissions_overrides').insert(permsToInsert);
+        }
       }
 
       toast.success("Utilisateur créé avec succès !");
@@ -218,8 +276,10 @@ const UserManagement: React.FC = () => {
         formData,
         `Création du compte utilisateur ${formData.full_name || formData.email} (${formData.system_role})`
       );
+
+
       setModalMode('none');
-      setFormData({ email: '', password: '', full_name: '', system_role: 'coach', job_title: '', avatar_url: null, categories: [], team_ids: [], permissions_overrides: {} });
+      setFormData({ email: '', password: '', full_name: '', phone_number: '', system_role: 'admin', job_title: '', avatar_url: null, categories: [], team_ids: [], permissions_overrides: {} });
       setAvatarFile(null);
       setAvatarPreview(null);
       fetchUsers();
@@ -231,10 +291,15 @@ const UserManagement: React.FC = () => {
   };
 
   const handleUpdateUser = async () => {
-    if (!selectedUserId) return;
-    setIsSubmitting(true);
     try {
-      const oldUser = users.find(u => u.id === selectedUserId);
+      setDbErrors([]);
+      if (!selectedUserId) return;
+      if ((formData.system_role === 'coach' || formData.system_role === 'assistant_coach') && formData.categories.length === 0) {
+        toast.error("Vous devez assigner au moins une catégorie pour un coach ou un entraîneur adjoint.");
+        return;
+      }
+      
+      setIsSubmitting(true);
       let finalAvatarUrl = formData.avatar_url;
 
       if (avatarFile) {
@@ -249,7 +314,9 @@ const UserManagement: React.FC = () => {
       }
 
       const { data: session } = await supabase.auth.getSession();
-      const response = await fetch('https://fuhrxfhszttvpkmjydca.supabase.co/functions/v1/create-user', {
+
+      // Update via Edge Function (service_role) to bypass RLS — handles job_title, phone_number, system_role
+      const efResponse = await fetch('https://fuhrxfhszttvpkmjydca.supabase.co/functions/v1/create-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -261,34 +328,73 @@ const UserManagement: React.FC = () => {
           email: formData.email,
           password: formData.password,
           full_name: formData.full_name,
+          phone_number: formData.phone_number || null,
           system_role: formData.system_role,
+          job_title: formData.job_title || null,
           avatar_url: finalAvatarUrl,
           categories: formData.categories,
           club_id: authState.user?.default_club_id
         })
       });
 
-      // Directly update job_title and profile in Supabase
-      await supabase
-        .from('user_profiles')
-        .update({ 
-          job_title: formData.job_title || null,
-          system_role: formData.system_role,
-          ...(finalAvatarUrl ? { avatar_url: finalAvatarUrl } : {})
-        })
-        .eq('id', selectedUserId);
+      const efResult = await efResponse.json();
+      if (!efResponse.ok) {
+        setDbErrors(prev => [...prev, `Erreur Profil (EF): ${efResult.error || 'Erreur inconnue'}`]);
+      }
 
-      toast.success("Utilisateur mis à jour avec succès !");
-      AuditLogger.logUpdate(
-        'USERS',
-        'USER',
-        selectedUserId,
-        oldUser || null,
-        formData,
-        `Mise à jour de l'utilisateur ${formData.full_name || formData.email}`
-      );
-      setModalMode('none');
-      fetchUsers();
+      // Fallback direct update for avatar_url if EF doesn't handle it
+      if (finalAvatarUrl) {
+        await supabase
+          .from('user_profiles')
+          .update({ avatar_url: finalAvatarUrl })
+          .eq('id', selectedUserId);
+      }
+
+      const { error: delError } = await supabase.from('user_permissions_overrides').delete().eq('user_id', selectedUserId);
+      if (delError) {
+        setDbErrors(prev => [...prev, `Erreur Suppression Permissions: ${delError.message}`]);
+      }
+
+      const permsToInsert = Object.keys(formData.permissions_overrides)
+        .filter(key => formData.permissions_overrides[key])
+        .map(key => ({ user_id: selectedUserId, permission_id: key }));
+      
+      if (permsToInsert.length > 0) {
+        const { error: permError } = await supabase.from('user_permissions_overrides').insert(permsToInsert);
+        if (permError) {
+           setDbErrors(prev => [...prev, `Erreur Insertion Permissions: ${permError.message}`]);
+           toast.error("Les permissions n'ont pas pu être sauvegardées dans la base de données.");
+        }
+      }
+
+      if (dbErrors.length === 0) {
+        toast.success("Utilisateur mis à jour avec succès !");
+        AuditLogger.logUpdate(
+          'USERS',
+          'USER',
+          selectedUserId,
+          {},
+          formData,
+          `Mise à jour du compte utilisateur ${formData.full_name || formData.email}`
+        );
+        
+        const channel = supabase.channel(`user-cats-${selectedUserId}`);
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            channel.send({
+              type: 'broadcast',
+              event: 'categories_updated',
+              payload: {},
+            });
+            setTimeout(() => {
+              supabase.removeChannel(channel);
+            }, 1000);
+          }
+        });
+
+        setModalMode('none');
+        fetchUsers();
+      }
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de la mise à jour.");
     } finally {
@@ -329,15 +435,17 @@ const UserManagement: React.FC = () => {
       email: user.email,
       password: '',
       full_name: user.full_name || '',
+      phone_number: user.phone_number || '',
       system_role: (user.system_role || 'viewer').toLowerCase(),
       job_title: user.job_title || '',
       avatar_url: user.avatar_url || null,
       categories: user.categories || [],
       team_ids: [],
-      permissions_overrides: {} 
+      permissions_overrides: user.permissions_overrides || {} 
     });
     setAvatarFile(null);
     setAvatarPreview(null);
+    setDbErrors([]);
     setModalMode('edit');
   };
 
@@ -347,12 +455,13 @@ const UserManagement: React.FC = () => {
       email: user.email,
       password: '',
       full_name: user.full_name || '',
+      phone_number: user.phone_number || '',
       system_role: (user.system_role || 'viewer').toLowerCase(),
       job_title: user.job_title || '',
       avatar_url: user.avatar_url || null,
       categories: user.categories || [],
       team_ids: [],
-      permissions_overrides: {}
+      permissions_overrides: user.permissions_overrides || {}
     });
     setAvatarFile(null);
     setAvatarPreview(null);
@@ -373,15 +482,6 @@ const UserManagement: React.FC = () => {
       categories: prev.categories.includes(cat) 
         ? prev.categories.filter(c => c !== cat)
         : [...prev.categories, cat]
-    }));
-  };
-
-  const toggleTeam = (teamId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      team_ids: prev.team_ids.includes(teamId)
-        ? prev.team_ids.filter(id => id !== teamId)
-        : [...prev.team_ids, teamId]
     }));
   };
 
@@ -418,7 +518,7 @@ const UserManagement: React.FC = () => {
             </p>
          </div>
          <Button onClick={() => {
-           setFormData({ email: '', password: '', full_name: '', system_role: 'coach', job_title: '', avatar_url: null, categories: [], team_ids: [], permissions_overrides: {} });
+           setFormData({ email: '', password: '', full_name: '', phone_number: '', system_role: 'admin', job_title: '', avatar_url: null, categories: [], team_ids: [], permissions_overrides: {} });
            setAvatarFile(null);
            setAvatarPreview(null);
            setModalMode('create');
@@ -509,6 +609,20 @@ const UserManagement: React.FC = () => {
                 )}
               </div>
 
+              {/* Permissions (Grid) */}
+              <div className="flex flex-wrap gap-1 justify-center mb-4 min-h-[24px]">
+                 {u.system_role === 'super_admin' ? (
+                   <span className="text-[9px] text-muted-foreground italic font-medium">Toutes les permissions</span>
+                 ) : u.permissions_overrides && Object.keys(u.permissions_overrides).length > 0 ? (
+                   Object.keys(u.permissions_overrides).map(pKey => {
+                     const pLabel = AVAILABLE_PERMISSIONS.find(ap => ap.key === pKey)?.label || pKey;
+                     return <Badge key={pKey} variant="outline" className="text-[9px] font-bold border-border text-foreground">{pLabel}</Badge>;
+                   })
+                 ) : (
+                   <span className="text-[9px] text-muted-foreground italic font-medium">— Aucune permission spécifique</span>
+                 )}
+              </div>
+
               <div className="flex gap-2 w-full justify-center mt-auto pt-3 border-t border-border">
                  <button onClick={() => openViewMode(u)} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-xl transition-colors" title="Aperçu">
                    <Eye className="w-4 h-4" />
@@ -539,6 +653,7 @@ const UserManagement: React.FC = () => {
                   <th className="text-left py-4 px-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Intitulé de Poste</th>
                   <th className="text-left py-4 px-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rôle Système</th>
                   <th className="text-left py-4 px-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Périmètre Catégories</th>
+                  <th className="text-left py-4 px-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Permissions Spécifiques</th>
                   <th className="text-right py-4 px-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Actions</th>
                 </tr>
               </thead>
@@ -580,6 +695,20 @@ const UserManagement: React.FC = () => {
                          </div>
                        ) : (
                          <span className="text-xs text-muted-foreground italic font-medium">Accès Global</span>
+                       )}
+                    </td>
+                    <td className="py-4 px-6">
+                       {u.system_role === 'super_admin' ? (
+                         <span className="text-xs text-muted-foreground italic">— Toutes les permissions</span>
+                       ) : u.permissions_overrides && Object.keys(u.permissions_overrides).length > 0 ? (
+                         <div className="flex flex-wrap gap-1 max-w-[200px]">
+                           {Object.keys(u.permissions_overrides).map(pKey => {
+                             const pLabel = AVAILABLE_PERMISSIONS.find(ap => ap.key === pKey)?.label || pKey;
+                             return <Badge key={pKey} variant="outline" className="text-[9px] font-bold border-border text-foreground">{pLabel}</Badge>;
+                           })}
+                         </div>
+                       ) : (
+                         <span className="text-xs text-muted-foreground italic font-medium">— Aucune</span>
                        )}
                     </td>
                     <td className="py-4 px-6 text-right">
@@ -664,6 +793,12 @@ const UserManagement: React.FC = () => {
                        <Input disabled={modalMode === 'view'} type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="coach@club.com" className="bg-secondary/30 border-transparent focus:bg-background h-11 rounded-xl font-medium" />
                      </div>
 
+                     {/* Numéro de téléphone */}
+                     <div className="space-y-1.5">
+                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Numéro de Téléphone</label>
+                       <Input disabled={modalMode === 'view'} type="tel" value={formData.phone_number} onChange={e => setFormData({...formData, phone_number: e.target.value})} placeholder="+212 600-000000" className="bg-secondary/30 border-transparent focus:bg-background h-11 rounded-xl font-medium" />
+                     </div>
+
                      {/* Password */}
                      {modalMode !== 'view' && (
                        <div className="space-y-1.5">
@@ -674,47 +809,45 @@ const UserManagement: React.FC = () => {
                        </div>
                      )}
 
-                     {/* Intitulé de Poste / Fonction */}
-                     <div className="space-y-2 pt-2 border-t border-border">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
-                          <Briefcase className="w-3.5 h-3.5" /> Intitulé de Poste / Fonction Officielle
-                       </label>
-                       <Input 
-                         disabled={modalMode === 'view'}
-                         value={formData.job_title} 
-                         onChange={e => setFormData({...formData, job_title: e.target.value})} 
-                         placeholder="Ex: Entraîneur Principal U15, Préparateur Physique..." 
-                         className="bg-secondary/30 border-transparent focus:bg-background h-11 rounded-xl font-bold" 
-                       />
-                       {modalMode !== 'view' && (
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                             <span className="text-[9px] font-bold text-muted-foreground uppercase self-center mr-1">Suggestions :</span>
-                             {JOB_TITLE_SUGGESTIONS.map((suggestion) => (
-                                <button
-                                   key={suggestion}
-                                   type="button"
-                                   onClick={() => setFormData({ ...formData, job_title: suggestion })}
-                                   className="px-2 py-0.5 rounded-lg bg-secondary text-secondary-foreground hover:bg-primary/10 hover:text-primary transition-all text-[9px] font-bold border border-border"
-                                >
-                                   {suggestion}
-                                </button>
-                             ))}
-                          </div>
-                       )}
-                     </div>
+                      {/* Rôle Système (Au-dessus de l'intitulé de poste) */}
+                      <div className="space-y-1.5 pt-2 border-t border-border">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5" /> Rôle Système *
+                        </label>
+                        <select 
+                          disabled={modalMode === 'view'}
+                          value={formData.system_role || 'admin'} 
+                          onChange={e => setFormData({...formData, system_role: e.target.value})}
+                          className="w-full h-11 px-3 rounded-xl bg-secondary/30 border border-transparent focus:border-primary focus:bg-background text-xs font-bold text-foreground outline-none"
+                        >
+                          {SYSTEM_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                        </select>
+                      </div>
 
-                     {/* Rôle Système */}
-                     <div className="space-y-1.5">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Rôle Système</label>
-                       <select 
-                         disabled={modalMode === 'view'}
-                         value={formData.system_role} 
-                         onChange={e => setFormData({...formData, system_role: e.target.value})}
-                         className="w-full h-11 px-3 rounded-xl bg-secondary/30 border border-transparent focus:border-primary focus:bg-background text-xs font-bold text-foreground outline-none"
-                       >
-                         {SYSTEM_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                       </select>
-                     </div>
+                      {/* Intitulé de Poste / Fonction */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                           <Briefcase className="w-3.5 h-3.5" /> Intitulé de Poste / Fonction Officielle
+                        </label>
+                        <div className="relative">
+                          <Input 
+                            list="job-titles"
+                            disabled={modalMode === 'view'}
+                            value={formData.job_title || ''} 
+                            onChange={e => {
+                              const title = e.target.value;
+                              setFormData({ ...formData, job_title: title });
+                            }}
+                            placeholder="Ex: Chef de projet..."
+                            className="bg-secondary/30 border-transparent focus:bg-background h-11 rounded-xl font-medium text-xs w-full"
+                          />
+                          <datalist id="job-titles">
+                            {JOB_TITLE_SUGGESTIONS.map(title => (
+                              <option key={title} value={title} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </div>
 
                      {/* Scope & Permissions Section */}
                      <div className="space-y-4 pt-4 border-t border-border">
@@ -741,53 +874,63 @@ const UserManagement: React.FC = () => {
                            ))}
                          </div>
                        </div>
-                       
-                       {/* Équipes Spécifiques */}
-                       <div>
-                         <label className="text-[10px] font-black uppercase tracking-widest text-primary block mb-2 flex items-center gap-1.5">
-                            <ShieldCheck className="w-3.5 h-3.5" /> Périmètre Équipes Spécifiques
-                         </label>
-                         <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto no-scrollbar">
-                           {availableTeams.map(team => (
-                             <button
-                               key={team.id}
-                               type="button"
-                               disabled={modalMode === 'view'}
-                               onClick={() => toggleTeam(team.id)}
-                               className={`px-3 py-1 rounded-xl text-xs font-extrabold border transition-all ${
-                                 formData.team_ids.includes(team.id) 
-                                   ? 'bg-primary text-primary-foreground border-primary shadow-sm' 
-                                   : 'bg-secondary/40 text-muted-foreground border-border hover:bg-secondary hover:text-foreground'
-                               } disabled:opacity-70 disabled:cursor-not-allowed`}
-                             >
-                               {team.name} ({team.category})
-                             </button>
-                           ))}
-                         </div>
-                       </div>
 
                        {/* Permissions Spécifiques */}
                        <div>
-                         <label className="text-[10px] font-black uppercase tracking-widest text-primary block mb-2 flex items-center gap-1.5">
-                            <Key className="w-3.5 h-3.5" /> Permissions Spécifiques par Module
-                         </label>
-                         <div className="flex flex-wrap gap-1.5">
-                           {AVAILABLE_PERMISSIONS.map(perm => (
-                             <button
-                               key={perm.key}
-                               type="button"
-                               disabled={modalMode === 'view'}
-                               onClick={() => togglePermission(perm.key)}
-                               className={`px-3 py-1 rounded-xl text-xs font-extrabold border transition-all ${
-                                 formData.permissions_overrides[perm.key] 
-                                   ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm' 
-                                   : 'bg-secondary/40 text-muted-foreground border-border hover:bg-secondary hover:text-foreground'
-                               } disabled:opacity-70 disabled:cursor-not-allowed`}
-                             >
-                               {perm.label}
-                             </button>
-                           ))}
-                         </div>
+                         {formData.system_role === 'super_admin' ? (
+                            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center mt-2">
+                               <ShieldCheck className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
+                               <span className="text-xs font-black text-emerald-700 uppercase">Accès Total</span>
+                               <p className="text-[10px] font-bold text-emerald-600 mt-1">Le Super Administrateur a tous les accès.</p>
+                            </div>
+                         ) : (
+                            <>
+                              {formData.system_role === 'medical' && (
+                                <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-center mb-3">
+                                  <span className="text-xs font-black text-teal-800 uppercase flex items-center justify-center gap-1.5">
+                                    🩺 Pôle Médical & Santé
+                                  </span>
+                                  <p className="text-[10px] font-semibold text-teal-700 mt-0.5">Accès dédié aux fiches médicales, bilans physiques et déclarations de blessures.</p>
+                                </div>
+                              )}
+                              {formData.system_role === 'scout' && (
+                                <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 text-center mb-3">
+                                  <span className="text-xs font-black text-purple-800 uppercase flex items-center justify-center gap-1.5">
+                                    🔍 Cellule Recrutement & Détection
+                                  </span>
+                                  <p className="text-[10px] font-semibold text-purple-700 mt-0.5">Accès dédié à la prospection, aux fiches de détection et au pipeline candidats.</p>
+                                </div>
+                              )}
+                              {formData.system_role === 'technical_director' && (
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center mb-3">
+                                  <span className="text-xs font-black text-amber-800 uppercase flex items-center justify-center gap-1.5">
+                                    ⭐ Direction Technique
+                                  </span>
+                                  <p className="text-[10px] font-semibold text-amber-700 mt-0.5">Supervision globale, méthodologie sportive et analyse croisée de toutes les catégories.</p>
+                                </div>
+                              )}
+                              <label className="text-[10px] font-black uppercase tracking-widest text-primary block mb-2 flex items-center gap-1.5">
+                                 <Key className="w-3.5 h-3.5" /> Permissions Spécifiques
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {AVAILABLE_PERMISSIONS.map(perm => (
+                                  <button
+                                    key={perm.key}
+                                    type="button"
+                                    disabled={modalMode === 'view'}
+                                    onClick={() => togglePermission(perm.key)}
+                                    className={`px-3 py-1 rounded-xl text-xs font-extrabold border transition-all ${
+                                      formData.permissions_overrides[perm.key] 
+                                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm' 
+                                        : 'bg-secondary/40 text-muted-foreground border-border hover:bg-secondary hover:text-foreground'
+                                    } disabled:opacity-70 disabled:cursor-not-allowed`}
+                                  >
+                                    {perm.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                         )}
                        </div>
                      </div>
                    </div>

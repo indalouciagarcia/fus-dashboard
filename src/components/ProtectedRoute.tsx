@@ -13,8 +13,10 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
+  requiredPermission,
+  fallback = '/',
 }) => {
-  const { authState } = usePermissions();
+  const { authState, can } = usePermissions();
   const location = useLocation();
 
   // Chargement initial de la session
@@ -32,11 +34,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Non authentifié → page de connexion (avec retour après login)
   if (!authState.isAuthenticated) {
     if (import.meta.env.DEV) {
-      return <>{children}</>;
+      // En DEV, si aucune permission spécifique n'est exigée ou si la permission est accordée, permettre l'accès direct
+      if (!requiredPermission || can(requiredPermission)) {
+        return <>{children}</>;
+      }
+      return <Navigate to={fallback} replace />;
     }
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Contrôle de permission RBAC (Proxy / Guard)
+  if (requiredPermission && !can(requiredPermission)) {
+    return <Navigate to={fallback} replace />;
+  }
 
   return <>{children}</>;
 };

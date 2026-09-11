@@ -12,6 +12,7 @@ Ce dossier rassemble l'ensemble de la documentation technique, fonctionnelle et 
 | :--- | :--- |
 | [`README.md`](file:///Users/macbook/Desktop/FuscClub/fus-dashboard/.agents/docs/README.md) | Index principal et guide d'utilisation de la base de connaissances |
 | [`architecture.md`](file:///Users/macbook/Desktop/FuscClub/fus-dashboard/.agents/docs/architecture.md) | Vue d'ensemble de l'architecture, stack technique et structure du projet |
+| [`design_system.md`](file:///Users/macbook/Desktop/FuscClub/fus-dashboard/.agents/docs/design_system.md) | Charte graphique, tokens de design et échelle typographique |
 | [`database.md`](file:///Users/macbook/Desktop/FuscClub/fus-dashboard/.agents/docs/database.md) | Documentation de la base de données Supabase (tables, RLS, RPC, migrations) |
 | [`ai_conventions.md`](file:///Users/macbook/Desktop/FuscClub/fus-dashboard/.agents/docs/ai_conventions.md) | Directives et standards de code pour les agents IA sur le projet |
 

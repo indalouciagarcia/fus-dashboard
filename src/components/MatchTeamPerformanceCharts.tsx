@@ -32,8 +32,9 @@ import {
 import { useMatches } from '../hooks/useMatches';
 import { useTeams } from '../hooks/useTeams';
 import type { Match, AgeCategory } from '../types';
+import { PLAYER_CATEGORIES, normalizeAgeCategory } from '../constants';
 
-const CATEGORIES: (AgeCategory | 'ALL')[] = ['ALL', 'SENIOR', 'U23', 'U21', 'U19', 'U17', 'U15', 'U13'];
+const CATEGORIES: (AgeCategory | 'ALL')[] = ['ALL', ...PLAYER_CATEGORIES];
 
 export const MatchTeamPerformanceCharts: React.FC = () => {
   const { matches } = useMatches();
@@ -44,7 +45,7 @@ export const MatchTeamPerformanceCharts: React.FC = () => {
   // Filter matches by category
   const filteredMatches = useMemo(() => {
     if (selectedCategory === 'ALL') return matches;
-    return matches.filter(m => m.category === selectedCategory);
+    return matches.filter(m => normalizeAgeCategory(m.category) === selectedCategory);
   }, [matches, selectedCategory]);
 
   const finishedMatches = useMemo(() => {

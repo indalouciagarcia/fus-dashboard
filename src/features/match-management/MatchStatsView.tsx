@@ -6,10 +6,12 @@ import { useMatches } from '../../hooks/useMatches';
 import { useClubData } from '../../hooks/useClubData';
 import { matchService } from '../../services/matchService';
 import { useSurclassements } from '../../hooks/useSurclassements';
+import { useCompetitions } from '../../hooks/useCompetitions';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Skeleton } from '../../components/ui/skeleton';
+import PlayerMatchEvaluationModal from './components/PlayerMatchEvaluationModal';
 import {
   Trophy,
   Target,
@@ -38,7 +40,9 @@ import {
   Camera,
   Layout,
   Goal,
-  Briefcase
+  Briefcase,
+  Star,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -140,6 +144,62 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
   const [selectedAssistId, setSelectedAssistId] = useState('');
   const [selectedPlayerInId, setSelectedPlayerInId] = useState('');
   const [cursorTime, setCursorTime] = useState(0);
+
+  // Competitions & League metadata
+  const { leagues } = useCompetitions();
+  const currentLeague = leagues?.find(l => l.id === currentMatch?.league_id);
+  const currentLeagueName = currentLeague?.name || currentMatch?.league?.name || 'Compétition Officielle';
+
+  // Friendly match evaluation condition & modal state
+  const isCurrentMatchFriendly = useMemo(() => {
+    if (!currentMatch) return false;
+    if (!currentMatch.league_id) return true;
+    const lName = (currentLeague?.name || currentMatch.league?.name || '').toLowerCase();
+    if (lName.includes('amical')) return true;
+    if (currentMatch.category?.toLowerCase().includes('amical')) return true;
+    if (currentMatch.notes?.toLowerCase().includes('amical')) return true;
+    return false;
+  }, [currentMatch, currentLeague]);
+
+  const [ratingModalPlayer, setRatingModalPlayer] = useState<any | null>(null);
+  const [modalRating, setModalRating] = useState<number>(7);
+  const [modalComment, setModalComment] = useState<string>('');
+  const [savingRating, setSavingRating] = useState(false);
+  const [ratingSuccess, setRatingSuccess] = useState(false);
+
+  const handleSaveRating = async () => {
+    if (!currentMatch?.id || !ratingModalPlayer?.id) return;
+    setSavingRating(true);
+    try {
+      await matchService.savePlayerRating(currentMatch.id, ratingModalPlayer.id, modalRating, modalComment.trim() || null);
+      if (!currentMatch.match_players) {
+        currentMatch.match_players = [];
+      }
+      const target = currentMatch.match_players.find((mp: any) => mp.player_id === ratingModalPlayer.id);
+      if (target) {
+        target.rating = modalRating;
+        target.rating_comment = modalComment.trim() || null;
+      } else {
+        currentMatch.match_players.push({
+          match_id: currentMatch.id,
+          player_id: ratingModalPlayer.id,
+          rating: modalRating,
+          rating_comment: modalComment.trim() || null,
+          is_starting: false
+        });
+      }
+      setRatingSuccess(true);
+      setTimeout(() => {
+        setRatingSuccess(false);
+        setRatingModalPlayer(null);
+      }, 700);
+    } catch (err) {
+      console.error('Erreur enregistrement note:', err);
+      alert('Erreur lors de la sauvegarde dans la base de données.');
+    } finally {
+      setSavingRating(false);
+    }
+  };
 
   const scoreEvolution = React.useMemo(() => {
     let currentHome = 0;
@@ -477,7 +537,18 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                      <span className="text-7xl md:text-8xl font-black italic tracking-tighter text-white tabular-nums drop-shadow-2xl">{currentMatch.score_away}</span>
                   </div>
                   <div className="flex flex-col items-center gap-2">
-                     <Badge className="bg-primary text-white font-black px-6 py-1.5 rounded-full uppercase tracking-widest text-[10px] border-none shadow-lg shadow-primary/20">Match Terminé</Badge>
+                     <div className="flex items-center gap-2 flex-wrap justify-center">
+                        {isCurrentMatchFriendly ? (
+                           <Badge className="bg-amber-400 text-slate-950 font-black px-4 py-1.5 rounded-full uppercase tracking-wider text-[10px] border-none shadow-lg shadow-amber-500/30">
+                              🤝 Match Amical
+                           </Badge>
+                        ) : (
+                           <Badge className="bg-emerald-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-wider text-[10px] border-none shadow-lg shadow-emerald-500/30">
+                              🏆 {currentLeagueName}
+                           </Badge>
+                        )}
+                        <Badge className="bg-primary text-white font-black px-5 py-1.5 rounded-full uppercase tracking-widest text-[10px] border-none shadow-lg shadow-primary/20">Match Terminé</Badge>
+                     </div>
                      <div className="flex items-center gap-2 text-slate-400 font-bold uppercase tracking-widest text-[10px]">
                         <Clock className="w-3 h-3" /> 90:00+
                      </div>
@@ -655,8 +726,21 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                            <Layout className="w-7 h-7" />
                         </div>
                         <div>
-                           <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">Visualisation Tactique</h3>
-                           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{currentMatch.lineup?.formation || "Tactique non définie"}</p>
+                           <div className="flex items-center gap-3 flex-wrap">
+                              <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white m-0">Visualisation Tactique</h3>
+                              {isCurrentMatchFriendly ? (
+                                 <Badge className="bg-amber-400 text-slate-950 font-black text-[9px] uppercase px-2.5 py-0.5 shadow-sm border-none">
+                                    🤝 Match Amical
+                                 </Badge>
+                              ) : (
+                                 <Badge className="bg-emerald-500 text-white font-black text-[9px] uppercase px-2.5 py-0.5 shadow-sm border-none">
+                                    🏆 {currentLeagueName}
+                                 </Badge>
+                              )}
+                           </div>
+                           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mt-1">
+                              {currentMatch.lineup?.formation || "Tactique non définie"} · Évaluations actives (cliquer sur un joueur)
+                           </p>
                         </div>
                      </div>
                      <div className="flex items-center gap-4 bg-white/5 rounded-full px-6 py-3 border border-white/10">
@@ -706,18 +790,30 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                            if (!player) return null;
                            
                            // Formation-based positioning - HOME TEAM (Left half only: 5%-45%)
+                           // Formation-based positioning
                            const fallbackPos = [
                              { left: '8%', top: '50%' }, // GK
                              { left: '18%', top: '15%' }, { left: '18%', top: '38%' }, { left: '18%', top: '62%' }, { left: '18%', top: '85%' }, // DF
                              { left: '32%', top: '25%' }, { left: '30%', top: '50%' }, { left: '32%', top: '75%' }, // MF
-                             { left: '42%', top: '20%' }, { left: '45%', top: '50%' }, { left: '42%', top: '80%' }, // FW (max 45%)
+                             { left: '42%', top: '20%' }, { left: '45%', top: '50%' }, { left: '42%', top: '80%' }, // FW
                            ][idx] || { left: `${8 + idx*3}%`, top: '50%' };
 
                            // Match Events for this player
                            const pEvents = events.filter(e => e.player_id === pId);
+                           const mpRecord = currentMatch.match_players?.find((mp: any) => mp.player_id === pId);
 
                            return (
-                              <div key={pId} className="absolute -translate-x-1/2 -translate-y-1/2 group" style={fallbackPos}>
+                              <div 
+                                 key={pId} 
+                                 className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer" 
+                                 style={fallbackPos}
+                                 onClick={() => {
+                                    setRatingModalPlayer(player);
+                                    setModalRating(mpRecord?.rating != null ? Number(mpRecord.rating) : 7);
+                                    setModalComment(mpRecord?.rating_comment || '');
+                                 }}
+                                 title={mpRecord?.rating != null ? `Note : ${mpRecord.rating}/10 (Cliquer pour modifier)` : `Cliquer pour évaluer ${player.full_name} (${isCurrentMatchFriendly ? 'Amical' : currentLeagueName})`}
+                              >
                                  <div className="relative flex flex-col items-center">
                                     {/* Event Badges Layer */}
                                     <div className="absolute -top-8 flex gap-1 group-hover:scale-125 transition-transform">
@@ -732,8 +828,21 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                                        ))}
                                     </div>
 
+                                    {/* Match Rating Badge (Top Left of Circle) */}
+                                    <div className="absolute -top-2.5 -left-2.5 z-20">
+                                       {mpRecord?.rating != null ? (
+                                          <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black text-[9px] shadow-lg border-2 border-white animate-in zoom-in">
+                                             ★ {mpRecord.rating}
+                                          </span>
+                                       ) : (
+                                          <span className="hidden group-hover:flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-[8px] shadow-lg border border-white">
+                                             +⭐ Noter
+                                          </span>
+                                       )}
+                                    </div>
+
                                     {/* Player Circle */}
-                                    <div className="w-10 h-10 md:w-14 md:h-14 rounded-full bg-white shadow-2xl flex items-center justify-center border-4 border-primary relative overflow-hidden group-hover:border-white transition-all duration-300">
+                                    <div className={`w-10 h-10 md:w-14 md:h-14 rounded-full bg-white shadow-2xl flex items-center justify-center border-4 ${mpRecord?.rating != null ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-primary'} relative overflow-hidden group-hover:border-white group-hover:scale-110 transition-all duration-300`}>
                                        {player.photo_url ? (
                                           <img 
                                              src={player.photo_url} 
@@ -750,7 +859,7 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                                           </div>
                                        )}
                                     </div>
-                                    <div className="mt-2 bg-slate-950/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 whitespace-nowrap">
+                                    <div className="mt-2 bg-slate-950/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 whitespace-nowrap group-hover:bg-primary transition-colors">
                                        <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-white">{player.full_name.split(' ').pop()}</span>
                                     </div>
                                  </div>
@@ -847,21 +956,51 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                         const player = players.find(p => p.id === pId);
                         if (!player) return null;
                         const hasEntered = events.some(e => e.type === 'substitution' && e.related_player_id === pId);
+                        const subMpRecord = currentMatch.match_players?.find((mp: any) => mp.player_id === pId);
                         return (
                            <div key={pId} className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${hasEntered ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
-                              <div className="w-12 h-12 rounded-xl bg-white overflow-hidden shadow-sm border border-slate-100 flex items-center justify-center">
+                              <div className="w-12 h-12 rounded-xl bg-white overflow-hidden shadow-sm border border-slate-100 flex items-center justify-center shrink-0">
                                  {player.photo_url ? (
                                     <img src={player.photo_url} className="w-full h-full object-cover" alt="" />
                                  ) : (
                                     <span className="font-black text-xs text-slate-400">{player.jersey_number || '•'}</span>
                                  )}
                               </div>
-                              <div className="flex-1">
+                              <div className="flex-1 min-w-0">
                                  <p className="text-xs font-black uppercase text-slate-900 truncate">{player.full_name}</p>
                                  <div className="flex items-center gap-2 mt-1">
                                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{player.position}</span>
                                     {hasEntered && <Badge className="bg-emerald-500 text-white text-[7px] font-black uppercase shadow-sm">ENTRÉ</Badge>}
                                  </div>
+                              </div>
+                              <div className="shrink-0">
+                                 {subMpRecord?.rating != null ? (
+                                    <button
+                                       onClick={() => {
+                                          setRatingModalPlayer(player);
+                                          setModalRating(Number(subMpRecord.rating));
+                                          setModalComment(subMpRecord.rating_comment || '');
+                                       }}
+                                       className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-100/80 border border-amber-300 text-amber-900 text-xs font-black hover:bg-amber-200 transition-colors shadow-sm"
+                                       title={subMpRecord.rating_comment || undefined}
+                                    >
+                                       <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                                       <span>{subMpRecord.rating}/10</span>
+                                    </button>
+                                 ) : (
+                                    <button
+                                       onClick={() => {
+                                          setRatingModalPlayer(player);
+                                          setModalRating(7);
+                                          setModalComment('');
+                                       }}
+                                       className="flex items-center gap-1 px-2.5 py-1 rounded-xl border border-dashed border-amber-500/50 text-amber-800 text-[10px] font-black hover:bg-amber-50 transition-colors"
+                                       title="Noter ce remplaçant"
+                                    >
+                                       <Star className="w-3 h-3 text-amber-500" />
+                                       <span>Noter</span>
+                                    </button>
+                                 )}
                               </div>
                            </div>
                         );
@@ -1135,6 +1274,45 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                       </Badge>
                     )}
                   </div>
+
+                  {/* Évaluation du Joueur (Amical & Compétition) */}
+                  {(() => {
+                    const mpRecord = currentMatch.match_players?.find((mp: any) => mp.player_id === stat.player.id);
+                    return (
+                      <div className="mt-3 pt-3 border-t border-secondary/50 flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                          <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                          Note {isCurrentMatchFriendly ? 'Amicale' : 'du Match'}
+                        </span>
+                        {mpRecord?.rating != null ? (
+                          <button
+                            onClick={() => {
+                              setRatingModalPlayer(stat.player);
+                              setModalRating(Number(mpRecord.rating));
+                              setModalComment(mpRecord.rating_comment || '');
+                            }}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-black hover:bg-amber-100 transition-colors"
+                            title={mpRecord.rating_comment || undefined}
+                          >
+                            <span>{mpRecord.rating}/10</span>
+                            <Edit3 className="w-3 h-3 text-amber-600 opacity-70" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setRatingModalPlayer(stat.player);
+                              setModalRating(7);
+                              setModalComment('');
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-dashed border-primary/40 text-primary text-[10px] font-black hover:bg-primary/5 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Noter (1–10)</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </motion.div>
               ))}
             </div>
@@ -1777,9 +1955,48 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                   </motion.div>
                 </div>
               )}
-           </AnimatePresence>
-        </div>
-      )}
+            </AnimatePresence>
+         </div>
+       )}
+
+           {/* Modal d'Évaluation Match à Double Niveau (Estimée vs Approfondie) */}
+           {ratingModalPlayer && (
+             <PlayerMatchEvaluationModal
+               player={ratingModalPlayer}
+               matchInfo={{
+                 id: currentMatch?.id,
+                 opponent_name: (currentMatch as any)?.opponent_club?.name || currentMatch?.opponent_team_name,
+                 match_date: currentMatch?.match_date,
+                 competition: currentLeagueName,
+                 is_friendly: isCurrentMatchFriendly,
+               }}
+               initialRating={modalRating}
+               initialComment={modalComment}
+               onClose={() => setRatingModalPlayer(null)}
+               onSave={async (evalData) => {
+                 setModalRating(evalData.rating);
+                 setModalComment(evalData.comment);
+                 if (!currentMatch?.id || !ratingModalPlayer?.id) return;
+                 await matchService.savePlayerRating(currentMatch.id, ratingModalPlayer.id, evalData.rating, evalData.comment.trim() || null);
+                 if (!currentMatch.match_players) {
+                   currentMatch.match_players = [];
+                 }
+                 const target = currentMatch.match_players.find((mp: any) => mp.player_id === ratingModalPlayer.id);
+                 if (target) {
+                   target.rating = evalData.rating;
+                   target.rating_comment = evalData.comment.trim() || null;
+                 } else {
+                   currentMatch.match_players.push({
+                     match_id: currentMatch.id,
+                     player_id: ratingModalPlayer.id,
+                     rating: evalData.rating,
+                     rating_comment: evalData.comment.trim() || null,
+                     is_starting: false
+                   });
+                 }
+               }}
+             />
+           )}
     </div>
   );
 };

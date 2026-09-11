@@ -10,6 +10,8 @@ import { usePermissions } from '../context/PermissionsContext';
 import { useMatches } from '../hooks/useMatches';
 import { useClubData } from '../hooks/useClubData';
 import { MobileMenuButton } from './Sidebar';
+import { toast } from 'sonner';
+import defaultClubLogo from '../assets/fus-logo.png';
 
 interface HeaderProps {
   title: string;
@@ -33,6 +35,7 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
   }, []);
 
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [dropdownOpen, setDropdownOpen]       = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +65,12 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
   const avatarUrl   = authState.user?.avatar_url || defaultAvatarUrl;
 
   const { matches } = useMatches();
-  const { opponentClubs } = useClubData();
+  const { opponentClubs, mainClub } = useClubData();
+
+  // Logo et nom configurés dans le Registre du Club
+  const clubName = mainClub?.name || mainClub?.settings?.club_name || 'FUS Rabat';
+  const rawLogo = mainClub?.logo_url || mainClub?.settings?.logo_url;
+  const clubLogo = (rawLogo && rawLogo !== 'null' && rawLogo.trim() !== '') ? rawLogo : defaultClubLogo;
 
   // Date courante formatée
   const today = new Date().toLocaleDateString('fr-FR', {
@@ -78,95 +86,137 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
 
   return (
     <header className={cn(
-      "fixed top-0 right-0 h-[72px] left-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b flex items-center px-3 sm:px-4 lg:px-6 z-40 transition-all duration-300",
-      // md+ : sidebar icône (72px) toujours présente
-      "md:left-[72px]",
-      // lg+ : sidebar pleine largeur ou collapsed
-      sidebarCollapsed ? "lg:left-[72px]" : "lg:left-64"
+      "fixed top-0 right-0 h-20 left-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b flex items-center px-4 sm:px-6 lg:px-8 z-40 transition-all duration-300",
+      // md+ : sidebar icône (80px)
+      "md:left-20",
+      // lg+ : sidebar pleine largeur (288px) ou collapsed (80px)
+      sidebarCollapsed ? "lg:left-20" : "lg:left-72"
     )}>
       {/* Menu burger — uniquement sous md (mobile), la sidebar est visible sur tablette */}
       {onMobileMenuClick && (
-        <div className="md:hidden">
+        <div className="md:hidden mr-2">
           <MobileMenuButton onClick={onMobileMenuClick} />
         </div>
       )}
 
+      {/* Logo officiel du Registre du Club */}
+      <Link
+        to="/settings"
+        title={`Registre du Club : ${clubName} (Cliquez pour configurer)`}
+        className="flex items-center gap-2.5 sm:gap-3 mr-3 sm:mr-4 group shrink-0 focus:outline-none focus:ring-2 focus:ring-primary/20 rounded-2xl p-1 -ml-1 transition-all"
+      >
+        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-sm p-1.5 flex items-center justify-center overflow-hidden group-hover:border-primary/50 group-hover:shadow-md transition-all">
+          <img
+            src={clubLogo}
+            alt={clubName}
+            className="w-full h-full object-contain transition-transform duration-200 group-hover:scale-105"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = defaultClubLogo;
+            }}
+          />
+        </div>
+        <div className="hidden xl:flex flex-col text-left">
+          <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground/80 leading-tight">Registre</span>
+          <span className="text-xs font-black text-foreground truncate max-w-[130px] leading-tight group-hover:text-primary transition-colors">
+            {clubName}
+          </span>
+        </div>
+        <div className="h-7 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block mx-1" />
+      </Link>
+
       {/* Titre + date / match du jour */}
-      <div className="flex-1 flex flex-col min-w-0 ml-2 lg:ml-0">
-        <h1 className="text-lg sm:text-xl font-bold text-foreground tracking-tight truncate">{title}</h1>
+      <div className="flex-1 flex flex-col min-w-0 ml-1 sm:ml-2">
+        <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight truncate">{title}</h1>
         {todayMatch && opponent ? (
           <button
             onClick={() => navigate('/matchday')}
-            className="flex items-center gap-1.5 sm:gap-2 group hover:opacity-80 transition-opacity overflow-hidden"
+            className="flex items-center gap-2 group hover:opacity-80 transition-opacity overflow-hidden mt-0.5"
           >
             {todayMatch.status === 'live' ? (
-              <span className="flex items-center gap-1 bg-red-500 text-white text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
-                <Radio className="w-2 h-2" /> LIVE
+              <span className="flex items-center gap-1 bg-red-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full animate-pulse shrink-0">
+                <Radio className="w-2.5 h-2.5" /> LIVE
               </span>
             ) : (
-              <Swords className="w-3 h-3 text-primary shrink-0" />
+              <Swords className="w-3.5 h-3.5 text-primary shrink-0" />
             )}
-            <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-foreground truncate">
+            <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-foreground truncate">
               {todayMatch.status === 'live' ? 'En cours' : 'Match ce soir'}
             </span>
-            <span className="text-[10px] sm:text-[11px] font-bold text-muted-foreground truncate hidden sm:inline">vs {opponent.name}</span>
+            <span className="text-[11px] sm:text-xs font-bold text-muted-foreground truncate hidden sm:inline">vs {opponent.name}</span>
             {todayMatch.match_time && (
-              <span className="text-[9px] sm:text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">{todayMatch.match_time}</span>
+              <span className="text-[10px] sm:text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">{todayMatch.match_time}</span>
             )}
-            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-primary/60 underline underline-offset-2 group-hover:text-primary transition-colors shrink-0 hidden md:inline">
+            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60 underline underline-offset-2 group-hover:text-primary transition-colors shrink-0 hidden md:inline">
               → Live
             </span>
           </button>
         ) : (
-          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] sm:text-[11px] font-medium uppercase tracking-wider">
-            <Calendar className="w-3 h-3 shrink-0" />
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] sm:text-xs font-semibold uppercase tracking-wider mt-0.5">
+            <Calendar className="w-3.5 h-3.5 shrink-0 text-muted-foreground/80" />
             <span className="capitalize truncate">{today}</span>
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-        {/* Recherche - hidden on small mobile */}
-        <div className={cn(
-          "relative hidden sm:flex items-center rounded-xl bg-secondary transition-all duration-300 overflow-hidden",
-          isSearchFocused ? "w-48 md:w-64 lg:w-80 ring-2 ring-primary/20 bg-white" : "w-32 md:w-48 lg:w-64"
-        )}>
+      <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
+        {/* Recherche - avec validation et navigation au submit */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (globalSearchQuery.trim()) {
+              navigate(`/players?search=${encodeURIComponent(globalSearchQuery.trim())}`);
+            }
+          }}
+          className={cn(
+            "relative hidden sm:flex items-center rounded-2xl bg-secondary transition-all duration-300 overflow-hidden",
+            isSearchFocused ? "w-52 md:w-72 lg:w-88 ring-2 ring-primary/20 bg-white" : "w-36 md:w-52 lg:w-72"
+          )}
+        >
           <Search className={cn(
-            "absolute left-3 w-4 h-4 transition-colors",
+            "absolute left-3.5 w-4.5 h-4.5 transition-colors",
             isSearchFocused ? "text-primary" : "text-muted-foreground"
           )} />
           <input
             type="text"
-            placeholder="Rechercher…"
-            className="w-full h-10 pl-10 pr-4 bg-transparent outline-none text-sm"
+            placeholder="Rechercher (ex: joueur, club)…"
+            value={globalSearchQuery}
+            onChange={(e) => setGlobalSearchQuery(e.target.value)}
+            className="w-full h-11 pl-10 pr-4 bg-transparent outline-none text-sm font-medium"
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
           />
-        </div>
+        </form>
 
-        {/* Notifications - simplified on mobile */}
+        {/* Notifications */}
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="relative group rounded-xl h-9 w-9 sm:h-10 sm:w-10">
-            <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-white" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative group rounded-2xl h-10 w-10 sm:h-11 sm:w-11"
+            title="Notifications (aucune alerte non lue)"
+            onClick={() => {
+              toast.info('Aucune nouvelle notification pour le moment.');
+            }}
+          >
+            <Bell className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
           </Button>
         </div>
 
-        <div className="h-6 sm:h-8 w-px bg-border mx-0.5 sm:mx-1" />
+        <div className="h-7 sm:h-9 w-px bg-border mx-0.5 sm:mx-1" />
 
         {/* Profil utilisateur + dropdown */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen(v => !v)}
-            className="flex items-center gap-2 sm:gap-3 pl-1 group cursor-pointer rounded-xl hover:bg-secondary px-2 sm:px-3 py-1.5 sm:py-2 transition-colors"
+            className="flex items-center gap-2.5 sm:gap-3.5 pl-1 group cursor-pointer rounded-2xl hover:bg-secondary px-2 sm:px-3 py-1.5 sm:py-2 transition-colors"
           >
             {/* Nom + rôle (masqué sur mobile) */}
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-sm font-semibold text-foreground leading-none mb-1 truncate max-w-[120px]">
+              <span className="text-sm font-bold text-foreground leading-none mb-1 truncate max-w-[140px]">
                 {displayName}
               </span>
               <span className={cn(
-                "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border",
+                "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border",
                 roleBadge,
               )}>
                 {roleLabel}
@@ -174,12 +224,12 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
             </div>
 
             {/* Avatar */}
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-primary flex items-center justify-center shadow-md shadow-primary/20 group-hover:scale-105 transition-transform overflow-hidden shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-primary flex items-center justify-center shadow-md shadow-primary/20 group-hover:scale-105 transition-transform overflow-hidden shrink-0">
               <img src={avatarUrl} className="w-full h-full object-cover" alt={displayName} />
             </div>
 
             <ChevronDown className={cn(
-              "w-4 h-4 text-muted-foreground transition-transform hidden sm:block",
+              "w-4.5 h-4.5 text-muted-foreground transition-transform hidden sm:block",
               dropdownOpen && "rotate-180"
             )} />
           </button>

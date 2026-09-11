@@ -6,6 +6,12 @@ export type SessionStatus = 'scheduled' | 'confirmed' | 'in_progress' | 'complet
 
 export type RecommendationPriority = 'low' | 'medium' | 'high' | 'very_high';
 
+import { PLAYER_CATEGORIES } from '../../../constants';
+
+export const RECRUITMENT_AGE_CATEGORIES = PLAYER_CATEGORIES;
+
+export type RecruitmentAgeCategory = typeof RECRUITMENT_AGE_CATEGORIES[number];
+
 export type PipelineStage = 
   | 'prospect'          // New Prospect
   | 'scouted'           // Observed
@@ -112,9 +118,19 @@ export interface TrialCandidate {
   initial_scout_score?: number;
   scout_recommendation_notes?: string;
 
-  // Pipeline Kanban
+  // Recruteur Référent
+  recruiter_id?: string;
+  recruiter_name?: string;
+
+  // Vidéo & Highlights Détection
+  video_type?: 'youtube' | 'drive' | 'none';
+  video_url?: string;
+
+  // Pipeline Kanban & Affectation
   pipeline_stage: PipelineStage;
   status: CandidateStatus;
+  assigned_team_id?: string;
+  assigned_team_name?: string;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -153,6 +169,8 @@ export interface ScoutObservation {
 export interface PlayerTest {
   id: string;
   candidate_id?: string;
+  match_id?: string;
+  match_name?: string;
   test_name: string;
   test_date: string;
   start_time?: string;
@@ -176,6 +194,7 @@ export interface CandidateEvaluation {
   id: string;
   candidate_id: string;
   test_id?: string;
+  test_name?: string;
   evaluator_name: string;
   evaluator_role?: string;
   evaluation_date: string;
@@ -231,6 +250,10 @@ export interface CandidateEvaluation {
   pos_specific_2_score?: number;
   pos_specific_3_label?: string;
   pos_specific_3_score?: number;
+
+  // Grille dynamique spécialisée par poste (Nom du critère -> Note 1-10)
+  criteria_scores?: Record<string, number>;
+  position_code?: string;
 
   // Overall Score Pondéré
   overall_score: number;

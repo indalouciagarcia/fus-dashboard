@@ -26,7 +26,7 @@ const DevRoleSwitcher: React.FC = () => {
 
       <div className="flex flex-wrap justify-center gap-2">
       {roles.map(r => {
-        const isActive = authState.roles.includes(r);
+        const isActive = (authState?.roles ?? []).includes(r) || authState?.user?.system_role === r;
         return (
           <button
             key={r}

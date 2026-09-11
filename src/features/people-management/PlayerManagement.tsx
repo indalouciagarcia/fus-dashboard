@@ -1,4 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+} from 'recharts';
+import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePlayers } from '../../hooks/usePlayers';
 import { useTeams } from '../../hooks/useTeams';
@@ -45,6 +55,14 @@ import {
   ArrowUpCircle,
   RotateCcw,
   Sparkles,
+  ArrowLeft,
+  Flame,
+  Zap,
+  Award,
+  TrendingUp,
+  Shield,
+  Filter,
+  HelpCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -53,12 +71,15 @@ import { storageService } from '../../services/storageService';
 import { supabase } from '../../lib/supabase';
 import ImageCropperModal from '../../components/ImageCropperModal';
 import { Skeleton } from '../../components/ui/skeleton';
-import { PLAYER_CATEGORIES } from '../../constants';
+import { PLAYER_CATEGORIES, NATIONALITIES, PLAYER_POSITIONS, getPositionDetails, matchesPositionFilter, normalizeAgeCategory } from '../../constants';
 
 import ErrorEmptyState from '../../components/ErrorEmptyState';
 import { useSurclassements, usePlayerSurclassements } from '../../hooks/useSurclassements';
 import SurclassementModal from './SurclassementModal';
 import { recruitmentService } from '../recruitment/services/recruitmentService';
+import { PlayerDepartureModal } from './components/PlayerDepartureModal';
+import { PlayerMatchCalendarModal } from './components/PlayerMatchCalendarModal';
+import { opponentPlayerService } from '../../services/opponentPlayerService';
 
 // ─── Fake player generation utilities ────────────────────────────────────────
 const _FIRST_NAMES = [
@@ -76,14 +97,14 @@ const _LAST_NAMES = [
   'Boussairi', 'Rahimi', 'Tlemçani', 'El Yamani', 'Chaabi', 'Ghazali', 'Essafi',
 ];
 const _POSITIONS = [
-  'GK', 'GK', 'GK',
-  'CB', 'CB', 'CB', 'CB', 'RB', 'RB', 'LB', 'LB',
+  'GK', 'GK',
+  'CB', 'CB', 'CB', 'LB', 'RB',
   'CDM', 'CDM', 'CM', 'CM', 'CAM',
-  'LW', 'LW', 'RW', 'RW', 'ST', 'ST',
+  'LW', 'RW', 'SS', 'ST', 'ST',
 ];
 const _CAT_YEAR: Record<string, number> = {
   U7: 2019, U9: 2017, U11: 2015, U13: 2013, U14: 2012,
-  U15: 2011, U16: 2010, U17: 2009, U19: 2007, U21: 2005,
+  U15: 2011, U16: 2010, U17: 2009, U18: 2008, U19: 2007, U21: 2005,
   U23: 2003, SENIOR: 1998, PRO: 1997, OTHER: 1998,
 };
 const _r = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -183,10 +204,150 @@ const ATTENDANCE_BG: Record<Attendance, string> = {
   suspendu: 'bg-amber-500',
 };
 
+const getPositionInfo = (position: string | undefined | null) => getPositionDetails(position);
+
+const IndicatorHelpTooltip: React.FC<{ title: string; role: string; metric: string }> = ({ title, role, metric }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        className="w-5 h-5 rounded-full bg-slate-100 hover:bg-primary/10 text-slate-400 hover:text-primary transition-colors flex items-center justify-center text-[10px] font-black border border-slate-200/80 shadow-xs focus:outline-none cursor-pointer"
+        title="Rôle de cet indicateur"
+      >
+        <HelpCircle className="w-3.5 h-3.5" />
+      </button>
+
+      {open && (
+        <div 
+          className="absolute z-50 left-0 top-full mt-2 w-64 sm:w-72 p-3.5 bg-slate-950/95 backdrop-blur-md text-white rounded-2xl shadow-2xl text-[11px] border border-slate-700/80 pointer-events-auto transition-all animate-in fade-in-50 zoom-in-95"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="space-y-1.5 text-left">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <span className="font-black text-primary uppercase text-[10px] tracking-wider">{title}</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase">{metric}</span>
+            </div>
+            <p className="text-slate-300 leading-relaxed font-medium">
+              <strong className="text-white font-bold">Rôle de l'indicateur : </strong>
+              {role}
+            </p>
+          </div>
+          {/* Tooltip caret pointing up */}
+          <div className="absolute bottom-full left-2.5 -mb-px border-4 border-transparent border-b-slate-950/95" />
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PlayerManagement: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const { players, isLoading: playersLoading, isError: playersError, addPlayer, updatePlayer, deletePlayer, bulkDeletePlayers, isBulkDeleting, bulkAddPlayers, isBulkAdding } = usePlayers();
   const { teams, isLoading: teamsLoading, isError: teamsError } = useTeams();
-  const { mainClub, isLoading: clubLoading } = useClubData();
+  const { mainClub, opponentClubs = [], isLoading: clubLoading } = useClubData();
+  const [departurePlayer, setDeparturePlayer] = useState<Player | null>(null);
+  const [departureModalOpen, setDepartureModalOpen] = useState(false);
+
+  const handleOpenDeparture = (player: Player) => {
+    setDeparturePlayer(player);
+    setDepartureModalOpen(true);
+  };
+
+  const handleConfirmTransfer = async (player: Player, targetClub: Club) => {
+    const playerCategory = teams.find(t => t.id === player.team_id)?.category || 'SENIOR';
+    await opponentPlayerService.addOpponentPlayer({
+      opponent_id: targetClub.id,
+      full_name: player.full_name,
+      jersey_number: player.jersey_number ?? null,
+      position: player.position ?? null,
+      category: playerCategory,
+      height: player.height ?? null,
+      weight: player.weight ?? null,
+      preferred_foot: player.preferred_foot === 'right' ? 'Droit' : player.preferred_foot === 'left' ? 'Gauche' : player.preferred_foot || 'Droit',
+      nationality: player.nationality || 'Maroc',
+      photo_url: player.photo_url || null,
+    });
+    await deletePlayer(player.id);
+    toast.success(`Joueur ${player.full_name} transféré vers ${targetClub.name} avec succès !`);
+  };
+
+  const handleConfirmArchive = async (player: Player) => {
+    const nameParts = player.full_name.trim().split(' ');
+    const firstName = nameParts[0] || player.full_name;
+    const lastName = nameParts.slice(1).join(' ') || player.full_name;
+    const playerCategory = teams.find(t => t.id === player.team_id)?.category || 'SENIOR';
+
+    // Fetch player stats from match_events before archiving
+    let matchesCount = 0;
+    let goalsCount = 0;
+    let assistsCount = 0;
+    let yellowCardsCount = 0;
+    let redCardsCount = 0;
+
+    try {
+      const { data: events } = await supabase
+        .from('match_events')
+        .select('*')
+        .eq('player_id', player.id);
+
+      if (events) {
+        goalsCount = events.filter((e: any) => e.type === 'goal').length;
+        assistsCount = events.filter((e: any) => e.type === 'goal' && e.related_player_id === player.id).length;
+        yellowCardsCount = events.filter((e: any) => e.type === 'yellow_card').length;
+        redCardsCount = events.filter((e: any) => e.type === 'red_card').length;
+      }
+
+      const { data: playerMatches } = await supabase
+        .from('matches')
+        .select('id, lineup')
+        .eq('status', 'finished');
+
+      if (playerMatches) {
+        matchesCount = playerMatches.filter((m: any) => {
+          if (!m.lineup) return false;
+          const lineupArray = Array.isArray(m.lineup) ? m.lineup : [];
+          return lineupArray.some((item: any) => 
+            item === player.id || item?.id === player.id || item?.jersey_number === player.jersey_number
+          );
+        }).length;
+      }
+    } catch (err) {
+      console.error('Error fetching player stats for archiving:', err);
+    }
+
+    const estimatedMinutes = matchesCount * 90;
+
+    await recruitmentService.createCandidate({
+      first_name: firstName,
+      last_name: lastName,
+      birth_date: player.birth_date || undefined,
+      nationality: player.nationality || 'Maroc',
+      primary_position: player.position || 'Milieu',
+      preferred_foot: player.preferred_foot === 'left' ? 'Gaucher' : player.preferred_foot === 'both' ? 'Ambidextre' : 'Droitier',
+      height_cm: player.height ?? undefined,
+      weight_kg: player.weight ?? undefined,
+      age_category: playerCategory,
+      photo_url: player.photo_url || undefined,
+      current_club: 'Ancien Joueur FUS (Archivé)',
+      previous_clubs: `FUS Rabat (${playerCategory})`,
+      matches_played: matchesCount,
+      minutes_played: estimatedMinutes,
+      goals: goalsCount,
+      assists: assistsCount,
+      yellow_cards: yellowCardsCount,
+      red_cards: redCardsCount,
+      pipeline_stage: 'rejected',
+      status: 'rejected',
+      scout_recommendation_notes: `Joueur sorti de l'effectif FUS et archivé. Statistiques enregistrées : ${goalsCount} buts, ${assistsCount} passes D, ${yellowCardsCount} CJ en ${matchesCount} matchs (${estimatedMinutes} min).`
+    });
+
+    await deletePlayer(player.id);
+    toast.success(`Joueur ${player.full_name} retiré du roster FUS et archivé avec toutes ses données & statistiques.`);
+  };
   const {
     activeByPlayerId,
     createSurclassement,
@@ -249,6 +410,7 @@ const PlayerManagement: React.FC = () => {
 
   // Surclassement modal state
   const [surclassementPlayer, setSurclassementPlayer] = useState<Player | null>(null);
+  const [calendarModalPlayer, setCalendarModalPlayer] = useState<Player | null>(null);
 
   const handleOpenSurclassement = (player: Player) => setSurclassementPlayer(player);
   const handleCloseSurclassement = () => setSurclassementPlayer(null);
@@ -268,7 +430,14 @@ const PlayerManagement: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [positionFilter, setPositionFilter] = useState<string>('ALL');
-  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>(() => {
+    const cat = new URLSearchParams(window.location.search).get('category');
+    return cat ? cat.toUpperCase() : 'ALL';
+  });
+  useEffect(() => {
+    const cat = searchParams.get('category');
+    if (cat) setCategoryFilter(cat.toUpperCase());
+  }, [searchParams]);
   const [viewState, setViewState] = useState<'LIST' | 'FORM' | 'VIEW' | 'STATS' | 'PLANNING' | 'BULK_ADD'>('LIST');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   // Multi-sélection
@@ -341,29 +510,32 @@ const PlayerManagement: React.FC = () => {
   const [selectedSeasonFilter, setSelectedSeasonFilter] = useState('ALL');
   const [selectedLeagueFilter, setSelectedLeagueFilter] = useState('ALL');
   const [selectedMatchFilter, setSelectedMatchFilter] = useState('ALL');
+  const [evalSeasonFilter, setEvalSeasonFilter] = useState('ALL');
+  const [evalMonthFilter, setEvalMonthFilter] = useState('ALL');
+  const [evalTypeFilter, setEvalTypeFilter] = useState<'ALL' | 'FRIENDLY' | 'OFFICIAL'>('ALL');
   const [rawPlayerEvents, setRawPlayerEvents] = useState<any[]>([]);
   const [rawPlayerMatches, setRawPlayerMatches] = useState<any[]>([]);
 
-  const { participatedMatches, participatedLeagues, participatedSeasons } = useMemo(() => {
-    if (!rawPlayerMatches || !selectedPlayer) return { participatedMatches: [], participatedLeagues: [], participatedSeasons: [] };
+  const { participatedMatches, participatedLeagues, participatedSeasons, hasFriendlyMatches } = useMemo(() => {
+    if (!rawPlayerMatches || !selectedPlayer) return { participatedMatches: [], participatedLeagues: [], participatedSeasons: [], hasFriendlyMatches: false };
 
     const pMatches: any[] = [];
     const leagueIds = new Set<string>();
+    let hasFriendlies = false;
 
     rawPlayerMatches.forEach(m => {
       const lineup = m.lineup as any;
-      if (lineup?.startingXI?.includes(selectedPlayer.id) || lineup?.substitutes?.includes(selectedPlayer.id)) {
-        pMatches.push(m);
-        if (m.league_id) leagueIds.add(m.league_id);
-      }
-    });
+      const mpRecord = m.match_players?.find((p: any) => p.player_id === selectedPlayer.id);
+      const isStarter = mpRecord?.is_starting || lineup?.startingXI?.includes(selectedPlayer.id);
+      const isSub = (mpRecord && !mpRecord.is_starting) || lineup?.substitutes?.includes(selectedPlayer.id);
+      const hasEvent = rawPlayerEvents?.some((e: any) => e.match_id === m.id);
 
-    rawPlayerEvents?.forEach(e => {
-      if (!pMatches.some(m => m.id === e.match_id)) {
-        const m = rawPlayerMatches.find(m => m.id === e.match_id);
-        if (m) {
-          pMatches.push(m);
-          if (m.league_id) leagueIds.add(m.league_id);
+      if (isStarter || isSub || hasEvent) {
+        pMatches.push(m);
+        if (m.league_id) {
+          leagueIds.add(m.league_id);
+        } else {
+          hasFriendlies = true;
         }
       }
     });
@@ -375,7 +547,8 @@ const PlayerManagement: React.FC = () => {
     return {
       participatedMatches: pMatches,
       participatedLeagues: pLeagues,
-      participatedSeasons: Array.from(seasons)
+      participatedSeasons: Array.from(seasons),
+      hasFriendlyMatches: hasFriendlies
     };
   }, [rawPlayerMatches, rawPlayerEvents, selectedPlayer, leagues]);
 
@@ -387,71 +560,208 @@ const PlayerManagement: React.FC = () => {
 
     if (selectedSeasonFilter !== 'ALL') {
       const validLeagueIds = leagues?.filter(l => l.season === selectedSeasonFilter).map(l => l.id) || [];
-      eventsToUse = eventsToUse.filter(e => validLeagueIds.includes(e.matches?.league_id));
       matchesToUse = matchesToUse.filter(m => validLeagueIds.includes(m.league_id));
     }
 
-    if (selectedLeagueFilter !== 'ALL') {
-      eventsToUse = eventsToUse.filter(e => e.matches?.league_id === selectedLeagueFilter);
+    if (selectedLeagueFilter === 'FRIENDLY') {
+      matchesToUse = matchesToUse.filter(m => !m.league_id || m.category?.toLowerCase().includes('amical') || m.notes?.toLowerCase().includes('amical'));
+    } else if (selectedLeagueFilter === 'OFFICIAL') {
+      matchesToUse = matchesToUse.filter(m => !!m.league_id && !m.category?.toLowerCase().includes('amical'));
+    } else if (selectedLeagueFilter !== 'ALL') {
       matchesToUse = matchesToUse.filter(m => m.league_id === selectedLeagueFilter);
     }
 
     if (selectedMatchFilter !== 'ALL') {
-      eventsToUse = eventsToUse.filter(e => e.match_id === selectedMatchFilter);
       matchesToUse = matchesToUse.filter(m => m.id === selectedMatchFilter);
     }
 
-    if (viewState === 'VIEW') {
-      let matchesPlayed = 0;
-      let minutesPlayed = 0;
+    const validMatchIds = new Set(matchesToUse.map(m => m.id));
+    eventsToUse = eventsToUse.filter(e => validMatchIds.has(e.match_id));
 
-      matchesToUse.forEach(match => {
-        const lineup = match.lineup as { startingXI?: string[]; substitutes?: string[] } | null;
-        if (lineup?.startingXI?.includes(selectedPlayer?.id) || lineup?.substitutes?.includes(selectedPlayer?.id)) {
-          matchesPlayed++;
-          const isStarter = lineup.startingXI?.includes(selectedPlayer?.id);
-          const matchDuration = (match.half_duration_minutes || 45) * 2;
-          if (isStarter) {
-            minutesPlayed += matchDuration;
-          } else {
-            minutesPlayed += 30;
-          }
+    let matchesPlayed = 0;
+    let startsCount = 0;
+    let subsCount = 0;
+    let minutesPlayed = 0;
+
+    matchesToUse.forEach(match => {
+      const lineup = match.lineup as { startingXI?: string[]; substitutes?: string[] } | null;
+      const mpRecord = (match as any).match_players?.find((p: any) => p.player_id === selectedPlayer?.id);
+      const isStarter = mpRecord?.is_starting || lineup?.startingXI?.includes(selectedPlayer?.id);
+      const isSub = (mpRecord && !mpRecord.is_starting) || lineup?.substitutes?.includes(selectedPlayer?.id);
+      const hasEvent = eventsToUse?.some((e: any) => e.match_id === match.id);
+
+      if (isStarter || isSub || hasEvent) {
+        matchesPlayed++;
+        const matchDuration = (match.half_duration_minutes || 45) * 2;
+        if (isStarter) {
+          startsCount++;
+          minutesPlayed += matchDuration;
+        } else if (isSub) {
+          subsCount++;
+          minutesPlayed += 30;
+        } else {
+          minutesPlayed += 20;
         }
-      });
+      }
+    });
 
-      eventsToUse.forEach((e: any) => {
-        if (e.type === 'substitution') {
-          if (e.player_id === selectedPlayer?.id) {
-            minutesPlayed -= 15;
-          } else if (e.related_player_id === selectedPlayer?.id) {
-            minutesPlayed += 15;
-          }
+    eventsToUse.forEach((e: any) => {
+      if (e.type === 'substitution') {
+        if (e.player_id === selectedPlayer?.id) {
+          minutesPlayed -= 15;
+        } else if (e.related_player_id === selectedPlayer?.id) {
+          minutesPlayed += 15;
         }
-      });
+      }
+    });
 
-      return {
-        matches: matchesPlayed,
-        minutes: Math.max(0, minutesPlayed),
-        goals: eventsToUse.filter((e: any) => e.type === 'goal').length || 0,
-        assists: eventsToUse.filter((e: any) => e.type === 'assist').length || 0,
-        yellowCards: eventsToUse.filter((e: any) => e.type === 'yellow_card').length || 0,
-        redCards: eventsToUse.filter((e: any) => e.type === 'red_card').length || 0,
-      };
-    } else if (viewState === 'STATS') {
-      return {
-        matches: eventsToUse.length || 0,
-        goals: eventsToUse.filter((e: any) => e.type === 'goal').length || 0,
-        assists: eventsToUse.filter((e: any) => e.type === 'goal' && e.related_player_id === selectedPlayer?.id).length || 0,
-        yellowCards: eventsToUse.filter((e: any) => e.type === 'yellow_card').length || 0,
-        redCards: eventsToUse.filter((e: any) => e.type === 'red_card').length || 0,
-        substitutions: eventsToUse.filter((e: any) => e.type === 'substitution').length || 0,
-      };
-    }
+    const goals = eventsToUse.filter((e: any) => e.type === 'goal' && e.player_id === selectedPlayer?.id).length || 0;
+    const assists = eventsToUse.filter((e: any) =>
+      e.type === 'assist' || (e.type === 'goal' && e.related_player_id === selectedPlayer?.id)
+    ).length || 0;
+    const yellowCards = eventsToUse.filter((e: any) => e.type === 'yellow_card' && e.player_id === selectedPlayer?.id).length || 0;
+    const redCards = eventsToUse.filter((e: any) => e.type === 'red_card' && e.player_id === selectedPlayer?.id).length || 0;
+    const substitutions = eventsToUse.filter((e: any) => e.type === 'substitution').length || 0;
 
-    return null;
-  }, [rawPlayerEvents, rawPlayerMatches, selectedLeagueFilter, viewState, selectedPlayer]);
+    return {
+      matches: matchesPlayed,
+      starts: startsCount,
+      subs: subsCount,
+      minutes: Math.max(0, minutesPlayed),
+      goals,
+      assists,
+      yellowCards,
+      redCards,
+      substitutions,
+      totalContributions: goals + assists,
+      avgMinutes: matchesPlayed > 0 ? Math.round(Math.max(0, minutesPlayed) / matchesPlayed) : 0,
+      starterRate: matchesPlayed > 0 ? Math.round((startsCount / matchesPlayed) * 100) : 0,
+    };
+  }, [rawPlayerEvents, rawPlayerMatches, selectedSeasonFilter, selectedLeagueFilter, selectedMatchFilter, leagues, selectedPlayer]);
 
   const displayStats = computedPlayerStats || playerStats;
+
+  // ── Évaluations de tous les matchs (amicaux & officiels) pour le joueur ──
+  const evaluatedMatches = useMemo(() => {
+    if (!rawPlayerMatches || !selectedPlayer) return [];
+    return rawPlayerMatches
+      .filter((m: any) => {
+        const mpRecord = (m as any).match_players?.find((p: any) => p.player_id === selectedPlayer.id);
+        return mpRecord && mpRecord.rating != null;
+      })
+      .map((m: any) => {
+        const mpRecord = (m as any).match_players?.find((p: any) => p.player_id === selectedPlayer.id);
+        const lg = leagues?.find((l: any) => l.id === m.league_id);
+        const season = lg?.season || (m.match_date ? `${new Date(m.match_date).getFullYear()}` : '2025');
+        const opp = opponentClubs.find((c: any) => c.id === m.opponent_id);
+        const isFriendly = !m.league_id || m.category?.toLowerCase().includes('amical') || m.notes?.toLowerCase().includes('amical') || (lg?.name && lg.name.toLowerCase().includes('amical'));
+        return {
+          ...m,
+          isFriendly,
+          rating: Number(mpRecord.rating),
+          ratingComment: mpRecord.rating_comment,
+          season,
+          opponentName: opp?.name || 'Adversaire',
+          leagueName: isFriendly ? 'Match Amical' : (lg?.name || 'Compétition Officielle'),
+        };
+      });
+  }, [rawPlayerMatches, selectedPlayer, leagues, opponentClubs]);
+
+  const availableEvalSeasons = useMemo(() => {
+    const s = new Set<string>();
+    evaluatedMatches.forEach(m => { if (m.season) s.add(m.season); });
+    return Array.from(s).sort();
+  }, [evaluatedMatches]);
+
+  const availableEvalMonths = useMemo(() => {
+    const mSet = new Set<string>();
+    evaluatedMatches.forEach(m => {
+      if (m.match_date && m.match_date.length >= 7) mSet.add(m.match_date.slice(5, 7));
+    });
+    return Array.from(mSet).sort();
+  }, [evaluatedMatches]);
+
+  const filteredEvaluatedMatches = useMemo(() => {
+    return evaluatedMatches.filter(m => {
+      if (evalSeasonFilter !== 'ALL' && m.season !== evalSeasonFilter) return false;
+      if (evalMonthFilter !== 'ALL' && m.match_date?.slice(5, 7) !== evalMonthFilter) return false;
+      if (evalTypeFilter === 'FRIENDLY' && !m.isFriendly) return false;
+      if (evalTypeFilter === 'OFFICIAL' && m.isFriendly) return false;
+      return true;
+    }).sort((a, b) => (a.match_date || '').localeCompare(b.match_date || ''));
+  }, [evaluatedMatches, evalSeasonFilter, evalMonthFilter, evalTypeFilter]);
+
+  const evalKPIs = useMemo(() => {
+    if (filteredEvaluatedMatches.length === 0) {
+      return { avg: '-', max: '-', min: '-', count: 0 };
+    }
+    const ratings = filteredEvaluatedMatches.map(m => m.rating);
+    const avg = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);
+    const max = Math.max(...ratings).toFixed(1);
+    const min = Math.min(...ratings).toFixed(1);
+    return { avg, max, min, count: filteredEvaluatedMatches.length };
+  }, [filteredEvaluatedMatches]);
+
+  const evalChartData = useMemo(() => {
+    return filteredEvaluatedMatches.map((m, idx) => {
+      const d = m.match_date ? new Date(m.match_date) : null;
+      const dateFormatted = d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : `M${idx + 1}`;
+      return {
+        name: `${dateFormatted} vs ${m.opponentName}`,
+        date: dateFormatted,
+        fullDate: m.match_date,
+        opponent: m.opponentName,
+        rating: m.rating,
+        comment: m.ratingComment,
+        isFriendly: m.isFriendly,
+        leagueName: m.leagueName,
+        score: `${m.is_home ? m.score_home : m.score_away} - ${m.is_home ? m.score_away : m.score_home}`,
+      };
+    });
+  }, [filteredEvaluatedMatches]);
+
+  const MONTH_LABELS: Record<string, string> = {
+    '01': 'Janvier', '02': 'Février', '03': 'Mars', '04': 'Avril',
+    '05': 'Mai', '06': 'Juin', '07': 'Juillet', '08': 'Août',
+    '09': 'Septembre', '10': 'Octobre', '11': 'Novembre', '12': 'Décembre',
+  };
+
+  const filteredPlayerMatches = useMemo(() => {
+    if (!selectedPlayer || !rawPlayerMatches) return [];
+
+    return rawPlayerMatches
+      .filter((m: any) => {
+        const lineup = m.lineup as { startingXI?: string[]; substitutes?: string[] } | null;
+        const mpRecord = (m as any).match_players?.find((p: any) => p.player_id === selectedPlayer.id);
+        const isStarter = mpRecord?.is_starting || lineup?.startingXI?.includes(selectedPlayer.id);
+        const isSub = (mpRecord && !mpRecord.is_starting) || lineup?.substitutes?.includes(selectedPlayer.id);
+        const hasEvent = rawPlayerEvents?.some((e: any) => e.match_id === m.id);
+
+        if (!isStarter && !isSub && !hasEvent) return false;
+
+        if (selectedSeasonFilter !== 'ALL') {
+          const lg = leagues?.find((l: any) => l.id === m.league_id);
+          if (lg?.season !== selectedSeasonFilter) return false;
+        }
+
+        if (selectedLeagueFilter === 'FRIENDLY') {
+          const isFriendly = !m.league_id || m.category?.toLowerCase().includes('amical') || m.notes?.toLowerCase().includes('amical');
+          if (!isFriendly) return false;
+        } else if (selectedLeagueFilter === 'OFFICIAL') {
+          const isOfficial = !!m.league_id && !m.category?.toLowerCase().includes('amical');
+          if (!isOfficial) return false;
+        } else if (selectedLeagueFilter !== 'ALL' && m.league_id !== selectedLeagueFilter) {
+          return false;
+        }
+
+        if (selectedMatchFilter !== 'ALL' && m.id !== selectedMatchFilter) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((a: any, b: any) => new Date(b.match_date || 0).getTime() - new Date(a.match_date || 0).getTime());
+  }, [rawPlayerMatches, rawPlayerEvents, selectedPlayer, selectedSeasonFilter, selectedLeagueFilter, selectedMatchFilter, leagues]);
 
   // Planning State
   const [weekOffset, setWeekOffset] = useState(0);
@@ -548,9 +858,9 @@ const PlayerManagement: React.FC = () => {
     return players.filter(p => {
       const matchesSearch = p.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.jersey_number?.toString().includes(searchQuery);
-      const matchesPosition = positionFilter === 'ALL' || p.position?.toUpperCase() === positionFilter.toUpperCase();
+      const matchesPosition = matchesPositionFilter(p.position, positionFilter);
       const playerCategory = teams.find(t => t.id === p.team_id)?.category;
-      const matchesCategory = categoryFilter === 'ALL' || playerCategory?.toUpperCase() === categoryFilter.toUpperCase();
+      const matchesCategory = categoryFilter === 'ALL' || normalizeAgeCategory(playerCategory) === categoryFilter.toUpperCase();
       return matchesSearch && matchesPosition && matchesCategory;
     });
   }, [players, searchQuery, positionFilter, categoryFilter, teams]);
@@ -635,56 +945,76 @@ const PlayerManagement: React.FC = () => {
 
     // Fetch player stats from match_events and matches
     try {
-      const { data: events } = await supabase
+      const { data: events, error: eventsError } = await supabase
         .from('match_events')
-        .select('*, matches(league_id)')
-        .eq('player_id', player.id);
+        .select('*')
+        .or(`player_id.eq.${player.id},related_player_id.eq.${player.id}`);
 
-      const { data: playerMatches } = await supabase
+      if (eventsError) console.error('Events error:', eventsError);
+
+      const { data: playerMatches, error: matchesError } = await supabase
         .from('matches')
-        .select('id, lineup, status, half_duration_minutes, league_id, match_date, clubs!matches_opponent_id_fkey(name)')
-        .eq('status', 'finished');
+        .select('*, match_players(player_id, is_starting, position_index, rating, rating_comment)')
+        .order('match_date', { ascending: false });
 
-      // Calculate matches played from lineup data
+      if (matchesError) console.error('Matches error:', matchesError);
+
       let matchesPlayed = 0;
+      let startsCount = 0;
+      let subsCount = 0;
       let minutesPlayed = 0;
 
       playerMatches?.forEach(match => {
         const lineup = match.lineup as { startingXI?: string[]; substitutes?: string[] } | null;
-        if (lineup?.startingXI?.includes(player.id) || lineup?.substitutes?.includes(player.id)) {
+        const mpRecord = (match as any).match_players?.find((p: any) => p.player_id === player.id);
+        const isStarter = mpRecord?.is_starting || lineup?.startingXI?.includes(player.id);
+        const isSub = (mpRecord && !mpRecord.is_starting) || lineup?.substitutes?.includes(player.id);
+        const hasEvent = events?.some((e: any) => e.match_id === match.id);
+
+        if (isStarter || isSub || hasEvent) {
           matchesPlayed++;
-          // Estimate minutes: if starter, assume full match (or use half_duration_minutes * 2)
-          const isStarter = lineup.startingXI?.includes(player.id);
           const matchDuration = (match.half_duration_minutes || 45) * 2;
           if (isStarter) {
+            startsCount++;
             minutesPlayed += matchDuration;
-          } else {
-            // Substitute: estimate 30 minutes
+          } else if (isSub) {
+            subsCount++;
             minutesPlayed += 30;
+          } else {
+            minutesPlayed += 20;
           }
         }
       });
 
-      // Check for substitution events to adjust minutes
       events?.forEach((e: any) => {
         if (e.type === 'substitution') {
           if (e.player_id === player.id) {
-            // Player was substituted out
-            minutesPlayed -= 15; // Rough estimate
+            minutesPlayed -= 15;
           } else if (e.related_player_id === player.id) {
-            // Player came in as substitute
             minutesPlayed += 15;
           }
         }
       });
 
+      const goals = events?.filter((e: any) => e.type === 'goal' && e.player_id === player.id).length || 0;
+      const assists = events?.filter((e: any) => e.type === 'assist' || (e.type === 'goal' && e.related_player_id === player.id)).length || 0;
+      const yellowCards = events?.filter((e: any) => e.type === 'yellow_card' && e.player_id === player.id).length || 0;
+      const redCards = events?.filter((e: any) => e.type === 'red_card' && e.player_id === player.id).length || 0;
+      const substitutions = events?.filter((e: any) => e.type === 'substitution').length || 0;
+
       const stats = {
         matches: matchesPlayed,
+        starts: startsCount,
+        subs: subsCount,
         minutes: Math.max(0, minutesPlayed),
-        goals: events?.filter((e: any) => e.type === 'goal').length || 0,
-        assists: events?.filter((e: any) => e.type === 'assist').length || 0,
-        yellowCards: events?.filter((e: any) => e.type === 'yellow_card').length || 0,
-        redCards: events?.filter((e: any) => e.type === 'red_card').length || 0,
+        goals,
+        assists,
+        yellowCards,
+        redCards,
+        substitutions,
+        totalContributions: goals + assists,
+        avgMinutes: matchesPlayed > 0 ? Math.round(Math.max(0, minutesPlayed) / matchesPlayed) : 0,
+        starterRate: matchesPlayed > 0 ? Math.round((startsCount / matchesPlayed) * 100) : 0,
       };
 
       setPlayerStats(stats);
@@ -695,7 +1025,7 @@ const PlayerManagement: React.FC = () => {
       setSelectedMatchFilter('ALL');
     } catch (error) {
       console.error('Error fetching stats:', error);
-      setPlayerStats({ matches: 0, minutes: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0 });
+      setPlayerStats({ matches: 0, starts: 0, subs: 0, minutes: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, substitutions: 0, totalContributions: 0, avgMinutes: 0, starterRate: 0 });
     } finally {
       setLoadingStats(false);
     }
@@ -706,25 +1036,78 @@ const PlayerManagement: React.FC = () => {
     setLoadingStats(true);
     setViewState('STATS');
 
-    // Fetch player stats from match_events
+    // Fetch player stats from match_events and matches
     try {
-      const { data: events } = await supabase
+      const { data: events, error: eventsError } = await supabase
         .from('match_events')
-        .select('*, matches(league_id)')
-        .eq('player_id', player.id);
+        .select('*')
+        .or(`player_id.eq.${player.id},related_player_id.eq.${player.id}`);
 
-      const { data: playerMatches } = await supabase
+      if (eventsError) console.error('Events error:', eventsError);
+
+      const { data: playerMatches, error: matchesError } = await supabase
         .from('matches')
-        .select('id, lineup, status, half_duration_minutes, league_id, match_date, clubs!matches_opponent_id_fkey(name)')
-        .eq('status', 'finished');
+        .select('*, match_players(player_id, is_starting, position_index, rating, rating_comment)')
+        .order('match_date', { ascending: false });
+
+      if (matchesError) console.error('Matches error:', matchesError);
+
+      let matchesPlayed = 0;
+      let startsCount = 0;
+      let subsCount = 0;
+      let minutesPlayed = 0;
+
+      playerMatches?.forEach(match => {
+        const lineup = match.lineup as { startingXI?: string[]; substitutes?: string[] } | null;
+        const mpRecord = (match as any).match_players?.find((p: any) => p.player_id === player.id);
+        const isStarter = mpRecord?.is_starting || lineup?.startingXI?.includes(player.id);
+        const isSub = (mpRecord && !mpRecord.is_starting) || lineup?.substitutes?.includes(player.id);
+        const hasEvent = events?.some((e: any) => e.match_id === match.id);
+
+        if (isStarter || isSub || hasEvent) {
+          matchesPlayed++;
+          const matchDuration = (match.half_duration_minutes || 45) * 2;
+          if (isStarter) {
+            startsCount++;
+            minutesPlayed += matchDuration;
+          } else if (isSub) {
+            subsCount++;
+            minutesPlayed += 30;
+          } else {
+            minutesPlayed += 20;
+          }
+        }
+      });
+
+      events?.forEach((e: any) => {
+        if (e.type === 'substitution') {
+          if (e.player_id === player.id) {
+            minutesPlayed -= 15;
+          } else if (e.related_player_id === player.id) {
+            minutesPlayed += 15;
+          }
+        }
+      });
+
+      const goals = events?.filter((e: any) => e.type === 'goal' && e.player_id === player.id).length || 0;
+      const assists = events?.filter((e: any) => e.type === 'assist' || (e.type === 'goal' && e.related_player_id === player.id)).length || 0;
+      const yellowCards = events?.filter((e: any) => e.type === 'yellow_card' && e.player_id === player.id).length || 0;
+      const redCards = events?.filter((e: any) => e.type === 'red_card' && e.player_id === player.id).length || 0;
+      const substitutions = events?.filter((e: any) => e.type === 'substitution').length || 0;
 
       const stats = {
-        matches: events?.length || 0,
-        goals: events?.filter((e: any) => e.type === 'goal').length || 0,
-        assists: events?.filter((e: any) => e.type === 'goal' && e.related_player_id === player.id).length || 0,
-        yellowCards: events?.filter((e: any) => e.type === 'yellow_card').length || 0,
-        redCards: events?.filter((e: any) => e.type === 'red_card').length || 0,
-        substitutions: events?.filter((e: any) => e.type === 'substitution').length || 0,
+        matches: matchesPlayed,
+        starts: startsCount,
+        subs: subsCount,
+        minutes: Math.max(0, minutesPlayed),
+        goals,
+        assists,
+        yellowCards,
+        redCards,
+        substitutions,
+        totalContributions: goals + assists,
+        avgMinutes: matchesPlayed > 0 ? Math.round(Math.max(0, minutesPlayed) / matchesPlayed) : 0,
+        starterRate: matchesPlayed > 0 ? Math.round((startsCount / matchesPlayed) * 100) : 0,
       };
 
       setPlayerStats(stats);
@@ -735,11 +1118,17 @@ const PlayerManagement: React.FC = () => {
       setSelectedMatchFilter('ALL');
     } catch (error) {
       console.error('Error fetching stats:', error);
-      setPlayerStats({ matches: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, substitutions: 0 });
+      setPlayerStats({ matches: 0, starts: 0, subs: 0, minutes: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, substitutions: 0, totalContributions: 0, avgMinutes: 0, starterRate: 0 });
     } finally {
       setLoadingStats(false);
     }
   };
+
+  useEffect(() => {
+    if (viewState === 'STATS' && selectedPlayer && (!rawPlayerMatches || rawPlayerMatches.length === 0) && !loadingStats) {
+      handleViewStats(selectedPlayer);
+    }
+  }, [viewState, selectedPlayer]);
 
   const handleSave = async () => {
     try {
@@ -1014,7 +1403,11 @@ const PlayerManagement: React.FC = () => {
                             </div>
 
                             <h3 className="font-black text-lg tracking-tight uppercase group-hover:text-primary transition-colors truncate">{player.full_name}</h3>
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1 mb-2">{player.position}</p>
+                            <div className="flex items-center justify-center mt-1 mb-2">
+                              <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-lg border ${getPositionDetails(player.position).badgeBg}`}>
+                                {getPositionDetails(player.position).code} — {getPositionDetails(player.position).label}
+                              </span>
+                            </div>
 
                             {/* Badge Recrutement Pipeline */}
                             <div className="mb-3 flex items-center justify-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1">
@@ -1069,8 +1462,8 @@ const PlayerManagement: React.FC = () => {
                                   {selectedIds.has(player.id) ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 rounded border-2 border-current" />}
                                 </button>
                               ) : (
-                                <Button variant="ghost" size="icon" onClick={() => deletePlayer(player.id)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
-                                  <Trash2 className="w-4 h-4" />
+                                <Button variant="ghost" size="icon" onClick={() => handleOpenDeparture(player)} title="Sortie / Transfert du club" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
+                                  <X className="w-4 h-4 text-red-500" />
                                 </Button>
                               )}
                             </div>
@@ -1121,7 +1514,13 @@ const PlayerManagement: React.FC = () => {
                         </td>
                         <td className="py-3 text-xs font-bold">{player.nationality}</td>
                         <td className="py-3">
-                          <Badge variant="outline" className="text-[9px] font-black border-primary/20 text-primary uppercase">{player.position}</Badge>
+                          <span
+                            className={`inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-md border shadow-2xs ${getPositionDetails(player.position).badgeBg}`}
+                            title={getPositionDetails(player.position).label}
+                          >
+                            <span>{getPositionDetails(player.position).code}</span>
+                            <span className="opacity-75 font-semibold text-[8px] hidden 2xl:inline">· {getPositionDetails(player.position).label}</span>
+                          </span>
                         </td>
                         <td className="py-3">
                           <div className="flex items-center gap-2">
@@ -1153,6 +1552,9 @@ const PlayerManagement: React.FC = () => {
                                 <Button variant="ghost" size="icon" onClick={() => handleViewStats(player)} className="h-9 w-9 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-md transition-all" title="Statistiques">
                                   <BarChart3 className="w-4 h-4" />
                                 </Button>
+                                <Button variant="ghost" size="icon" onClick={() => setCalendarModalPlayer(player)} className="h-9 w-9 rounded-xl hover:bg-blue-50 hover:text-blue-600 hover:shadow-md transition-all" title="Calendrier & Stats Matchs Joueur">
+                                  <Calendar className="w-4 h-4 text-blue-600" />
+                                </Button>
                                 <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
                                   <Edit2 className="w-4 h-4" />
                                 </Button>
@@ -1171,8 +1573,8 @@ const PlayerManagement: React.FC = () => {
                                     : <ArrowUpCircle className="w-4 h-4" />
                                   }
                                 </Button>
-                                <Button variant="ghost" size="icon" onClick={() => deletePlayer(player.id)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
-                                  <Trash2 className="w-4 h-4" />
+                                <Button variant="ghost" size="icon" onClick={() => handleOpenDeparture(player)} title="Sortie / Transfert du club" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
+                                  <X className="w-4 h-4 text-red-500" />
                                 </Button>
                               </>
                             )}
@@ -1315,13 +1717,16 @@ const PlayerManagement: React.FC = () => {
                     </select>
                   </div>
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Nationalité</label>
-                    <Input
-                      value={formData.nationality}
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Nationalité (Liste Déroulante)</label>
+                    <select
+                      value={formData.nationality || 'Maroc'}
                       onChange={e => setFormData({ ...formData, nationality: e.target.value })}
-                      placeholder="ex. Maroc"
-                      className="h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20"
-                    />
+                      className="w-full h-16 px-8 rounded-2xl bg-secondary/30 border-none font-bold text-lg focus:ring-2 ring-primary/20 appearance-none outline-none cursor-pointer"
+                    >
+                      {NATIONALITIES.map(nat => (
+                        <option key={nat} value={nat}>{nat}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-3">
                     <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Date de Naissance</label>
@@ -1342,10 +1747,11 @@ const PlayerManagement: React.FC = () => {
                       onChange={e => setFormData({ ...formData, position: e.target.value as any })}
                       className="w-full h-16 rounded-2xl bg-secondary/30 border-none font-bold px-8 outline-none appearance-none cursor-pointer focus:ring-2 ring-primary/20"
                     >
-                      <option value="GK">GK - Gardien</option>
-                      <option value="DF">DF - Défenseur</option>
-                      <option value="MF">MF - Milieu</option>
-                      <option value="FW">FW - Attaquant</option>
+                      {PLAYER_POSITIONS.map(pos => (
+                        <option key={pos.code} value={pos.code}>
+                          {pos.code} — {pos.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-3">
@@ -1683,164 +2089,912 @@ const PlayerManagement: React.FC = () => {
         ) : viewState === 'STATS' ? (
           <motion.div
             key="stats"
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="max-w-4xl mx-auto"
+            exit={{ opacity: 0, y: -15 }}
+            transition={{ duration: 0.25 }}
+            className="max-w-6xl mx-auto space-y-6 pb-16"
           >
             {selectedPlayer && (
-              <div className="space-y-8">
-                <div className="flex items-center gap-4">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setViewState('LIST')}
-                    className="w-14 h-14 rounded-2xl bg-white border shadow-sm hover:bg-secondary transition-all"
-                  >
-                    <X className="w-6 h-6 rotate-90" />
-                  </Button>
-
-                  <div className="flex items-center gap-2">
+              <div className="space-y-6">
+                {/* ── Top Navigation Bar ── */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-secondary/60 shadow-sm">
+                  <div className="flex items-center gap-3">
                     <Button
                       variant="outline"
-                      size="icon"
-                      onClick={goToPreviousPlayer}
-                      disabled={filteredPlayers.length <= 1}
-                      className="w-12 h-12 rounded-xl bg-white border shadow-sm hover:bg-secondary transition-all disabled:opacity-40"
-                      title="Joueur précédent"
+                      onClick={() => setViewState('LIST')}
+                      className="h-11 px-4 rounded-xl border-border hover:bg-secondary text-xs font-black uppercase tracking-wider gap-2 shadow-sm transition-all hover:scale-[1.02]"
                     >
-                      <PrevIcon className="w-5 h-5" />
+                      <ArrowLeft className="w-4 h-4 text-primary" />
+                      <span>Retour Effectif</span>
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={goToNextPlayer}
-                      disabled={filteredPlayers.length <= 1}
-                      className="w-12 h-12 rounded-xl bg-white border shadow-sm hover:bg-secondary transition-all disabled:opacity-40"
-                      title="Joueur suivant"
-                    >
-                      <NextIcon className="w-5 h-5" />
-                    </Button>
-                  </div>
 
-                  <div className="flex-1">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div>
-                        <h3 className="text-3xl font-black tracking-tight uppercase italic">Statistiques</h3>
-                        <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest mt-1">{selectedPlayer.full_name}</p>
+                    <div className="flex items-center bg-secondary/40 p-1 rounded-xl border border-secondary">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={goToPreviousPlayer}
+                        disabled={filteredPlayers.length <= 1}
+                        className="w-9 h-9 rounded-lg hover:bg-white transition-all disabled:opacity-30"
+                        title="Joueur précédent"
+                      >
+                        <PrevIcon className="w-4 h-4" />
+                      </Button>
+                      <div className="px-3 text-[11px] font-black tracking-widest uppercase text-muted-foreground whitespace-nowrap">
+                        {filteredPlayers.findIndex(p => p.id === selectedPlayer.id) + 1} / {filteredPlayers.length}
                       </div>
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <select
-                          value={selectedSeasonFilter}
-                          onChange={(e) => { setSelectedSeasonFilter(e.target.value); setSelectedLeagueFilter('ALL'); setSelectedMatchFilter('ALL'); }}
-                          className="h-10 rounded-xl border border-input bg-background px-4 text-sm font-medium shadow-sm w-full sm:w-40 focus:outline-none focus:ring-2 focus:ring-primary"
-                        >
-                          <option value="ALL">Toutes Saisons</option>
-                          {participatedSeasons.map((s: string) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-
-                        <select
-                          value={selectedLeagueFilter}
-                          onChange={(e) => { setSelectedLeagueFilter(e.target.value); setSelectedMatchFilter('ALL'); }}
-                          className="h-10 rounded-xl border border-input bg-background px-4 text-sm font-medium shadow-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-primary"
-                        >
-                          <option value="ALL">Toutes Ligues</option>
-                          {participatedLeagues
-                            .filter((l: any) => selectedSeasonFilter === 'ALL' || l.season === selectedSeasonFilter)
-                            .map((league: any) => (
-                              <option key={league.id} value={league.id}>{league.name}</option>
-                            ))
-                          }
-                        </select>
-
-                        <select
-                          value={selectedMatchFilter}
-                          onChange={(e) => setSelectedMatchFilter(e.target.value)}
-                          className="h-10 rounded-xl border border-input bg-background px-4 text-sm font-medium shadow-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-primary"
-                        >
-                          <option value="ALL">Tous les Matchs</option>
-                          {participatedMatches
-                            .filter((m: any) => selectedLeagueFilter === 'ALL' || m.league_id === selectedLeagueFilter)
-                            .filter((m: any) => {
-                              if (selectedSeasonFilter === 'ALL') return true;
-                              const lg = leagues.find((l: any) => l.id === m.league_id);
-                              return lg?.season === selectedSeasonFilter;
-                            })
-                            .map((match: any) => {
-                              const oppName = match.clubs?.name || 'Inconnu';
-                              const dateStr = match.match_date ? new Date(match.match_date).toLocaleDateString('fr-FR') : '';
-                              return (
-                                <option key={match.id} value={match.id}>vs {oppName} {dateStr ? `(${dateStr})` : ''}</option>
-                              );
-                            })
-                          }
-                        </select>
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={goToNextPlayer}
+                        disabled={filteredPlayers.length <= 1}
+                        className="w-9 h-9 rounded-lg hover:bg-white transition-all disabled:opacity-30"
+                        title="Joueur suivant"
+                      >
+                        <NextIcon className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
 
-                  <Badge variant="outline" className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest hidden md:inline-flex items-center">
-                    {filteredPlayers.findIndex(p => p.id === selectedPlayer.id) + 1} / {filteredPlayers.length}
-                  </Badge>
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleViewPlayer(selectedPlayer)}
+                      className="h-11 px-4 rounded-xl border-secondary hover:bg-secondary text-xs font-black uppercase tracking-wider gap-2 transition-all"
+                    >
+                      <Eye className="w-4 h-4 text-primary" />
+                      <span className="hidden md:inline">Voir Profil Complet</span>
+                      <span className="md:hidden">Profil</span>
+                    </Button>
+                    <Button
+                      onClick={() => handleOpenEdit(selectedPlayer)}
+                      className="h-11 px-4 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-wider gap-2 shadow-md shadow-primary/20 transition-all"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      <span className="hidden md:inline">Modifier Joueur</span>
+                      <span className="md:hidden">Modifier</span>
+                    </Button>
+                  </div>
                 </div>
 
-                <Card className="border-none shadow-2xl rounded-[3rem] bg-white overflow-hidden">
-                  <CardContent className="p-10">
-                    {loadingStats ? (
-                      <div className="flex items-center justify-center h-64">
-                        <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                {/* ── Player Header (Directement dans la page, sans carte fermée, photo à gauche) ── */}
+                <div className="relative pt-2 pb-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 sm:gap-8">
+                    {/* Photo Joueur À GAUCHE */}
+                    <div className="shrink-0">
+                      <div className="relative group">
+                        <div className="relative w-28 h-28 sm:w-36 sm:h-36 lg:w-40 lg:h-40 rounded-3xl bg-white p-1.5 shadow-xl border-4 border-white ring-1 ring-slate-200/80 overflow-hidden">
+                          <img
+                            src={(selectedPlayer.photo_url && selectedPlayer.photo_url !== 'null') ? selectedPlayer.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedPlayer.full_name)}&background=e2e8f0&color=1e293b&size=256`}
+                            alt={selectedPlayer.full_name}
+                            className="w-full h-full object-cover rounded-2xl transition-transform duration-500 group-hover:scale-105"
+                          />
+                        </div>
+                        {selectedPlayer.jersey_number && (
+                          <div className="absolute -bottom-2 -right-2 bg-primary text-white text-xs sm:text-sm font-black px-2.5 py-1 rounded-xl shadow-lg border-2 border-white">
+                            #{selectedPlayer.jersey_number}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                        <div className="p-8 rounded-[2rem] bg-emerald-50 border border-emerald-100 text-center">
-                          <Trophy className="w-8 h-8 text-emerald-500 mx-auto mb-3" />
-                          <p className="text-xs font-black text-emerald-900/60 uppercase tracking-widest mb-1">Matchs</p>
-                          <p className="text-4xl font-black text-emerald-700">{displayStats?.matches || 0}</p>
-                        </div>
+                    </div>
 
-                        <div className="p-8 rounded-[2rem] bg-blue-50 border border-blue-100 text-center">
-                          <Target className="w-8 h-8 text-blue-500 mx-auto mb-3" />
-                          <p className="text-xs font-black text-blue-900/60 uppercase tracking-widest mb-1">Buts</p>
-                          <p className="text-4xl font-black text-blue-700">{displayStats?.goals || 0}</p>
-                        </div>
+                    {/* Infos Joueur (À DROITE de la photo) */}
+                    <div className="space-y-4 flex-1">
+                      {/* Tags club, position & catégorie */}
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-black uppercase tracking-wider border border-primary/20">
+                          <Sparkles className="w-3.5 h-3.5" /> FUS Rabat • Centre de Performance
+                        </span>
+                        <Badge className={`font-black uppercase text-[11px] px-3 py-1 border shadow-xs ${getPositionInfo(selectedPlayer.position).badgeBg}`}>
+                          {getPositionInfo(selectedPlayer.position).label}
+                        </Badge>
+                        <Badge className="bg-secondary text-slate-700 font-black uppercase text-[11px] px-3 py-1 border border-secondary/80">
+                          {teams.find(t => t.id === selectedPlayer.team_id)?.category || selectedPlayer.category || 'U16'}
+                        </Badge>
+                        <Badge variant="outline" className="text-slate-600 border-border text-[11px] uppercase font-bold px-2.5 py-0.5">
+                          <Globe className="w-3.5 h-3.5 mr-1 text-primary" />
+                          {selectedPlayer.nationality || 'Maroc'}
+                        </Badge>
+                      </div>
 
-                        <div className="p-8 rounded-[2rem] bg-indigo-50 border border-indigo-100 text-center">
-                          <Users className="w-8 h-8 text-indigo-500 mx-auto mb-3" />
-                          <p className="text-xs font-black text-indigo-900/60 uppercase tracking-widest mb-1">Passes</p>
-                          <p className="text-4xl font-black text-indigo-700">{displayStats?.assists || 0}</p>
+                      {/* Nom & Numéro de Maillot */}
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-3">
+                          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-tight text-slate-900 leading-none">
+                            {selectedPlayer.full_name}
+                          </h1>
+                          {selectedPlayer.jersey_number && (
+                            <span className="px-3 py-1 rounded-xl bg-primary text-white font-mono font-black text-lg sm:text-xl shadow-md shadow-primary/20">
+                              #{selectedPlayer.jersey_number}
+                            </span>
+                          )}
                         </div>
+                        <p className="text-xs text-muted-foreground font-semibold">
+                          Fiche analytique individuelle et statistiques de jeu en compétition
+                        </p>
+                      </div>
 
-                        <div className="p-8 rounded-[2rem] bg-amber-50 border border-amber-100 text-center">
-                          <div className="w-6 h-8 bg-amber-400 rounded mx-auto mb-3" />
-                          <p className="text-xs font-black text-amber-900/60 uppercase tracking-widest mb-1">Jaunes</p>
-                          <p className="text-4xl font-black text-amber-700">{displayStats?.yellowCards || 0}</p>
+                      {/* Passeport physique (Pills dans la page) */}
+                      <div className="inline-flex flex-wrap items-center gap-2 sm:gap-3 pt-1">
+                        <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white border border-secondary shadow-xs">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Âge</span>
+                          <span className="text-sm font-black text-slate-900">{calculateAge(selectedPlayer.birth_date)} <span className="text-xs font-normal text-slate-500">ans</span></span>
                         </div>
-
-                        <div className="p-8 rounded-[2rem] bg-red-50 border border-red-100 text-center">
-                          <div className="w-6 h-8 bg-red-500 rounded mx-auto mb-3" />
-                          <p className="text-xs font-black text-red-900/60 uppercase tracking-widest mb-1">Rouges</p>
-                          <p className="text-4xl font-black text-red-700">{displayStats?.redCards || 0}</p>
+                        <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white border border-secondary shadow-xs">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Taille</span>
+                          <span className="text-sm font-black text-slate-900">{selectedPlayer.height || '-'} <span className="text-xs font-normal text-slate-500">cm</span></span>
                         </div>
-
-                        <div className="p-8 rounded-[2rem] bg-slate-50 border border-slate-200 text-center">
-                          <Clock className="w-8 h-8 text-slate-500 mx-auto mb-3" />
-                          <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Minutes</p>
-                          <p className="text-4xl font-black text-slate-700">{displayStats?.minutes || 0}</p>
+                        <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white border border-secondary shadow-xs">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Poids</span>
+                          <span className="text-sm font-black text-slate-900">{selectedPlayer.weight || '-'} <span className="text-xs font-normal text-slate-500">kg</span></span>
+                        </div>
+                        <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white border border-secondary shadow-xs">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Pied</span>
+                          <span className="text-sm font-black text-slate-900 uppercase">{selectedPlayer.preferred_foot || 'Droit'}</span>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Filters Toolbar ── */}
+                <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-secondary/70 shadow-sm">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
+                    <Filter className="w-4 h-4 text-primary" />
+                    <span>Filtrer les statistiques :</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    {/* Season Filter */}
+                    <select
+                      value={selectedSeasonFilter}
+                      onChange={(e) => { setSelectedSeasonFilter(e.target.value); setSelectedLeagueFilter('ALL'); setSelectedMatchFilter('ALL'); }}
+                      className="h-10 rounded-xl border border-input bg-secondary/30 px-3 text-xs font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[130px]"
+                    >
+                      <option value="ALL">🗓️ Toutes Saisons</option>
+                      {participatedSeasons.map((s: string) => <option key={s} value={s}>Saison {s}</option>)}
+                    </select>
+
+                    {/* League / Competition Filter with Matchs Amicaux */}
+                    <select
+                      value={selectedLeagueFilter}
+                      onChange={(e) => { setSelectedLeagueFilter(e.target.value); setSelectedMatchFilter('ALL'); }}
+                      className="h-10 rounded-xl border border-input bg-secondary/30 px-3 text-xs font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[170px]"
+                    >
+                      <option value="ALL">🏆 Toutes Compétitions</option>
+                      <option value="FRIENDLY">🤝 Matchs Amicaux</option>
+                      <option value="OFFICIAL">🏅 Compétitions Officielles</option>
+                      {participatedLeagues
+                        .filter((l: any) => selectedSeasonFilter === 'ALL' || l.season === selectedSeasonFilter)
+                        .map((league: any) => (
+                          <option key={league.id} value={league.id}>{league.name}</option>
+                        ))
+                      }
+                    </select>
+
+                    {/* Match Filter */}
+                    <select
+                      value={selectedMatchFilter}
+                      onChange={(e) => setSelectedMatchFilter(e.target.value)}
+                      className="h-10 rounded-xl border border-input bg-secondary/30 px-3 text-xs font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-primary max-w-[240px]"
+                    >
+                      <option value="ALL">⚽ Tous les Matchs</option>
+                      {participatedMatches
+                        .filter((m: any) => {
+                          if (selectedLeagueFilter === 'FRIENDLY') {
+                            return !m.league_id || m.category?.toLowerCase().includes('amical') || m.notes?.toLowerCase().includes('amical');
+                          }
+                          if (selectedLeagueFilter === 'OFFICIAL') {
+                            return !!m.league_id && !m.category?.toLowerCase().includes('amical');
+                          }
+                          if (selectedLeagueFilter !== 'ALL') {
+                            return m.league_id === selectedLeagueFilter;
+                          }
+                          return true;
+                        })
+                        .filter((m: any) => {
+                          if (selectedSeasonFilter === 'ALL') return true;
+                          const lg = leagues?.find((l: any) => l.id === m.league_id);
+                          return lg?.season === selectedSeasonFilter;
+                        })
+                        .map((match: any) => {
+                          const opp = opponentClubs.find((c: any) => c.id === match.opponent_id);
+                          const oppName = opp?.name || 'Adversaire';
+                          const dateStr = match.match_date ? new Date(match.match_date).toLocaleDateString('fr-FR') : '';
+                          return (
+                            <option key={match.id} value={match.id}>vs {oppName} {dateStr ? `(${dateStr})` : ''}</option>
+                          );
+                        })
+                      }
+                    </select>
+
+                    {/* Reset Button */}
+                    {(selectedSeasonFilter !== 'ALL' || selectedLeagueFilter !== 'ALL' || selectedMatchFilter !== 'ALL') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setSelectedSeasonFilter('ALL'); setSelectedLeagueFilter('ALL'); setSelectedMatchFilter('ALL'); }}
+                        className="h-10 px-3 rounded-xl text-xs font-black text-primary hover:bg-primary/10 gap-1.5 transition-all"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Réinitialiser</span>
+                      </Button>
                     )}
+                  </div>
+                </div>
 
-                    <div className="flex justify-center mt-8">
+                {/* ── 6 Core Football KPI Cards ── */}
+                {loadingStats ? (
+                  <div className="flex items-center justify-center h-64 bg-white rounded-3xl border border-secondary/60 shadow-sm">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                      <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Chargement des analytiques...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                      {/* 1. MATCHS JOUÉS */}
+                      <div className="relative p-6 rounded-[2rem] bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 shadow-sm hover:shadow-md transition-all group hover:z-30 focus-within:z-30">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 transition-transform group-hover:scale-110">
+                              <Trophy className="w-6 h-6" />
+                            </div>
+                            <IndicatorHelpTooltip
+                              title="Matchs Disputés"
+                              metric="Volume & Présence"
+                              role="Mesure la récurrence des apparitions sur la feuille de match. Permet d'évaluer l'intégration sportive du joueur, sa disponibilité et son taux de titularisation dans le XI de départ."
+                            />
+                          </div>
+                          <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px] font-black uppercase tracking-widest">
+                            Taux départ : {displayStats?.starterRate || 0}%
+                          </Badge>
+                        </div>
+                        <p className="text-xs font-black text-emerald-900/60 uppercase tracking-widest mb-1">Matchs Disputés</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-4xl sm:text-5xl font-black text-emerald-950 tracking-tight">{displayStats?.matches || 0}</span>
+                          <span className="text-xs font-bold text-emerald-700 uppercase">rencontres</span>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-emerald-500/15 flex items-center justify-between text-[11px] font-bold text-emerald-800/80">
+                          <span>{displayStats?.starts || 0} Titulaire(s)</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span>{displayStats?.subs || 0} Remplaçant(s)</span>
+                        </div>
+                      </div>
+
+                      {/* 2. TEMPS DE JEU (MINUTES) */}
+                      <div className="relative p-6 rounded-[2rem] bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border border-blue-500/20 shadow-sm hover:shadow-md transition-all group hover:z-30 focus-within:z-30">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-12 h-12 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-600 transition-transform group-hover:scale-110">
+                              <Clock className="w-6 h-6" />
+                            </div>
+                            <IndicatorHelpTooltip
+                              title="Temps de Jeu"
+                              metric="Charge athlétique"
+                              role="Cumule les minutes réelles jouées en match. Permet au staff technique de doser la charge de travail athlétique, de prévenir le surentraînement et de valider la régularité physique."
+                            />
+                          </div>
+                          <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[10px] font-black uppercase tracking-widest">
+                            Moy. {displayStats?.avgMinutes || 0} min/m
+                          </Badge>
+                        </div>
+                        <p className="text-xs font-black text-blue-900/60 uppercase tracking-widest mb-1">Temps de Jeu Total</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-4xl sm:text-5xl font-black text-blue-950 tracking-tight">{displayStats?.minutes || 0}</span>
+                          <span className="text-xs font-bold text-blue-700 uppercase">minutes</span>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-blue-500/15 flex items-center justify-between text-[11px] font-bold text-blue-800/80">
+                          <span>Présence active terrain</span>
+                          <span className="font-black text-blue-900">{displayStats?.matches ? Math.round(((displayStats?.minutes || 0) / (displayStats.matches * 90)) * 100) : 0}% du temps total</span>
+                        </div>
+                      </div>
+
+                      {/* 3. BUTS MARQUÉS */}
+                      <div className="relative p-6 rounded-[2rem] bg-gradient-to-br from-primary/15 via-primary/5 to-transparent border border-primary/30 shadow-sm hover:shadow-md transition-all group hover:z-30 focus-within:z-30">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-12 h-12 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary transition-transform group-hover:scale-110">
+                              <Flame className="w-6 h-6" />
+                            </div>
+                            <IndicatorHelpTooltip
+                              title="Buts Marqués"
+                              metric="Finition offensive"
+                              role="Comptabilise les réalisations officielles et amicales du joueur. Évalue le réalisme devant le but adverse, le ratio d'efficacité offensive et l'impact direct au score."
+                            />
+                          </div>
+                          <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] font-black uppercase tracking-widest">
+                            {displayStats?.matches ? ((displayStats.goals || 0) / displayStats.matches).toFixed(2) : '0.00'} but/match
+                          </Badge>
+                        </div>
+                        <p className="text-xs font-black text-primary/70 uppercase tracking-widest mb-1">Buts Marqués</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-4xl sm:text-5xl font-black text-slate-950 tracking-tight">{displayStats?.goals || 0}</span>
+                          <span className="text-xs font-bold text-primary uppercase">but(s) officiel(s)</span>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-primary/15 flex items-center justify-between text-[11px] font-bold text-slate-600">
+                          <span>Impact offensif</span>
+                          <span className="font-black text-primary">{displayStats?.goals ? `${Math.round((displayStats?.minutes || 0) / displayStats.goals)} min/but` : 'Aucun but'}</span>
+                        </div>
+                      </div>
+
+                      {/* 4. PASSES DÉCISIVES */}
+                      <div className="relative p-6 rounded-[2rem] bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border border-indigo-500/20 shadow-sm hover:shadow-md transition-all group hover:z-30 focus-within:z-30">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-600 transition-transform group-hover:scale-110">
+                              <Zap className="w-6 h-6" />
+                            </div>
+                            <IndicatorHelpTooltip
+                              title="Passes Décisives"
+                              metric="Créativité & Vista"
+                              role="Mesure les passes directes converties en but par un coéquipier. Témoigne de la vision tactique, de l'altruisme et de la faculté à créer des opportunités de but."
+                            />
+                          </div>
+                          <Badge className="bg-indigo-500/15 text-indigo-700 border-indigo-500/30 text-[10px] font-black uppercase tracking-widest">
+                            {displayStats?.totalContributions || 0} G+A total
+                          </Badge>
+                        </div>
+                        <p className="text-xs font-black text-indigo-900/60 uppercase tracking-widest mb-1">Passes Décisives</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-4xl sm:text-5xl font-black text-indigo-950 tracking-tight">{displayStats?.assists || 0}</span>
+                          <span className="text-xs font-bold text-indigo-700 uppercase">assist(s)</span>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-indigo-500/15 flex items-center justify-between text-[11px] font-bold text-indigo-800/80">
+                          <span>Créativité & vista</span>
+                          <span className="font-black text-indigo-900">{((displayStats?.goals || 0) + (displayStats?.assists || 0))} actions décisives</span>
+                        </div>
+                      </div>
+
+                      {/* 5. DISCIPLINE & CARTONS */}
+                      <div className="relative p-6 rounded-[2rem] bg-gradient-to-br from-amber-500/10 via-rose-500/5 to-transparent border border-amber-500/20 shadow-sm hover:shadow-md transition-all group hover:z-30 focus-within:z-30">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 transition-transform group-hover:scale-110">
+                              <Shield className="w-6 h-6" />
+                            </div>
+                            <IndicatorHelpTooltip
+                              title="Discipline Arbitrale"
+                              metric="Maîtrise & Fair-play"
+                              role="Recense les cartons jaunes et rouges reçus. Indique la maîtrise de soi dans les duels disputés, le respect des décisions arbitrales et prévient les suspensions."
+                            />
+                          </div>
+                          <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px] font-black uppercase tracking-widest">
+                            {(displayStats?.yellowCards || 0) === 0 && (displayStats?.redCards || 0) === 0 ? 'Discipline ✅' : 'Averti'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs font-black text-amber-900/60 uppercase tracking-widest mb-1">Discipline Arbitrale</p>
+                        <div className="flex items-center gap-4 py-1">
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-7 bg-amber-400 rounded-[4px] shadow-sm border border-amber-500/40" />
+                            <span className="text-3xl font-black text-amber-950">{displayStats?.yellowCards || 0}</span>
+                          </div>
+                          <div className="w-px h-8 bg-border" />
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-7 bg-red-500 rounded-[4px] shadow-sm border border-red-600/40" />
+                            <span className="text-3xl font-black text-red-950">{displayStats?.redCards || 0}</span>
+                          </div>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-amber-500/15 flex items-center justify-between text-[11px] font-bold text-amber-900/80">
+                          <span>{displayStats?.yellowCards || 0} Jaune(s)</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          <span>{displayStats?.redCards || 0} Rouge(s)</span>
+                        </div>
+                      </div>
+
+                      {/* 6. FRÉQUENCE DÉCISIVE / IMPACT */}
+                      <div className="relative p-6 rounded-[2rem] bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent border border-purple-500/20 shadow-sm hover:shadow-md transition-all group hover:z-30 focus-within:z-30">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-600 transition-transform group-hover:scale-110">
+                              <TrendingUp className="w-6 h-6" />
+                            </div>
+                            <IndicatorHelpTooltip
+                              title="Fréquence Décisive"
+                              metric="Rentabilité par minute"
+                              role="Définit le nombre moyen de minutes nécessaires au joueur pour réaliser une action décisive (but ou assist). Plus ce chiffre est bas, plus son impact par match est élevé."
+                            />
+                          </div>
+                          <Badge className="bg-purple-500/15 text-purple-700 border-purple-500/30 text-[10px] font-black uppercase tracking-widest">
+                            Impact Pro
+                          </Badge>
+                        </div>
+                        <p className="text-xs font-black text-purple-900/60 uppercase tracking-widest mb-1">Fréquence Décisive</p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-4xl sm:text-5xl font-black text-purple-950 tracking-tight">
+                            {displayStats?.totalContributions > 0 && displayStats?.minutes > 0
+                              ? Math.round(displayStats.minutes / displayStats.totalContributions)
+                              : '-'
+                            }
+                          </span>
+                          <span className="text-xs font-bold text-purple-700 uppercase">{displayStats?.totalContributions > 0 ? 'min / geste décisif' : 'N/A'}</span>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-purple-500/15 flex items-center justify-between text-[11px] font-bold text-purple-800/80">
+                          <span>Régularité offensive</span>
+                          <span className="font-black text-purple-900">{displayStats?.totalContributions || 0} geste(s) clé(s)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── CARD: ÉVOLUTION DES ÉVALUATIONS EN MATCHS AMICAUX ── */}
+                    <div className="bg-white p-6 sm:p-8 rounded-[2.5rem] border border-secondary/60 shadow-sm space-y-6">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-secondary">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+                              <Star className="w-4 h-4 fill-amber-500" />
+                            </div>
+                            <h4 className="text-base font-black uppercase tracking-tight text-slate-900 m-0">
+                              Évolution des Évaluations Staff
+                            </h4>
+                            <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] font-black uppercase">
+                              {evaluatedMatches.length} match{evaluatedMatches.length > 1 ? 's' : ''} noté{evaluatedMatches.length > 1 ? 's' : ''}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground font-medium">
+                            Suivi chronologique des notes (1 à 10) et observations attribuées par le staff (Matchs Amicaux & Compétitions Officielles).
+                          </p>
+                        </div>
+
+                        {/* Filtres Saison, Mois et Type */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* Filtre Type de match */}
+                          <div className="flex items-center gap-1.5 bg-secondary/30 p-1 rounded-xl border border-secondary/60">
+                            <Shield className="w-3.5 h-3.5 text-muted-foreground ml-2" />
+                            <select
+                              value={evalTypeFilter}
+                              onChange={e => setEvalTypeFilter(e.target.value as any)}
+                              className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none pr-2 py-1 cursor-pointer"
+                            >
+                              <option value="ALL">Tous les types</option>
+                              <option value="FRIENDLY">🤝 Matchs amicaux</option>
+                              <option value="OFFICIAL">🏆 Compétitions officielles</option>
+                            </select>
+                          </div>
+
+                          {/* Filtre Saison */}
+                          <div className="flex items-center gap-1.5 bg-secondary/30 p-1 rounded-xl border border-secondary/60">
+                            <Calendar className="w-3.5 h-3.5 text-muted-foreground ml-2" />
+                            <select
+                              value={evalSeasonFilter}
+                              onChange={e => setEvalSeasonFilter(e.target.value)}
+                              className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none pr-2 py-1 cursor-pointer"
+                            >
+                              <option value="ALL">Toutes les saisons</option>
+                              {availableEvalSeasons.map(sz => (
+                                <option key={sz} value={sz}>{sz}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Filtre Mois */}
+                          <div className="flex items-center gap-1.5 bg-secondary/30 p-1 rounded-xl border border-secondary/60">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground ml-2" />
+                            <select
+                              value={evalMonthFilter}
+                              onChange={e => setEvalMonthFilter(e.target.value)}
+                              className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none pr-2 py-1 cursor-pointer"
+                            >
+                              <option value="ALL">Tous les mois</option>
+                              {availableEvalMonths.map(mCode => (
+                                <option key={mCode} value={mCode}>{MONTH_LABELS[mCode] || `Mois ${mCode}`}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {(evalSeasonFilter !== 'ALL' || evalMonthFilter !== 'ALL' || evalTypeFilter !== 'ALL') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => { setEvalSeasonFilter('ALL'); setEvalMonthFilter('ALL'); setEvalTypeFilter('ALL'); }}
+                              className="h-8 px-2 text-[10px] font-black uppercase text-primary hover:bg-primary/5"
+                            >
+                              Effacer
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 4 KPIs de Performance */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/20 text-center">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-amber-800/70 mb-1">Note Moyenne</p>
+                          <p className="text-3xl font-black text-amber-950">{evalKPIs.avg} <span className="text-xs text-amber-700">/10</span></p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 text-center">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-800/70 mb-1">Meilleure Note</p>
+                          <p className="text-3xl font-black text-emerald-950">{evalKPIs.max} <span className="text-xs text-emerald-700">/10</span></p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border border-blue-500/20 text-center">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-blue-800/70 mb-1">Note Minimale</p>
+                          <p className="text-3xl font-black text-blue-950">{evalKPIs.min} <span className="text-xs text-blue-700">/10</span></p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent border border-purple-500/20 text-center">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-purple-800/70 mb-1">Matchs Notés</p>
+                          <p className="text-3xl font-black text-purple-950">{evalKPIs.count}</p>
+                        </div>
+                      </div>
+
+                      {/* Recharts AreaChart */}
+                      {evalChartData.length === 0 ? (
+                        <div className="py-12 flex flex-col items-center justify-center text-center bg-secondary/10 rounded-2xl border border-dashed border-secondary">
+                          <Star className="w-8 h-8 text-muted-foreground/30 mb-2" />
+                          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                            Aucune évaluation disponible pour ces filtres
+                          </p>
+                          <p className="text-[11px] text-muted-foreground/60 max-w-sm mt-1">
+                            Les notes sont saisies par le staff technique dans la fiche de match (Amicaux et Compétitions).
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="h-64 w-full pt-2">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={evalChartData} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="evalGradColor" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.35} />
+                                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.06)" />
+                              <XAxis
+                                dataKey="date"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 11, fontWeight: 'bold', fill: '#64748b' }}
+                              />
+                              <YAxis
+                                domain={[0, 10]}
+                                ticks={[0, 2, 4, 6, 8, 10]}
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 10, fontWeight: 'bold', fill: '#94a3b8' }}
+                              />
+                              <RechartsTooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    const data = payload[0].payload;
+                                    return (
+                                      <div className="bg-slate-950 text-white p-3.5 rounded-2xl shadow-2xl border border-white/10 space-y-1.5 text-xs max-w-xs">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-bold text-slate-400 text-[11px]">{data.fullDate || data.date}</span>
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${data.isFriendly ? 'bg-amber-400/20 text-amber-300' : 'bg-emerald-400/20 text-emerald-300'}`}>
+                                              {data.isFriendly ? '🤝 Amical' : `🏆 ${data.leagueName || 'Officiel'}`}
+                                            </span>
+                                          </div>
+                                          <span className="font-black text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-md border border-amber-400/20 text-xs">
+                                            ★ {data.rating}/10
+                                          </span>
+                                        </div>
+                                        <p className="font-black text-white text-sm">vs {data.opponent}</p>
+                                        <p className="text-slate-300 text-[11px]">Score : <span className="font-bold">{data.score}</span></p>
+                                        {data.comment && (
+                                          <p className="text-amber-200/90 italic pt-1.5 border-t border-white/10 text-[11px] leading-relaxed">
+                                            « {data.comment} »
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Area
+                                type="monotone"
+                                dataKey="rating"
+                                stroke="#d97706"
+                                strokeWidth={3}
+                                fillOpacity={1}
+                                fill="url(#evalGradColor)"
+                                dot={{ r: 5, fill: '#f59e0b', stroke: '#fff', strokeWidth: 2 }}
+                                activeDot={{ r: 7, fill: '#b45309' }}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Two-Column Breakdown & Matches Feed ── */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      {/* Left: Tactical Game Distribution (5 cols) */}
+                      <div className="lg:col-span-5 bg-white p-6 sm:p-7 rounded-[2.5rem] border border-secondary/60 shadow-sm space-y-6">
+                        <div className="flex items-center justify-between pb-4 border-b border-secondary">
+                          <h4 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 m-0">
+                            <BarChart3 className="w-4 h-4 text-primary" />
+                            <span>Répartition & Ratios Tactiques</span>
+                          </h4>
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase">Saison en cours</span>
+                        </div>
+
+                        {/* Starter vs Substitute Bar */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-xs font-bold">
+                            <span className="text-emerald-700 flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                              Titulaire ({displayStats?.starts || 0})
+                            </span>
+                            <span className="text-amber-700 flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                              Remplaçant ({displayStats?.subs || 0})
+                            </span>
+                          </div>
+                          <div className="h-4 bg-secondary/60 rounded-full overflow-hidden flex p-0.5 gap-0.5">
+                            <div
+                              style={{ width: `${displayStats?.matches > 0 ? Math.round(((displayStats.starts || 0) / displayStats.matches) * 100) : 50}%` }}
+                              className="h-full bg-emerald-500 rounded-full transition-all duration-700"
+                              title={`${displayStats?.starts || 0} Titularisations`}
+                            />
+                            <div
+                              style={{ width: `${displayStats?.matches > 0 ? Math.round(((displayStats.subs || 0) / displayStats.matches) * 100) : 50}%` }}
+                              className="h-full bg-amber-400 rounded-full transition-all duration-700"
+                              title={`${displayStats?.subs || 0} Remplacements`}
+                            />
+                          </div>
+                          <p className="text-[10px] text-muted-foreground text-right font-medium">
+                            {displayStats?.starterRate || 0}% de titularisation dans le XI
+                          </p>
+                        </div>
+
+                        {/* Playing Time Gauge */}
+                        <div className="space-y-2 pt-2">
+                          <div className="flex justify-between text-xs font-bold">
+                            <span className="text-slate-700">Volume de Temps de Jeu</span>
+                            <span className="text-primary font-black">{displayStats?.minutes || 0} / {(displayStats?.matches || 1) * 90} min</span>
+                          </div>
+                          <div className="h-3 bg-secondary rounded-full overflow-hidden">
+                            <div
+                              style={{ width: `${Math.min(100, Math.round(((displayStats?.minutes || 0) / Math.max(90, (displayStats?.matches || 1) * 90)) * 100))}%` }}
+                              className="h-full bg-gradient-to-r from-blue-500 to-primary rounded-full transition-all duration-700"
+                            />
+                          </div>
+                          <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
+                            <span>0 min</span>
+                            <span>Temps maximal possible</span>
+                          </div>
+                        </div>
+
+                        {/* Offensive Breakdown (Goals vs Assists) */}
+                        <div className="space-y-2 pt-2">
+                          <div className="flex justify-between text-xs font-bold">
+                            <span className="text-slate-700">Actions Décisives (Buts / Assists)</span>
+                            <span className="text-indigo-700 font-black">{((displayStats?.goals || 0) + (displayStats?.assists || 0))} au total</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="p-3 rounded-xl bg-primary/5 border border-primary/15 text-center">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-primary">Buts</p>
+                              <p className="text-xl font-black text-slate-900">{displayStats?.goals || 0}</p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-150 text-center">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-indigo-700">Passes D.</p>
+                              <p className="text-xl font-black text-indigo-950">{displayStats?.assists || 0}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Performance Note Card */}
+                        <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 text-white space-y-2 border border-slate-800">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                            <Award className="w-3.5 h-3.5 text-primary" /> Évaluation Technique Staff
+                          </p>
+                          <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                            {(displayStats?.matches || 0) > 0
+                              ? `Joueur actif avec ${displayStats?.matches} apparitions. Régularité physique confirmée (${displayStats?.avgMinutes} min/m en moyenne).`
+                              : 'Aucune donnée officielle enregistrée pour cette sélection de filtres.'
+                            }
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Right: Match Log (7 cols) */}
+                      <div className="lg:col-span-7 bg-white p-6 sm:p-7 rounded-[2.5rem] border border-secondary/60 shadow-sm space-y-4 flex flex-col">
+                        <div className="flex items-center justify-between pb-4 border-b border-secondary shrink-0">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                              <Calendar className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 m-0">
+                                Historique des Matchs
+                              </h4>
+                              <p className="text-[10px] text-muted-foreground font-semibold">
+                                {filteredPlayerMatches.length} match(s) disputé(s)
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1">
+                            FUS Rabat
+                          </Badge>
+                        </div>
+
+                        {filteredPlayerMatches.length === 0 ? (
+                          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-3 min-h-[300px]">
+                            <div className="w-14 h-14 rounded-2xl bg-secondary/80 flex items-center justify-center text-muted-foreground">
+                              <Calendar className="w-6 h-6 opacity-40" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-black uppercase text-slate-700">Aucun match trouvé</p>
+                              <p className="text-xs text-muted-foreground max-w-xs mt-1">
+                                Aucun match ne correspond aux filtres de saison ou de ligue sélectionnés pour ce joueur.
+                              </p>
+                            </div>
+                            {(selectedSeasonFilter !== 'ALL' || selectedLeagueFilter !== 'ALL' || selectedMatchFilter !== 'ALL') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => { setSelectedSeasonFilter('ALL'); setSelectedLeagueFilter('ALL'); setSelectedMatchFilter('ALL'); }}
+                                className="h-9 rounded-xl text-xs font-bold uppercase tracking-wider text-primary border-primary/30 hover:bg-primary/5"
+                              >
+                                Réinitialiser les filtres
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+                            {filteredPlayerMatches.map((m: any) => {
+                              const lineup = m.lineup as { startingXI?: string[]; substitutes?: string[] } | null;
+                              const mpRecord = m.match_players?.find((p: any) => p.player_id === selectedPlayer.id);
+                              const isStarter = mpRecord?.is_starting || lineup?.startingXI?.includes(selectedPlayer.id);
+                              const isSub = (mpRecord && !mpRecord.is_starting) || lineup?.substitutes?.includes(selectedPlayer.id);
+                              const matchEvents = (rawPlayerEvents || []).filter((e: any) => e.match_id === m.id);
+
+                              const playerGoals = matchEvents.filter((e: any) => e.type === 'goal' && e.player_id === selectedPlayer.id).length;
+                              const playerAssists = matchEvents.filter((e: any) => e.type === 'assist' || (e.type === 'goal' && e.related_player_id === selectedPlayer.id)).length;
+                              const playerYellows = matchEvents.filter((e: any) => e.type === 'yellow_card' && e.player_id === selectedPlayer.id).length;
+                              const playerReds = matchEvents.filter((e: any) => e.type === 'red_card' && e.player_id === selectedPlayer.id).length;
+
+                              const opp = opponentClubs.find((c: any) => c.id === m.opponent_id);
+                              const oppName = opp?.name || 'Adversaire';
+                              const oppLogo = opp?.logo_url;
+                              const dateFormatted = m.match_date ? new Date(m.match_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date inconnue';
+                              const isFriendly = !m.league_id || m.category?.toLowerCase().includes('amical') || m.notes?.toLowerCase().includes('amical');
+                              const leagueName = isFriendly ? '🤝 Match Amical' : (leagues?.find((l: any) => l.id === m.league_id)?.name || 'Compétition');
+
+                              // Score & Result
+                              const homeScore = m.score_home ?? 0;
+                              const awayScore = m.score_away ?? 0;
+                              const hasScore = m.score_home !== null && m.score_home !== undefined && m.score_away !== null && m.score_away !== undefined;
+                              let resultBadge = null;
+                              if (hasScore) {
+                                const fusScore = m.is_home ? homeScore : awayScore;
+                                const oppScore = m.is_home ? awayScore : homeScore;
+                                if (fusScore > oppScore) {
+                                  resultBadge = <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px] font-black px-2 py-0.5 uppercase">Victoire</Badge>;
+                                } else if (fusScore < oppScore) {
+                                  resultBadge = <Badge className="bg-rose-500/15 text-rose-700 border-rose-500/30 text-[9px] font-black px-2 py-0.5 uppercase">Défaite</Badge>;
+                                } else {
+                                  resultBadge = <Badge className="bg-slate-500/15 text-slate-700 border-slate-500/30 text-[9px] font-black px-2 py-0.5 uppercase">Nul</Badge>;
+                                }
+                              }
+
+                              const ratingBadge = mpRecord?.rating != null ? (
+                                <Badge className={isFriendly ? "bg-amber-50 text-amber-700 border-amber-300 text-[9px] font-black px-2 py-0.5 gap-1 shadow-sm" : "bg-emerald-50 text-emerald-700 border-emerald-300 text-[9px] font-black px-2 py-0.5 gap-1 shadow-sm"}>
+                                  <Star className={`w-2.5 h-2.5 ${isFriendly ? 'text-amber-600 fill-amber-600' : 'text-emerald-600 fill-emerald-600'}`} />
+                                  {mpRecord.rating}/10
+                                </Badge>
+                              ) : null;
+
+                              return (
+                                <div
+                                  key={m.id}
+                                  className="p-4 rounded-2xl bg-secondary/20 hover:bg-secondary/40 border border-secondary/60 transition-all space-y-3"
+                                >
+                                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    {/* Opponent & Competition */}
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-xl bg-white shadow-sm border border-secondary p-1.5 flex items-center justify-center shrink-0">
+                                        {oppLogo ? (
+                                          <img src={oppLogo} alt={oppName} className="w-full h-full object-contain" />
+                                        ) : (
+                                          <Shield className="w-5 h-5 text-slate-400" />
+                                        )}
+                                      </div>
+                                      <div>
+                                        <p className="text-xs font-black uppercase text-slate-900 flex items-center gap-2">
+                                          vs {oppName}
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground font-semibold flex items-center gap-2">
+                                          <span>{dateFormatted}</span>
+                                          <span>•</span>
+                                          <span>{leagueName}</span>
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* Score and Status */}
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {hasScore && (
+                                        <div className="text-right">
+                                          <p className="text-xs font-black text-slate-900">
+                                            {homeScore} - {awayScore}
+                                          </p>
+                                          {resultBadge}
+                                        </div>
+                                      )}
+
+                                      {ratingBadge}
+
+                                      {isStarter ? (
+                                        <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px] font-black uppercase">
+                                          Titulaire
+                                        </Badge>
+                                      ) : isSub ? (
+                                        <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px] font-black uppercase">
+                                          Remplaçant
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-[10px] font-black uppercase">
+                                          Convoqué
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Event & Evaluation Badges if any */}
+                                  {(playerGoals > 0 || playerAssists > 0 || playerYellows > 0 || playerReds > 0 || (mpRecord?.rating !== undefined && mpRecord?.rating !== null)) && (
+                                    <div className="pt-2 border-t border-secondary/60 flex items-center gap-2 flex-wrap text-[11px]">
+                                      {mpRecord?.rating !== undefined && mpRecord?.rating !== null && (
+                                        <Badge className={`font-black text-[10px] px-2.5 py-0.5 gap-1 shadow-sm ${
+                                          isFriendly ? 'bg-amber-500/15 text-amber-800 border border-amber-500/30' : 'bg-emerald-500/15 text-emerald-800 border border-emerald-500/30'
+                                        }`} title={mpRecord.rating_comment || undefined}>
+                                          ⭐ Note {isFriendly ? 'amicale' : 'officielle'} : {Number(mpRecord.rating).toFixed(1)}/10
+                                          {mpRecord.rating_comment && (
+                                            <span className="font-normal italic text-slate-700 ml-1 truncate max-w-[150px]">
+                                              « {mpRecord.rating_comment} »
+                                            </span>
+                                          )}
+                                        </Badge>
+                                      )}
+                                      {playerGoals > 0 && (
+                                        <Badge className="bg-primary text-white font-black text-[10px] px-2 py-0.5 border-none gap-1">
+                                          ⚽ {playerGoals} But{playerGoals > 1 ? 's' : ''}
+                                        </Badge>
+                                      )}
+                                      {playerAssists > 0 && (
+                                        <Badge className="bg-indigo-600 text-white font-black text-[10px] px-2 py-0.5 border-none gap-1">
+                                          👟 {playerAssists} Passe{playerAssists > 1 ? 's' : ''} D.
+                                        </Badge>
+                                      )}
+                                      {playerYellows > 0 && (
+                                        <Badge className="bg-amber-400 text-amber-950 font-black text-[10px] px-2 py-0.5 border-none gap-1">
+                                          🟨 Carton Jaune
+                                        </Badge>
+                                      )}
+                                      {playerReds > 0 && (
+                                        <Badge className="bg-red-600 text-white font-black text-[10px] px-2 py-0.5 border-none gap-1">
+                                          🟥 Carton Rouge
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── Footer Navigation Actions ── */}
+                    <div className="flex justify-center items-center gap-4 pt-4">
                       <Button
                         variant="outline"
                         onClick={() => setViewState('LIST')}
-                        className="h-14 px-12 rounded-2xl font-black uppercase tracking-widest text-xs"
+                        className="h-12 px-8 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-secondary transition-all"
                       >
                         Fermer
                       </Button>
+                      <Button
+                        onClick={() => handleViewPlayer(selectedPlayer)}
+                        className="h-12 px-8 rounded-2xl font-black uppercase tracking-widest text-xs bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all"
+                      >
+                        Consulter Fiche Technique
+                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
+                  </>
+                )}
               </div>
             )}
           </motion.div>
@@ -2067,7 +3221,7 @@ const PlayerManagement: React.FC = () => {
             <div className="flex items-center gap-4 p-5 bg-white border rounded-[2rem] shadow-sm">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground shrink-0">Appliquer à tous :</p>
               <div className="flex items-center gap-3 flex-wrap">
-                {(['U7', 'U9', 'U11', 'U13', 'U15', 'U16', 'U17', 'U19', 'U21', 'U23', 'SENIOR'] as const).map(cat => (
+                {PLAYER_CATEGORIES.map(cat => (
                   <button key={cat} onClick={() => setBulkRows(prev => prev.map(r => ({ ...r, category: cat })))}
                     className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase bg-secondary/30 hover:bg-primary hover:text-white transition-all">
                     {cat}
@@ -2146,7 +3300,9 @@ const PlayerManagement: React.FC = () => {
                           onChange={e => updateBulkRow(row.id, 'position', e.target.value)}
                           className="h-9 w-full px-2 rounded-xl text-[11px] font-bold bg-secondary/20 border-transparent outline-none focus:bg-white"
                         >
-                          {['GK', 'CB', 'LB', 'RB', 'DM', 'CM', 'AM', 'LW', 'RW', 'SS', 'FW'].map(p => <option key={p} value={p}>{p}</option>)}
+                          {PLAYER_POSITIONS.map(p => (
+                            <option key={p.code} value={p.code}>{p.code} — {p.label}</option>
+                          ))}
                         </select>
                       </td>
                       <td className="px-4 py-2">
@@ -2155,7 +3311,7 @@ const PlayerManagement: React.FC = () => {
                           onChange={e => updateBulkRow(row.id, 'category', e.target.value)}
                           className="h-9 w-full px-2 rounded-xl text-[11px] font-bold bg-secondary/20 border-transparent outline-none focus:bg-white"
                         >
-                          {['U7', 'U9', 'U11', 'U13', 'U15', 'U16', 'U17', 'U19', 'U21', 'U23', 'SENIOR'].map(c => <option key={c} value={c}>{c}</option>)}
+                          {PLAYER_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </td>
                       <td className="px-4 py-2">
@@ -2496,6 +3652,25 @@ const PlayerManagement: React.FC = () => {
           />
         )}
       </AnimatePresence>
+
+      {/* Departure / Transfer Modal */}
+      <PlayerDepartureModal
+        isOpen={departureModalOpen}
+        onClose={() => setDepartureModalOpen(false)}
+        player={departurePlayer}
+        opponentClubs={opponentClubs}
+        onConfirmTransfer={handleConfirmTransfer}
+        onConfirmArchive={handleConfirmArchive}
+      />
+
+      {/* Dedicated Player Match Calendar Modal */}
+      {calendarModalPlayer && (
+        <PlayerMatchCalendarModal
+          isOpen={!!calendarModalPlayer}
+          onClose={() => setCalendarModalPlayer(null)}
+          initialPlayer={calendarModalPlayer}
+        />
+      )}
     </div>
   );
 };

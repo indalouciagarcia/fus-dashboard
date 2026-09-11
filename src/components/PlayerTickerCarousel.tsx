@@ -13,6 +13,7 @@ import {
 import { Badge } from './ui/badge';
 import { Card } from './ui/card';
 import type { Player, AgeCategory } from '../types';
+import { PLAYER_CATEGORIES, normalizeAgeCategory } from '../constants';
 
 interface PlayerTickerCarouselProps {
   players: Player[];
@@ -26,7 +27,7 @@ const POSITION_COLORS: Record<string, { bg: string; text: string; border: string
   FW: { bg: 'bg-rose-500/10 dark:bg-rose-500/20', text: 'text-rose-600 dark:text-rose-400', border: 'border-rose-500/30' },
 };
 
-const CATEGORIES: (AgeCategory | 'ALL')[] = ['ALL', 'SENIOR', 'U23', 'U21', 'U19', 'U17', 'U15', 'U13'];
+const CATEGORIES: (AgeCategory | 'ALL')[] = ['ALL', ...PLAYER_CATEGORIES];
 
 export const PlayerTickerCarousel: React.FC<PlayerTickerCarouselProps> = ({
   players,
@@ -38,7 +39,7 @@ export const PlayerTickerCarousel: React.FC<PlayerTickerCarouselProps> = ({
 
   const filteredPlayers = React.useMemo(() => {
     if (selectedCategory === 'ALL') return players;
-    return players.filter(p => (p as any).category === selectedCategory);
+    return players.filter(p => normalizeAgeCategory((p as any).category) === selectedCategory);
   }, [players, selectedCategory]);
 
   // Auto-scroll loop effect

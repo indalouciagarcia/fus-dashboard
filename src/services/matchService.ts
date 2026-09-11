@@ -13,7 +13,7 @@ export const matchService = {
 
     const { data, error } = await supabase
       .from('matches')
-      .select('*, match_players(player_id, is_starting, position_index), match_staff(staff_id)')
+      .select('*, match_players(player_id, is_starting, position_index, rating, rating_comment), match_staff(staff_id)')
       .eq('club_id', clubId)
       .order('match_date', { ascending: false });
 
@@ -87,12 +87,24 @@ export const matchService = {
       .single();
 
     if (error) {
-      // If columns don't exist yet (400), retry without opponent scouting fields
+      // If columns don't exist yet (400 / PGRST204 / PGRST205), retry with safe payload stripped of missing columns
       const isColumnError = error.code === 'PGRST204' || error.code === 'PGRST205' ||
-        error.message?.includes('opponent_lineup') || error.message?.includes('opponent_subs') ||
-        error.message?.includes('column') || (error as any)?.status === 400;
+        error.message?.includes('referee_') || error.message?.includes('opponent_lineup') || 
+        error.message?.includes('opponent_subs') || error.message?.includes('column') || 
+        (error as any)?.status === 400;
+
       if (isColumnError) {
-        const { opponent_lineup: _ol, opponent_subs: _os, ...safePayload } = dbPayload;
+        const { 
+          opponent_lineup: _ol, 
+          opponent_subs: _os, 
+          referee_central_id: _rc,
+          referee_assistant1_id: _ra1,
+          referee_assistant2_id: _ra2,
+          referee_fourth_id: _r4,
+          referees_assigned: _ras,
+          ...safePayload 
+        } = dbPayload;
+
         const { data: retryData, error: retryError } = await supabase
           .from('matches')
           .insert([safePayload])
@@ -133,7 +145,33 @@ export const matchService = {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      const isColumnError = error.code === 'PGRST204' || error.code === 'PGRST205' ||
+        error.message?.includes('referee_') || error.message?.includes('opponent_lineup') ||
+        error.message?.includes('column') || (error as any)?.status === 400;
+
+      if (isColumnError) {
+        delete sanitized.referee_central_id;
+        delete sanitized.referee_assistant1_id;
+        delete sanitized.referee_assistant2_id;
+        delete sanitized.referee_fourth_id;
+        delete sanitized.referees_assigned;
+        delete sanitized.opponent_lineup;
+        delete sanitized.opponent_subs;
+
+        const { data: retryData, error: retryError } = await supabase
+          .from('matches')
+          .update(sanitized)
+          .eq('id', id)
+          .select()
+          .single();
+        if (retryError) throw retryError;
+        if (lineup) await matchService.saveLineup(id, lineup.startingXI, lineup.substitutes);
+        if (staff_ids) await matchService.saveStaff(id, staff_ids);
+        return retryData;
+      }
+      throw error;
+    }
 
     if (lineup) {
       await matchService.saveLineup(id, lineup.startingXI, lineup.substitutes);
@@ -173,26 +211,36 @@ export const matchService = {
   // Composition
   // -------------------------------------------------------
 
-  async saveLineup(matchId: string, startingXI: string[], substitutes: string[]): Promise<void> {
-    await supabase.from('match_players').delete().eq('match_id', matchId);
+  async saveLineup(matchId: string, startingXI: any[], substitutes: any[]): Promise<void> {
+    const normalizePid = (p: any): string => {
+      if (!p) return '';
+      if (typeof p === 'object') return p.player_id || p.id || '';
+      return String(p).trim();
+    };
 
     // Build rows with position_index for starters to preserve their position in the array
     const rawRows = [
-      ...startingXI.map((pid, index) => ({ 
-        match_id: matchId, 
-        player_id: pid, 
-        is_starting: !!pid, // true if player exists, false for empty slots
-        position_index: pid ? index : null, // store index only for actual players
-      })).filter(r => r.player_id), // Only insert non-empty slots
-      ...substitutes.filter(Boolean).map(pid => ({ 
-        match_id: matchId, 
-        player_id: pid, 
-        is_starting: false,
-        position_index: null, // substitutes don't have a position index
-      })),
+      ...startingXI.map((rawPid, index) => {
+        const pid = normalizePid(rawPid);
+        return {
+          match_id: matchId,
+          player_id: pid,
+          is_starting: !!pid,
+          position_index: pid ? index : null,
+        };
+      }).filter(r => r.player_id),
+      ...substitutes.map(rawPid => {
+        const pid = normalizePid(rawPid);
+        return {
+          match_id: matchId,
+          player_id: pid,
+          is_starting: false,
+          position_index: null,
+        };
+      }).filter(r => r.player_id),
     ];
 
-    // Deduplicate by player_id (keep first occurrence, which favors startingXI)
+    // Deduplicate by player_id
     const uniqueRowsMap = new Map();
     rawRows.forEach(r => {
       if (!uniqueRowsMap.has(r.player_id)) {
@@ -201,19 +249,49 @@ export const matchService = {
     });
     const rows = Array.from(uniqueRowsMap.values());
 
+    await supabase.from('match_players').delete().eq('match_id', matchId);
+
     if (rows.length) {
-      const { error } = await supabase.from('match_players').insert(rows);
-      if (error) throw error;
+      const { error } = await supabase.from('match_players').upsert(rows, { onConflict: 'match_id,player_id' });
+      if (error) {
+        const { error: insertError } = await supabase.from('match_players').insert(rows);
+        if (insertError && insertError.code !== '23505') {
+          console.warn('saveLineup insert error:', insertError);
+        }
+      }
     }
   },
 
-  async getMatchLineup(matchId: string): Promise<{ player_id: string; is_starting: boolean; position_index: number | null }[]> {
+  async getMatchLineup(matchId: string): Promise<{ player_id: string; is_starting: boolean; position_index: number | null; rating?: number | null; rating_comment?: string | null }[]> {
     const { data, error } = await supabase
       .from('match_players')
-      .select('player_id, is_starting, position_index')
+      .select('player_id, is_starting, position_index, rating, rating_comment')
       .eq('match_id', matchId);
     if (error) throw error;
     return data ?? [];
+  },
+
+  async savePlayerRating(matchId: string, playerId: string, rating: number | null, ratingComment: string | null = null): Promise<void> {
+    const { data, error } = await supabase
+      .from('match_players')
+      .update({ rating, rating_comment: ratingComment })
+      .eq('match_id', matchId)
+      .eq('player_id', playerId)
+      .select();
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      const { error: upsertErr } = await supabase
+        .from('match_players')
+        .upsert({
+          match_id: matchId,
+          player_id: playerId,
+          rating,
+          rating_comment: ratingComment,
+          is_starting: false
+        }, { onConflict: 'match_id,player_id' });
+      if (upsertErr) throw upsertErr;
+    }
   },
 
   // -------------------------------------------------------

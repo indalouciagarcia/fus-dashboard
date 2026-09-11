@@ -33,6 +33,7 @@ import { useAdvancedDashboardStats } from '../hooks/useAdvancedDashboardStats';
 import { useSurclassements } from '../hooks/useSurclassements';
 import PlayerRadarChart from '../features/recruitment/components/PlayerRadarChart';
 import type { CandidateEvaluation } from '../features/recruitment/types/recruitment';
+import { getPositionDetails } from '../constants';
 
 interface PlayerPersonalSportDetailModalProps {
   player: Player | null;
@@ -328,8 +329,8 @@ export const PlayerPersonalSportDetailModal: React.FC<PlayerPersonalSportDetailM
                 <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase">
                   {player.full_name}
                 </h3>
-                <Badge className="bg-primary text-white border-none text-[11px] font-black uppercase px-2.5 py-0.5">
-                  {player.position || 'MF'}
+                <Badge className={`border text-[11px] font-black uppercase px-2.5 py-0.5 shadow-xs ${getPositionDetails(player.position).badgeBg}`}>
+                  {getPositionDetails(player.position).code} — {getPositionDetails(player.position).label}
                 </Badge>
                 {(player as any).category && (
                   <Badge variant="outline" className="bg-white/10 text-white border-white/20 text-[10px] font-black uppercase px-2 py-0.5">
@@ -570,8 +571,13 @@ export const PlayerPersonalSportDetailModal: React.FC<PlayerPersonalSportDetailM
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
-                    <span className="text-muted-foreground block">Poste Principal</span>
-                    <span className="font-bold text-foreground">{player.position || 'Milieu'}</span>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold tracking-wider">Poste Principal</span>
+                    <span className="font-bold text-foreground inline-flex items-center gap-1.5 mt-0.5">
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${getPositionDetails(player.position).badgeBg}`}>
+                        {getPositionDetails(player.position).code}
+                      </span>
+                      <span>{getPositionDetails(player.position).label}</span>
+                    </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block">Pied Fort</span>

@@ -4,10 +4,14 @@ import {
   LayoutDashboard, Trophy, Users, UserCog, Shield, UserCheck,
   FileText, Settings, LogOut, Activity,
   Swords, Building2, Target, Calendar, LayoutTemplate,
-  X, ChevronLeft, ChevronDown, Sparkles, UserPlus, Compass
+  X, ChevronLeft, ChevronDown, Sparkles, UserPlus, Compass,
+  Dumbbell, Award, Zap
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { usePermissions } from '../context/PermissionsContext';
+import { useClubData } from '../hooks/useClubData';
+import defaultClubLogo from '../assets/fus-logo.png';
+import { AuditLogger } from '../services/auditLogger';
 
 interface SubNavItem {
   path: string;
@@ -15,6 +19,7 @@ interface SubNavItem {
   icon: React.ElementType;
   count?: number;
   hide?: boolean;
+  children?: SubNavItem[];
 }
 
 interface NavCategory {
@@ -38,9 +43,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
 }) => {
   const { logout, can } = usePermissions();
+  const { mainClub } = useClubData();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
+
+  const clubName = mainClub?.name || mainClub?.settings?.club_name || 'FUS Rabat';
+  const rawLogo = mainClub?.logo_url || mainClub?.settings?.logo_url;
+  const clubLogo = (rawLogo && rawLogo !== 'null' && rawLogo.trim() !== '') ? rawLogo : defaultClubLogo;
 
   // Groupes de navigation hiérarchiques
   const navCategories: NavCategory[] = [
@@ -49,13 +59,25 @@ const Sidebar: React.FC<SidebarProps> = ({
       title: 'Compétition & Matchs',
       icon: Trophy,
       items: [
-        { path: '/matches',   label: 'Calendrier',   icon: Calendar },
-        ...(can('track_live_match') ? [{ path: '/matchday',  label: 'Match Day',    icon: Swords }] : []),
+        { path: '/matches',            label: 'Calendrier',            icon: Calendar },
+        { path: '/official-shortlist', label: 'Shortlist Officielle',  icon: Trophy },
+        { path: '/arbitres',           label: 'Arbitres',              icon: UserCheck },
         ...(can('manage_teams') ? [
           { path: '/leagues',   label: 'Compétitions', icon: Trophy },
-          { path: '/opponents', label: 'Adversaires',  icon: Target },
           { path: '/stadiums',  label: 'Stades',       icon: Building2 },
         ] : []),
+      ],
+    },
+    {
+      id: 'trainings',
+      title: 'Entraînements',
+      icon: Dumbbell,
+      items: [
+        { path: '/trainings?tab=calendar',    label: 'Calendrier',             icon: Calendar },
+        { path: '/trainings?tab=sessions',    label: 'Séances',                icon: FileText },
+        { path: '/trainings?tab=exercises',   label: 'Exercices',              icon: Dumbbell },
+        { path: '/trainings?tab=evaluations', label: 'Évaluations',            icon: Award },
+        { path: '/trainings?tab=load',        label: 'Charge d\'entraînement', icon: Zap },
       ],
     },
     {
@@ -63,10 +85,17 @@ const Sidebar: React.FC<SidebarProps> = ({
       title: 'Effectif & Sportif',
       icon: Users,
       items: [
-        { path: '/players',  label: 'Joueurs',          icon: Users },
-        ...(can('manage_teams') ? [{ path: '/teams', label: 'Équipes', icon: Shield }] : []),
+        {
+          path: '/players',
+          label: 'Mon Club',
+          icon: Shield,
+          children: [
+            { path: '/players', label: 'Joueurs', icon: Users },
+            ...(can('manage_teams') ? [{ path: '/teams', label: 'Équipes', icon: Shield }] : []),
+          ],
+        },
+        { path: '/opponents', label: 'Adversaires',     icon: Target },
         ...(can('manage_roles') ? [{ path: '/staff', label: 'Staff Technique', icon: UserCog }] : []),
-        { path: '/arbitres', label: 'Arbitres',         icon: UserCheck },
       ],
     },
     {
@@ -74,13 +103,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       title: 'Recrutement & Détection',
       icon: Compass,
       items: [
-        { path: '/recruitment?tab=kanban',       label: 'Pipeline Kanban',     icon: LayoutTemplate },
-        { path: '/recruitment?tab=candidates',   label: 'Fiches & Tuteurs',    icon: UserPlus },
-        { path: '/recruitment?tab=scouts',       label: 'Cellule Scouts',      icon: UserCheck },
-        { path: '/recruitment?tab=observations', label: 'Observations Matchs', icon: FileText },
-        { path: '/recruitment?tab=sessions',     label: 'Planning des Tests',  icon: Calendar },
-        { path: '/recruitment?tab=evaluations',  label: 'Évaluations (1–10)',  icon: Sparkles },
-        { path: '/recruitment?tab=compare',      label: 'Comparateur Radar',   icon: Swords },
+        { path: '/recruitment?tab=scouts',       label: 'Cellule Scouts',          icon: UserCheck },
+        { path: '/recruitment?tab=kanban',       label: 'Pipeline Kanban',         icon: LayoutTemplate },
+        { path: '/recruitment?tab=candidates',   label: 'Fiches & Tuteurs',        icon: UserPlus },
+        { path: '/recruitment?tab=shortlist',    label: 'Shortlist & Onze Idéal',  icon: Trophy },
+        { path: '/recruitment?tab=observations', label: 'Observations Matchs',     icon: FileText },
+        { path: '/recruitment?tab=sessions',     label: 'Planning des Tests',      icon: Calendar },
+        { path: '/recruitment?tab=evaluations',  label: 'Évaluations (1–10)',      icon: Sparkles },
+        { path: '/recruitment?tab=compare',      label: 'Comparateur Radar',       icon: Swords },
       ],
     },
     {
@@ -98,15 +128,20 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // État des catégories ouvertes (accordéon)
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() => {
-    // Par défaut, ouvrir la catégorie correspondant à la route actuelle
     const initial: Record<string, boolean> = {
       competition: true,
+      trainings: true,
       effectif: true,
       recruitment: true,
       system: true,
     };
     return initial;
   });
+  // State for expanded nav items with children
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const toggleItemExpand = (path: string) => {
+    setExpandedItems(prev => ({ ...prev, [path]: !prev[path] }));
+  };
 
   // Détecter et ouvrir automatiquement la catégorie contenant la route active
   useEffect(() => {
@@ -116,8 +151,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     navCategories.forEach((cat) => {
       const isInside = cat.items.some(item => {
+        if (item.children && item.children.length > 0) {
+          if (item.children.some(c => c.path === currentPath)) return true;
+        }
         if (item.path.includes('?')) {
-          return fullCurrent === item.path || (currentPath === '/recruitment' && item.path.startsWith('/recruitment'));
+          return fullCurrent === item.path ||
+            (currentPath === '/recruitment' && item.path.startsWith('/recruitment')) ||
+            (currentPath === '/trainings' && item.path.startsWith('/trainings'));
         }
         return currentPath === item.path || (currentPath.startsWith(item.path) && item.path !== '/');
       });
@@ -128,21 +168,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     });
   }, [location.pathname, location.search]);
 
-  // Basculer l'ouverture/fermeture d'une catégorie et naviguer si fermeture
+  // Basculer l'ouverture/fermeture d'une catégorie (sans forcer la navigation)
   const toggleCategory = (categoryId: string) => {
-    const willOpen = !openCategories[categoryId];
     setOpenCategories(prev => ({
       ...prev,
-      [categoryId]: willOpen,
+      [categoryId]: !prev[categoryId],
     }));
-
-    // Si on ouvre la catégorie et qu'on n'est pas déjà dedans, naviguer vers le premier élément
-    if (willOpen) {
-      const cat = navCategories.find(c => c.id === categoryId);
-      if (cat && cat.items.length > 0 && !isCategoryActive(cat)) {
-        navigate(cat.items[0].path);
-      }
-    }
   };
 
   // Detect mobile/tablet viewport
@@ -162,9 +193,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleLogout = async () => {
     try {
-      const { AuditLogger } = await import('../services/auditLogger');
       await AuditLogger.closeSession();
-    } catch (_) {}
+    } catch (err) {
+      console.warn('[Sidebar] Erreur fermeture session audit:', err);
+    }
     await logout();
     navigate('/login');
   };
@@ -172,13 +204,22 @@ const Sidebar: React.FC<SidebarProps> = ({
   const isItemActive = (itemPath: string) => {
     if (itemPath.includes('?')) {
       const [path, search] = itemPath.split('?');
-      return location.pathname === path && location.search === `?${search}`;
+      if (location.pathname === path) {
+        if (!location.search && (search === 'tab=scouts' || search === 'tab=calendar')) return true;
+        return location.search === `?${search}`;
+      }
+      return false;
     }
     return location.pathname === itemPath;
   };
 
   const isCategoryActive = (category: NavCategory) => {
-    return category.items.some(item => isItemActive(item.path));
+    return category.items.some(item => {
+      if (item.children && item.children.length > 0) {
+        return item.children.some(c => isItemActive(c.path));
+      }
+      return isItemActive(item.path);
+    });
   };
 
   const isDashboardActive = location.pathname === '/' || location.pathname === '/dashboard';
@@ -191,16 +232,16 @@ const Sidebar: React.FC<SidebarProps> = ({
           to="/dashboard"
           onClick={() => isMobile && onMobileClose?.()}
           className={cn(
-            "w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all duration-200 group relative text-xs font-bold shadow-sm",
+            "w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl transition-all duration-200 group relative text-sm font-bold shadow-sm",
             isDashboardActive
               ? "bg-primary text-white shadow-md font-black"
               : "text-slate-700 hover:bg-slate-100",
-            isCollapsedMode && "justify-center px-2 py-2.5"
+            isCollapsedMode && "justify-center px-2 py-3"
           )}
           title={isCollapsedMode ? "Tableau de Bord" : undefined}
         >
           <LayoutDashboard className={cn(
-            "w-4 h-4 shrink-0 transition-transform",
+            "w-5 h-5 shrink-0 transition-transform",
             !isDashboardActive && "group-hover:scale-110 text-primary"
           )} />
 
@@ -212,7 +253,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {!isCollapsedMode && (
             <span className={cn(
-              "text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md",
+              "text-[10px] font-black uppercase px-2 py-0.5 rounded-md",
               isDashboardActive ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
             )}>
               Live
@@ -220,7 +261,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {isDashboardActive && !isCollapsedMode && (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-white rounded-r-full" />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-white rounded-r-full" />
           )}
         </NavLink>
       </div>
@@ -242,7 +283,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               }}
               title={isCollapsedMode ? category.title : undefined}
               className={cn(
-                "w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 group",
+                "w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 group",
                 hasActiveSubItem
                   ? "text-primary bg-primary/5 font-extrabold"
                   : "text-muted-foreground/80 hover:text-foreground hover:bg-slate-100/70",
@@ -251,12 +292,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             >
               <div className="flex items-center gap-2.5 overflow-hidden">
                 <CategoryIcon className={cn(
-                  "w-4 h-4 shrink-0 transition-transform duration-200",
+                  "w-4.5 h-4.5 shrink-0 transition-transform duration-200",
                   hasActiveSubItem ? "text-primary" : "text-muted-foreground",
                   !isCollapsedMode && "group-hover:scale-110"
                 )} />
                 {!isCollapsedMode && (
-                  <span className="truncate text-[11px] font-black">{category.title}</span>
+                  <span className="truncate text-xs font-black">{category.title}</span>
                 )}
               </div>
 
@@ -279,14 +320,84 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {category.items.map((item) => {
                   const ItemIcon = item.icon;
                   const active = isItemActive(item.path);
+                  const hasChildren = item.children && item.children.length > 0;
+                  const childIsActive = item.children?.some(c => isItemActive(c.path));
+                  const isExpanded = expandedItems[item.path] !== undefined
+                    ? expandedItems[item.path]
+                    : Boolean(childIsActive);
 
+                  if (hasChildren) {
+                    return (
+                      <div key={item.path} className="space-y-1">
+                        {/* Parent item with expand toggle */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            toggleItemExpand(item.path);
+                            if (!childIsActive) {
+                              navigate(item.children?.[0]?.path || item.path);
+                            }
+                          }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all duration-200 group relative text-sm font-semibold",
+                            (active || childIsActive)
+                              ? "bg-primary/10 text-primary shadow-sm font-bold"
+                              : "text-slate-600 hover:bg-secondary hover:text-foreground",
+                            isCollapsedMode && "justify-center px-2"
+                          )}
+                        >
+                          <ItemIcon className={cn("w-4.5 h-4.5 shrink-0", !active && !childIsActive && "group-hover:scale-110 transition-transform")} />
+                          {!isCollapsedMode && (
+                            <span className="truncate flex-1 text-left">{item.label}</span>
+                          )}
+                          {!isCollapsedMode && (
+                            <ChevronDown className={cn(
+                              "w-3.5 h-3.5 shrink-0 transition-transform duration-200 text-muted-foreground/60",
+                              isExpanded ? "rotate-0" : "-rotate-90"
+                            )} />
+                          )}
+                        </button>
+
+                        {/* Children */}
+                        {isExpanded && !isCollapsedMode && (
+                          <div className="pl-3 ml-3 border-l-2 border-primary/20 space-y-1">
+                            {item.children!.map(child => {
+                              const ChildIcon = child.icon;
+                              const childActive = isItemActive(child.path);
+                              return (
+                                <NavLink
+                                  key={child.path}
+                                  to={child.path}
+                                  onClick={() => isMobile && onMobileClose?.()}
+                                  className={cn(
+                                    "w-full flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-200 group relative text-xs font-semibold",
+                                    childActive
+                                      ? "bg-primary/10 text-primary font-bold"
+                                      : "text-slate-500 hover:bg-secondary hover:text-foreground"
+                                  )}
+                                >
+                                  <ChildIcon className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="truncate flex-1 text-left">{child.label}</span>
+                                  {childActive && (
+                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-4 bg-primary rounded-r-full" />
+                                  )}
+                                </NavLink>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // Normal item (no children)
                   return (
                     <NavLink
                       key={item.path}
                       to={item.path}
                       onClick={() => isMobile && onMobileClose?.()}
                       className={cn(
-                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-200 group relative text-xs font-semibold",
+                        "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all duration-200 group relative text-sm font-semibold",
                         active
                           ? "bg-primary/10 text-primary shadow-sm font-bold"
                           : "text-slate-600 hover:bg-secondary hover:text-foreground",
@@ -295,7 +406,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       title={isCollapsedMode ? item.label : undefined}
                     >
                       <ItemIcon className={cn(
-                        "w-4 h-4 shrink-0 transition-transform",
+                        "w-4.5 h-4.5 shrink-0 transition-transform",
                         !active && "group-hover:scale-110"
                       )} />
                       
@@ -304,13 +415,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                       )}
 
                       {item.count !== undefined && !isCollapsedMode && (
-                        <span className="ml-auto bg-primary text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                        <span className="ml-auto bg-primary text-white text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
                           {item.count}
                         </span>
                       )}
 
                       {active && !isCollapsedMode && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-4 bg-primary rounded-r-full" />
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-5 bg-primary rounded-r-full" />
                       )}
                     </NavLink>
                   );
@@ -336,33 +447,40 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Logo */}
-      <div className="h-[72px] flex items-center px-6 border-b shrink-0 bg-white sticky top-0 z-10">
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
-          <Trophy className="w-5 h-5 text-white" />
+      <div className="h-20 flex items-center px-6 border-b shrink-0 bg-white sticky top-0 z-10">
+        <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 shadow-sm p-1.5 flex items-center justify-center shrink-0">
+          <img
+            src={clubLogo}
+            alt={clubName}
+            className="w-full h-full object-contain"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = defaultClubLogo;
+            }}
+          />
         </div>
-        <span className="ml-3 font-bold text-lg block text-foreground tracking-tight">
-          Fusc<span className="text-primary">Club</span>
+        <span className="ml-3 font-extrabold text-lg block text-foreground tracking-tight truncate">
+          {clubName}
         </span>
       </div>
 
       {/* Navigation principale */}
-      <div className="flex-1 overflow-y-auto py-5 px-3 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto py-5 px-3.5 custom-scrollbar">
         {renderNavList(false)}
       </div>
 
       {/* Navigation bas */}
-      <div className="p-3 border-t space-y-1 bg-white">
+      <div className="p-3.5 border-t space-y-1.5 bg-white">
         <NavLink
           to="/settings"
           onClick={() => isMobile && onMobileClose?.()}
           className={({ isActive }) => cn(
-            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group text-xs font-semibold",
+            "w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-200 group text-sm font-semibold",
             isActive
               ? "bg-primary/10 text-primary font-bold"
               : "text-muted-foreground hover:bg-secondary hover:text-foreground"
           )}
         >
-          <Settings className="w-4 h-4 shrink-0 group-hover:scale-110 transition-transform" />
+          <Settings className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
           <span className="block">Paramètres</span>
         </NavLink>
 
@@ -371,9 +489,9 @@ const Sidebar: React.FC<SidebarProps> = ({
             handleLogout();
             if (isMobile) onMobileClose?.();
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group text-xs font-semibold text-muted-foreground hover:bg-red-50 hover:text-red-600"
+          className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl transition-all duration-200 group text-sm font-semibold text-muted-foreground hover:bg-red-50 hover:text-red-600"
         >
-          <LogOut className="w-4 h-4 shrink-0 group-hover:scale-110 transition-transform" />
+          <LogOut className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
           <span className="block">Déconnexion</span>
         </button>
       </div>
@@ -384,52 +502,59 @@ const Sidebar: React.FC<SidebarProps> = ({
   const desktopSidebar = (
     <aside className={cn(
       "fixed left-0 top-0 h-full bg-white border-r hidden md:flex flex-col z-50 transition-all duration-300 overflow-y-auto overflow-hidden",
-      collapsed ? "w-[72px]" : "w-[72px] lg:w-64"
+      collapsed ? "w-20" : "w-20 lg:w-72"
     )}>
       {/* Header Logo & Collapse Button */}
-      <div className="h-[72px] flex items-center px-4 border-b shrink-0 bg-white sticky top-0 z-10">
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
-          <Trophy className="w-5 h-5 text-white" />
+      <div className="h-20 flex items-center px-4.5 border-b shrink-0 bg-white sticky top-0 z-10">
+        <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 shadow-sm p-1.5 flex items-center justify-center shrink-0 ml-1">
+          <img
+            src={clubLogo}
+            alt={clubName}
+            className="w-full h-full object-contain"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = defaultClubLogo;
+            }}
+          />
         </div>
         <span className={cn(
-          "ml-3 font-bold text-lg text-foreground tracking-tight transition-all duration-300",
+          "ml-3 font-extrabold text-lg text-foreground tracking-tight transition-all duration-300 truncate",
           collapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-0 w-0 overflow-hidden lg:opacity-100 lg:w-auto"
         )}>
-          Fusc<span className="text-primary">Club</span>
+          {clubName}
         </span>
 
         <button
           onClick={onToggleCollapse}
           className={cn(
-            "ml-auto p-1.5 rounded-lg hover:bg-secondary transition-all duration-300 hidden lg:flex",
+            "ml-auto p-2 rounded-lg hover:bg-secondary transition-all duration-300 hidden lg:flex",
             collapsed ? "opacity-100" : "opacity-60 hover:opacity-100"
           )}
           title={collapsed ? "Développer" : "Réduire"}
         >
           <ChevronLeft className={cn(
-            "w-4 h-4 text-muted-foreground transition-transform duration-300",
+            "w-4.5 h-4.5 text-muted-foreground transition-transform duration-300",
             collapsed && "rotate-180"
           )} />
         </button>
       </div>
       
       {/* Content */}
-      <div className="flex-1 overflow-y-auto py-5 px-3 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto py-5 px-3.5 custom-scrollbar">
         {renderNavList(collapsed)}
       </div>
 
       {/* Footer Settings & Logout */}
-      <div className="p-3 border-t space-y-1 bg-white">
+      <div className="p-3.5 border-t space-y-1.5 bg-white">
         <NavLink
           to="/settings"
           className={({ isActive }) => cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 group text-xs font-semibold",
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group text-sm font-semibold",
             isActive ? "bg-primary/10 text-primary font-bold" : "text-muted-foreground hover:bg-secondary hover:text-foreground",
             collapsed && "justify-center px-2"
           )}
           title={collapsed ? "Paramètres" : undefined}
         >
-          <Settings className="w-4 h-4 shrink-0 group-hover:scale-110 transition-transform" />
+          <Settings className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
           <span className={cn(
             "transition-all duration-300",
             collapsed ? "opacity-0 w-0 overflow-hidden hidden" : "opacity-100 block"
@@ -439,12 +564,12 @@ const Sidebar: React.FC<SidebarProps> = ({
         <button
           onClick={handleLogout}
           className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 group text-xs font-semibold text-muted-foreground hover:bg-red-50 hover:text-red-600",
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group text-sm font-semibold text-muted-foreground hover:bg-red-50 hover:text-red-600",
             collapsed && "justify-center px-2"
           )}
           title={collapsed ? "Déconnexion" : undefined}
         >
-          <LogOut className="w-4 h-4 shrink-0 group-hover:scale-110 transition-transform" />
+          <LogOut className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
           <span className={cn(
             "transition-all duration-300",
             collapsed ? "opacity-0 w-0 overflow-hidden hidden" : "opacity-100 block"
@@ -464,7 +589,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={onMobileClose}
           />
-          <aside className="fixed left-0 top-0 h-full w-72 sm:w-80 bg-white border-r flex flex-col z-50 lg:hidden shadow-2xl">
+          <aside className="fixed left-0 top-0 h-full w-80 bg-white border-r flex flex-col z-50 lg:hidden shadow-2xl">
             {sidebarContent}
           </aside>
         </>
