@@ -875,7 +875,40 @@ export const RecruitmentV2Page: React.FC = () => {
 
       {/* L'onglet Observations a été supprimé de la V2 */}
 
-      {/* Les onglets Planning des Tests et Comparateur Radar ont été supprimés de la V2 */}
+      {/* TAB 5 : PLANNING DES TESTS */}
+      {activeTab === 'sessions' && (
+        <TestCalendarView
+          tests={filteredTests}
+          candidates={filteredCandidates}
+          evaluations={filteredEvaluations}
+          isLoading={isLoadingTests}
+          onOpenNewTest={(defaultDate) => {
+            setEditingTest(null);
+            setNewTestDefaultDate(defaultDate);
+            setIsSessionModalOpen(true);
+          }}
+          onEditTest={(test) => {
+            setEditingTest(test);
+            setNewTestDefaultDate(undefined);
+            setIsSessionModalOpen(true);
+          }}
+          onDeleteTest={async (testId) => {
+            await deleteTest(testId);
+          }}
+          onMoveTest={async (testId, newDate) => {
+            await updateTest({ id: testId, updates: { test_date: newDate } });
+          }}
+          onOpenEvaluationForTest={(candidate, test) => {
+            setEvaluatingCandidate(candidate);
+            const hasExisting = evaluations.some(e => e.candidate_id === candidate.id);
+            setEvaluationInitialMode(hasExisting ? 'reevaluate' : 'create');
+            setEvaluationInitialTestId(test.id);
+            setIsEvaluationModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* L'onglet Comparateur Radar a été supprimé de la V2 */}
 
       {/* TAB 8 : SHORTLIST & ONZE IDÉAL (TERRAIN VERTICAL) */}
       {activeTab === 'shortlist' && (
