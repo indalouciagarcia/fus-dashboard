@@ -70,32 +70,32 @@ export const PlayerTickerCarousel: React.FC<PlayerTickerCarouselProps> = ({
   if (players.length === 0) return null;
 
   return (
-    <Card className="border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white via-slate-50/50 to-slate-100/60 dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-950 shadow-sm overflow-hidden rounded-3xl p-5">
+    <Card className="border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white via-slate-50/50 to-slate-100/60 dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-950 shadow-sm overflow-hidden rounded-2xl sm:rounded-3xl p-3.5 sm:p-5">
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 dark:bg-primary/20 text-primary flex items-center justify-center shadow-inner">
-            <Users className="w-5 h-5" />
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-primary/10 dark:bg-primary/20 text-primary flex items-center justify-center shadow-inner shrink-0">
+            <Users className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-black tracking-tight text-foreground uppercase">
-                Effectif du Club • Showcase
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h3 className="text-sm sm:text-base font-black tracking-tight text-foreground uppercase truncate">
+                Effectif • Showcase
               </h3>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-black tracking-widest px-2 py-0.5">
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[9px] sm:text-[10px] font-black tracking-widest px-1.5 sm:px-2 py-0.5 shrink-0">
                 {filteredPlayers.length} Athlètes
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground font-medium">
-              Cliquez sur un joueur pour consulter sa fiche détaillée et sportive
+            <p className="text-[11px] sm:text-xs text-muted-foreground font-medium truncate">
+              Cliquez sur un joueur pour consulter sa fiche détaillée
             </p>
           </div>
         </div>
 
         {/* Controls & Filter */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-between sm:justify-end">
           {/* Category tabs */}
-          <div className="flex items-center gap-1 bg-secondary/60 dark:bg-secondary/30 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-800">
+          <div className="flex items-center gap-1 bg-secondary/60 dark:bg-secondary/30 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-800 overflow-x-auto no-scrollbar max-w-full">
             {CATEGORIES.slice(0, 5).map(cat => (
               <button
                 key={cat}

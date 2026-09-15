@@ -153,55 +153,55 @@ const LeagueManagement: React.FC = () => {
             className="space-y-8"
           >
             {/* Premium Header */}
-            <div className="relative bg-gradient-to-r from-slate-900 to-amber-900 rounded-[3rem] px-10 py-12 text-white overflow-hidden shadow-2xl border-b-[8px] border-amber-500/20">
+            <div className="relative bg-gradient-to-r from-slate-900 to-amber-900 rounded-[2rem] sm:rounded-[3rem] px-6 sm:px-10 py-8 sm:py-12 text-white overflow-hidden shadow-2xl border-b-[8px] border-amber-500/20">
               <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'repeating-linear-gradient(45deg,#fff 0,#fff 1px,transparent 0,transparent 50%)', backgroundSize: '20px 20px' }} />
-              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
-                <div className="flex items-center gap-8">
-                  <div className="w-20 h-20 rounded-[2.5rem] bg-white/10 flex items-center justify-center text-amber-400 shadow-2xl border border-white/20 ring-8 ring-white/5">
-                    <Trophy className="w-10 h-10" />
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 sm:gap-8">
+                <div className="flex items-center gap-4 sm:gap-8">
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-[1.8rem] sm:rounded-[2.5rem] bg-white/10 flex items-center justify-center text-amber-400 shadow-2xl border border-white/20 ring-4 sm:ring-8 ring-white/5 shrink-0">
+                    <Trophy className="w-7 h-7 sm:w-10 sm:h-10" />
                   </div>
                   <div>
-                    <h1 className="text-5xl font-black tracking-tighter uppercase italic leading-none">Competition Hub</h1>
-                    <p className="text-white/40 text-[11px] font-black uppercase tracking-[0.4em] mt-3">Elite League & Tournament Management</p>
+                    <h1 className="text-2xl sm:text-4xl md:text-5xl font-black tracking-tighter uppercase italic leading-tight">Competition Hub</h1>
+                    <p className="text-white/40 text-[9px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.4em] mt-1 sm:mt-3">Elite League & Tournament Management</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
                     <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-md">
                         <Button 
                             variant={displayMode === 'list' ? 'default' : 'ghost'} 
                             size="icon" 
                             onClick={() => setDisplayMode('list')}
-                            className={`w-12 h-12 rounded-xl ${displayMode === 'list' ? 'bg-amber-500 text-slate-950' : 'text-white hover:bg-white/10'}`}
+                            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${displayMode === 'list' ? 'bg-amber-500 text-slate-950' : 'text-white hover:bg-white/10'}`}
                         >
-                            <ListIcon className="w-5 h-5" />
+                            <ListIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                         </Button>
                         <Button 
                             variant={displayMode === 'grid' ? 'default' : 'ghost'} 
                             size="icon" 
                             onClick={() => setDisplayMode('grid')}
-                            className={`w-12 h-12 rounded-xl ${displayMode === 'grid' ? 'bg-amber-500 text-slate-950' : 'text-white hover:bg-white/10'}`}
+                            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${displayMode === 'grid' ? 'bg-amber-500 text-slate-950' : 'text-white hover:bg-white/10'}`}
                         >
-                            <LayoutGrid className="w-5 h-5" />
+                            <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" />
                         </Button>
                     </div>
-                    <Button onClick={handleOpenAdd} className="bg-amber-500 hover:bg-amber-400 text-slate-950 h-16 px-10 rounded-2xl font-black uppercase tracking-widest text-xs gap-4 shadow-2xl transition-all hover:scale-105 active:scale-95 group">
-                        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" /> Create
+                    <Button onClick={handleOpenAdd} className="bg-amber-500 hover:bg-amber-400 text-slate-950 h-12 sm:h-16 px-6 sm:px-10 rounded-2xl font-black uppercase tracking-widest text-xs gap-3 sm:gap-4 shadow-2xl transition-all hover:scale-105 active:scale-95 group">
+                        <Plus className="w-4 h-4 sm:w-5 sm:h-5 group-hover:rotate-90 transition-transform duration-500" /> Create
                     </Button>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-4 p-4 rounded-[2.5rem] bg-white border shadow-sm">
-                <div className="relative flex-1">
-                    <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground opacity-30" />
+            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-[1.8rem] sm:rounded-[2.5rem] bg-white border shadow-sm">
+                <div className="relative flex-1 w-full sm:w-auto">
+                    <Search className="absolute left-5 sm:left-6 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground opacity-30" />
                     <Input 
                         placeholder="Rechercher une compétition..." 
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-14 pl-16 pr-8 rounded-[1.5rem] bg-secondary/20 border-none font-black text-sm transition-all focus:bg-white focus:ring-4 ring-primary/5"
+                        className="h-12 sm:h-14 pl-12 sm:pl-16 pr-6 sm:pr-8 rounded-[1.2rem] sm:rounded-[1.5rem] bg-secondary/20 border-none font-black text-xs sm:text-sm transition-all focus:bg-white focus:ring-4 ring-primary/5"
                     />
                 </div>
-                <Badge variant="secondary" className="h-14 px-8 text-[11px] font-black uppercase tracking-[0.2em] bg-secondary/50 rounded-[1.5rem] border-none shadow-inner">
+                <Badge variant="secondary" className="h-10 sm:h-14 px-4 sm:px-8 text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] bg-secondary/50 rounded-[1rem] sm:rounded-[1.5rem] border-none shadow-inner self-end sm:self-auto">
                     Total: {leagues.length}
                 </Badge>
             </div>
@@ -255,53 +255,55 @@ const LeagueManagement: React.FC = () => {
                 </AnimatePresence>
               </div>
             ) : (
-              <div className="bg-white border rounded-[3rem] overflow-hidden shadow-sm">
-                <table className="w-full">
-                  <thead className="bg-secondary/10 border-b">
-                    <tr>
-                      <th className="text-left px-10 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Compétition</th>
-                      <th className="text-left py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Saison</th>
-                      <th className="text-left py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">ID Système</th>
-                      <th className="text-right px-10 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-secondary/30">
-                    {paginatedLeagues.map(l => (
-                      <tr key={l.id} className="group hover:bg-secondary/5 transition-colors">
-                        <td className="px-10 py-4">
-                           <div className="flex items-center gap-5">
-                              <div className="w-12 h-12 rounded-2xl bg-secondary/30 overflow-hidden border-2 border-white shadow-md">
-                                 <img src={(l.logo_url && l.logo_url !== 'null') ? l.logo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(l.name)}&background=random&color=fff&size=200`} className="w-full h-full object-contain p-2" />
-                              </div>
-                              <span className="font-black text-base uppercase italic tracking-tighter">{l.name}</span>
-                           </div>
-                        </td>
-                        <td className="py-4">
-                           <div className="flex items-center gap-2">
-                             <span className="font-black italic text-primary/70">{l.season}</span>
-                             {l.category && <Badge variant="outline" className="text-[9px] font-black">{l.category}</Badge>}
-                           </div>
-                        </td>
-                        <td className="py-4">
-                           <code className="text-[10px] font-black opacity-30 uppercase tracking-widest">{l.id.substr(0, 12)}</code>
-                        </td>
-                        <td className="px-10 py-4 text-right">
-                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="icon" onClick={() => setSelectedLeague(l)} className="h-10 w-10 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all">
-                                 <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} className="h-10 w-10 rounded-xl hover:bg-white hover:shadow-md transition-all">
-                                 <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => deleteLeague(l.id)} className="h-10 w-10 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
-                                 <Trash2 className="w-4 h-4" />
-                              </Button>
-                           </div>
-                        </td>
+              <div className="bg-white border rounded-[2rem] sm:rounded-[3rem] overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px]">
+                    <thead className="bg-secondary/10 border-b">
+                      <tr>
+                        <th className="text-left px-6 sm:px-10 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Compétition</th>
+                        <th className="text-left py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Saison</th>
+                        <th className="text-left py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">ID Système</th>
+                        <th className="text-right px-6 sm:px-10 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-secondary/30">
+                      {paginatedLeagues.map(l => (
+                        <tr key={l.id} className="group hover:bg-secondary/5 transition-colors">
+                          <td className="px-6 sm:px-10 py-4">
+                             <div className="flex items-center gap-4 sm:gap-5">
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-secondary/30 overflow-hidden border-2 border-white shadow-md">
+                                   <img src={(l.logo_url && l.logo_url !== 'null') ? l.logo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(l.name)}&background=random&color=fff&size=200`} className="w-full h-full object-contain p-2" />
+                                </div>
+                                <span className="font-black text-sm sm:text-base uppercase italic tracking-tighter">{l.name}</span>
+                             </div>
+                          </td>
+                          <td className="py-4">
+                             <div className="flex items-center gap-2">
+                               <span className="font-black italic text-primary/70">{l.season}</span>
+                               {l.category && <Badge variant="outline" className="text-[9px] font-black">{l.category}</Badge>}
+                             </div>
+                          </td>
+                          <td className="py-4">
+                             <code className="text-[10px] font-black opacity-30 uppercase tracking-widest">{l.id.substr(0, 12)}</code>
+                          </td>
+                          <td className="px-6 sm:px-10 py-4 text-right">
+                             <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon" onClick={() => setSelectedLeague(l)} className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all">
+                                   <Eye className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(l)} className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-white hover:shadow-md transition-all">
+                                   <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => deleteLeague(l.id)} className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
+                                   <Trash2 className="w-4 h-4" />
+                                </Button>
+                             </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 

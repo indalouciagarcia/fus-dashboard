@@ -242,8 +242,8 @@ const StadiumManagement: React.FC = () => {
                             alt={stadium.name} 
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                          <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-500" />
+                          <div className="absolute top-4 right-4 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:translate-y-2 sm:group-hover:translate-y-0 transition-all duration-300">
                             <Button variant="secondary" size="icon" onClick={() => openEdit(stadium)} className="h-9 w-9 rounded-xl bg-white/90 backdrop-blur-md hover:bg-white shadow-lg"><Edit2 className="w-4 h-4" /></Button>
                             <Button variant="secondary" size="icon" onClick={() => setConfirmDelete(stadium.id)} className="h-9 w-9 rounded-xl bg-white/90 backdrop-blur-md hover:bg-red-50 hover:text-red-500 shadow-lg"><Trash2 className="w-4 h-4" /></Button>
                           </div>
@@ -286,7 +286,7 @@ const StadiumManagement: React.FC = () => {
                   onClick={openAdd}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="border-2 border-dashed border-secondary hover:border-primary/40 rounded-[2rem] flex flex-col items-center justify-center gap-4 p-10 min-h-[280px] text-muted-foreground hover:text-primary transition-all group bg-white/50"
+                  className="border-2 border-dashed border-secondary hover:border-primary/50 rounded-[2rem] p-8 flex flex-col items-center justify-center gap-4 text-muted-foreground hover:text-primary transition-all duration-300 min-h-[350px] group bg-secondary/5"
                 >
                   <div className="w-14 h-14 rounded-2xl bg-secondary group-hover:bg-primary/10 flex items-center justify-center transition-all">
                     <Plus className="w-7 h-7 group-hover:scale-110 transition-transform" />
@@ -298,31 +298,33 @@ const StadiumManagement: React.FC = () => {
               </div>
             ) : (
               <div className="bg-white border rounded-[2rem] overflow-hidden shadow-sm">
-                <table className="w-full">
-                  <thead className="bg-secondary/10 border-b">
-                    <tr>
-                      <th className="text-left px-8 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Infrastructure</th>
-                      <th className="text-left py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Ville</th>
-                      <th className="text-left py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Capacité</th>
-                      <th className="text-right px-8 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-secondary/30">
-                    {paginatedStadiums.map(s => (
-                      <tr key={s.id} className="group hover:bg-secondary/5 transition-colors">
-                        <td className="px-8 py-3 font-black text-sm uppercase italic tracking-tighter truncate max-w-[200px]">{s.name}</td>
-                        <td className="py-3 text-xs font-bold uppercase text-muted-foreground">{s.city}</td>
-                        <td className="py-3 font-bold text-xs">{s.capacity?.toLocaleString() || 'N/A'}</td>
-                        <td className="px-8 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(s)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all"><Edit2 className="w-4 h-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => setConfirmDelete(s.id)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 className="w-4 h-4" /></Button>
-                          </div>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[500px]">
+                    <thead className="bg-secondary/10 border-b">
+                      <tr>
+                        <th className="text-left px-8 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Infrastructure</th>
+                        <th className="text-left py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Ville</th>
+                        <th className="text-left py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Capacité</th>
+                        <th className="text-right px-8 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-secondary/30">
+                      {paginatedStadiums.map(s => (
+                        <tr key={s.id} className="group hover:bg-secondary/5 transition-colors">
+                          <td className="px-8 py-3 font-black text-sm uppercase italic tracking-tighter truncate max-w-[200px]">{s.name}</td>
+                          <td className="py-3 text-xs font-bold uppercase text-muted-foreground">{s.city}</td>
+                          <td className="py-3 font-bold text-xs">{s.capacity?.toLocaleString() || 'N/A'}</td>
+                          <td className="px-8 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" onClick={() => openEdit(s)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all"><Edit2 className="w-4 h-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => setConfirmDelete(s.id)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 className="w-4 h-4" /></Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 

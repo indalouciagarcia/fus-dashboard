@@ -55,43 +55,8 @@ interface MatchOverviewPanelProps {
   onBack: () => void;
 }
 
-// Tactical Formation Coordinates
-const getFormationPositions = (formation: string) => {
-  const roles: Record<string, { top: string; left: string; label: string }[]> = {
-    '4-3-3': [
-      { top: '92%', left: '50%', label: 'GK' },
-      { top: '75%', left: '16%', label: 'LB' }, { top: '78%', left: '38%', label: 'CB' }, { top: '78%', left: '62%', label: 'CB' }, { top: '75%', left: '84%', label: 'RB' },
-      { top: '54%', left: '30%', label: 'CM' }, { top: '62%', left: '50%', label: 'CDM' }, { top: '54%', left: '70%', label: 'CM' },
-      { top: '24%', left: '20%', label: 'LW' }, { top: '15%', left: '50%', label: 'ST' }, { top: '24%', left: '80%', label: 'RW' },
-    ],
-    '4-4-2': [
-      { top: '92%', left: '50%', label: 'GK' },
-      { top: '75%', left: '16%', label: 'LB' }, { top: '78%', left: '38%', label: 'CB' }, { top: '78%', left: '62%', label: 'CB' }, { top: '75%', left: '84%', label: 'RB' },
-      { top: '50%', left: '16%', label: 'LM' }, { top: '54%', left: '38%', label: 'CM' }, { top: '54%', left: '62%', label: 'CM' }, { top: '50%', left: '84%', label: 'RM' },
-      { top: '18%', left: '36%', label: 'ST' }, { top: '18%', left: '64%', label: 'ST' },
-    ],
-    '4-2-3-1': [
-      { top: '92%', left: '50%', label: 'GK' },
-      { top: '75%', left: '16%', label: 'LB' }, { top: '78%', left: '38%', label: 'CB' }, { top: '78%', left: '62%', label: 'CB' }, { top: '75%', left: '84%', label: 'RB' },
-      { top: '62%', left: '36%', label: 'CDM' }, { top: '62%', left: '64%', label: 'CDM' },
-      { top: '42%', left: '20%', label: 'LAM' }, { top: '35%', left: '50%', label: 'CAM' }, { top: '42%', left: '80%', label: 'RAM' },
-      { top: '15%', left: '50%', label: 'ST' },
-    ],
-    '3-5-2': [
-      { top: '92%', left: '50%', label: 'GK' },
-      { top: '76%', left: '26%', label: 'CB' }, { top: '80%', left: '50%', label: 'CB' }, { top: '76%', left: '74%', label: 'CB' },
-      { top: '52%', left: '14%', label: 'LWB' }, { top: '56%', left: '36%', label: 'CM' }, { top: '62%', left: '50%', label: 'CDM' }, { top: '56%', left: '64%', label: 'CM' }, { top: '52%', left: '86%', label: 'RWB' },
-      { top: '18%', left: '36%', label: 'ST' }, { top: '18%', left: '64%', label: 'ST' },
-    ],
-    '5-3-2': [
-      { top: '92%', left: '50%', label: 'GK' },
-      { top: '74%', left: '12%', label: 'LWB' }, { top: '78%', left: '30%', label: 'CB' }, { top: '80%', left: '50%', label: 'CB' }, { top: '78%', left: '70%', label: 'CB' }, { top: '74%', left: '88%', label: 'RWB' },
-      { top: '52%', left: '32%', label: 'CM' }, { top: '58%', left: '50%', label: 'CM' }, { top: '52%', left: '68%', label: 'CM' },
-      { top: '18%', left: '36%', label: 'ST' }, { top: '18%', left: '64%', label: 'ST' },
-    ],
-  };
-  return roles[formation] || roles['4-3-3'];
-};
+// Tactical Formation Coordinates imported from centralized module
+import { getFormationPositions, inferMatchFormat } from './tacticalFormations';
 
 const getInitials = (name: string) => {
   if (!name) return '';
@@ -202,26 +167,56 @@ export const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
   const opponentSubs: string[] = Array.isArray(match.opponent_subs) ? match.opponent_subs : [];
   const opponentFormationKey = match.opponent_formation || '4-3-3';
 
+  // Format et durée de match dynamiques (Jeu réduit, opposition interne, catégories jeunes)
+  const matchFormat = inferMatchFormat(match);
+  const halfDuration = Number(
+    match.half_duration_minutes ||
+    (matchFormat <= 8 || ['U7', 'U9', 'U11', 'U13'].includes(match.category || '') ? 30 : 45)
+  );
+  const totalDuration = halfDuration * 2;
+
   // Helper for real player info (handles both string ID and raw object)
   const getPlayer = (rawPid?: any) => {
     if (!rawPid) return null;
     const pid = typeof rawPid === 'object' ? (rawPid.id || rawPid.player_id) : rawPid;
     if (!pid) return null;
-    return (players || []).find(pl => String(pl.id) === String(pid)) || null;
+    const pStr = String(pid);
+    return (
+      (players || []).find(pl => String(pl.id) === pStr) ||
+      (matchLineupPlayers || []).find(pl => String(pl.player_id || pl.id) === pStr) ||
+      null
+    );
+  };
+
+  const getPlayerDisplayName = (rawPid?: any, fallbackName?: string) => {
+    if (typeof rawPid === 'object' && rawPid) {
+      const directName = rawPid.full_name || rawPid.name || rawPid.last_name || rawPid.first_name;
+      if (directName && directName !== 'undefined') return String(directName);
+    }
+    const p = getPlayer(rawPid);
+    if (p) {
+      const fullName = p.full_name || p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
+      if (fullName && fullName !== 'undefined') return fullName;
+    }
+    if (fallbackName && fallbackName !== 'undefined' && fallbackName.trim() !== '') {
+      return fallbackName;
+    }
+    return 'Joueur';
   };
 
   const getPlayerShortName = (rawPid?: any) => {
     if (!rawPid) return 'Joueur';
     if (typeof rawPid === 'object') {
-      const nm = rawPid.last_name || rawPid.full_name || rawPid.name || rawPid.first_name || '';
-      if (nm) {
+      const nm = rawPid.full_name || rawPid.last_name || rawPid.name || rawPid.first_name || '';
+      if (nm && nm !== 'undefined') {
         const parts = String(nm).trim().split(' ');
         return parts[parts.length - 1]?.substring(0, 12) || 'Joueur';
       }
     }
     const p = getPlayer(rawPid);
     if (!p) return 'Joueur';
-    const name = p.last_name || p.name || p.first_name || '';
+    const name = p.full_name || p.last_name || p.name || p.first_name || '';
+    if (!name || name === 'undefined') return 'Joueur';
     const parts = name.trim().split(' ');
     return parts[parts.length - 1]?.substring(0, 12) || 'Joueur';
   };
@@ -229,97 +224,183 @@ export const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
   // Whether FUS plays at home (from DB)
   const isHome = match.is_home ?? true;
 
+  const getEventPlayerId = (e: any): string => {
+    if (!e) return '';
+    const raw = e.player_id ?? e.playerId;
+    if (!raw) return '';
+    if (typeof raw === 'object') return raw.id || raw.player_id || '';
+    return String(raw);
+  };
+
   // Real event stats directly from Supabase match_events & match
   const ourPlayerIds = new Set(
-    [...startingXI, ...subs].map(item => (typeof item === 'object' ? (item.id || item.player_id) : item)).filter(Boolean)
+    [...startingXI, ...subs].map(item => (typeof item === 'object' ? (item.id || item.player_id) : item)).filter(Boolean).map(String)
   );
 
+  const isEventOurTeam = (e: any): boolean => {
+    if (e.extra?.opponent_ref) return false;
+    const pid = getEventPlayerId(e);
+    if (!pid) return true;
+    return ourPlayerIds.has(pid);
+  };
+
   // 1. Buts
-  const ourGoalEvents = (events || []).filter(e => (e.type === 'goal' || e.type === 'penalty') && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
-  const advGoalEvents = (events || []).filter(e => (e.type === 'goal' || e.type === 'penalty') && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const ourGoalEvents = (events || []).filter(e => (e.type === 'goal' || e.type === 'penalty') && isEventOurTeam(e)).length;
+  const advGoalEvents = (events || []).filter(e => (e.type === 'goal' || e.type === 'penalty') && !isEventOurTeam(e)).length;
   const ourGoals = Math.max(isHome ? homeScore : awayScore, ourGoalEvents);
   const advGoals = Math.max(isHome ? awayScore : homeScore, advGoalEvents);
 
   // 2. Assists (Passes décisives)
-  const ourAssists = (events || []).filter(e => e.type === 'assist' && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
-  const advAssists = (events || []).filter(e => e.type === 'assist' && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const ourAssists = (events || []).filter(e => e.type === 'assist' && isEventOurTeam(e)).length;
+  const advAssists = (events || []).filter(e => e.type === 'assist' && !isEventOurTeam(e)).length;
 
   // 3. Changements (Remplacements)
-  const ourSubsCount = (events || []).filter(e => e.type === 'substitution' && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
-  const advSubsCount = (events || []).filter(e => e.type === 'substitution' && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const ourSubsCount = (events || []).filter(e => e.type === 'substitution' && isEventOurTeam(e)).length;
+  const advSubsCount = (events || []).filter(e => e.type === 'substitution' && !isEventOurTeam(e)).length;
 
   // 4. Cartons Jaunes
-  const ourYellows = (events || []).filter(e => e.type === 'yellow_card' && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
-  const advYellows = (events || []).filter(e => e.type === 'yellow_card' && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const ourYellows = (events || []).filter(e => e.type === 'yellow_card' && isEventOurTeam(e)).length;
+  const advYellows = (events || []).filter(e => e.type === 'yellow_card' && !isEventOurTeam(e)).length;
 
   // 5. Cartons Rouges
-  const ourReds = (events || []).filter(e => e.type === 'red_card' && ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
-  const advReds = (events || []).filter(e => e.type === 'red_card' && !ourPlayerIds.has(typeof e.playerId === 'object' ? e.playerId?.id : e.playerId || '')).length;
+  const ourReds = (events || []).filter(e => e.type === 'red_card' && isEventOurTeam(e)).length;
+  const advReds = (events || []).filter(e => e.type === 'red_card' && !isEventOurTeam(e)).length;
 
   // Real Head Coach from Staff
   const headCoach = (staff || []).find(s => (s.role || '').toLowerCase().includes('entraîneur') || (s.role || '').toLowerCase().includes('coach')) || staff[0];
   const headCoachName = headCoach ? (headCoach.full_name || headCoach.name || 'Staff Technique') : 'Staff Technique FUS';
 
+  const getPeriodMarkerDetails = (e: any) => {
+    const phase = e.extra?.phase || '';
+    const label = e.extra?.label || '';
+    if (phase === 'first_half_start' || label.toLowerCase().includes('1ère')) {
+      return { icon: '🏁', label: label || 'Coup d\'envoi (1ère Mi-temps)' };
+    }
+    if (phase === 'half_time' || label.toLowerCase().includes('mi-temps')) {
+      return { icon: '⏸️', label: label || 'Pause Mi-temps' };
+    }
+    if (phase === 'second_half_start' || label.toLowerCase().includes('2ème')) {
+      return { icon: '▶️', label: label || 'Reprise 2ème Mi-temps' };
+    }
+    if (phase === 'full_time' || label.toLowerCase().includes('fin')) {
+      return { icon: '🏁', label: label || 'Fin du match' };
+    }
+    return { icon: '⏱️', label: label || 'Temps de jeu' };
+  };
+
   // Real Timeline Events Feed
   const timelineEvents = useMemo(() => {
     if (events && events.length > 0) {
       return [...events].sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0)).map(e => {
-        const rawPid = typeof e.playerId === 'object' ? (e.playerId?.id || e.playerId) : e.playerId;
-        const isOur = rawPid ? ourPlayerIds.has(rawPid) : true;
-        const playerObj = getPlayer(rawPid);
-        const pName = playerObj ? (playerObj.last_name || playerObj.name || playerObj.first_name) : (typeof e.player === 'string' ? e.player : 'Joueur');
+        // 1. Marqueurs officiels de période (Coup d'envoi, Mi-temps, Fin du match)
+        if (e.type === 'period_marker') {
+          const marker = getPeriodMarkerDetails(e);
+          return {
+            id: e.id,
+            minute: e.minute || 0,
+            type: 'period_marker',
+            isPeriodMarker: true,
+            markerIcon: marker.icon,
+            markerLabel: marker.label,
+            title: marker.label,
+            desc: '',
+            isLeft: false,
+          };
+        }
 
-        let title = 'Événement';
+        const rawPid = getEventPlayerId(e);
+        const isOpponentRef = Boolean(e.extra?.opponent_ref);
+        const isOur = isOpponentRef ? false : (rawPid ? ourPlayerIds.has(rawPid) : true);
+        const playerObj = getPlayer(rawPid);
+
+        const rawFallback = (typeof e.player === 'string' && e.player !== 'undefined')
+          ? e.player
+          : (e.extra?.player_name || e.extra?.playerName || '');
+        const pName = getPlayerDisplayName(rawPid, rawFallback || (isOur ? 'FUS Club' : 'Adversaire'));
+
+        let title = 'Action de jeu';
         let desc = `Action enregistrée à la ${e.minute || 0}'`;
         if (e.type === 'goal') {
           title = '⚽ BUT !';
-          desc = `Superbe but inscrit par ${pName} à la ${e.minute}'`;
+          desc = `Superbe but inscrit par ${pName} à la ${e.minute || 0}'`;
         } else if (e.type === 'yellow_card') {
           title = '🟨 Carton Jaune';
           desc = `Avertissement arbitral adressé à ${pName}`;
         } else if (e.type === 'red_card') {
           title = '🟥 Carton Rouge';
-          desc = `Expulsion directe de ${pName} à la ${e.minute}'`;
+          desc = `Expulsion directe de ${pName} à la ${e.minute || 0}'`;
         } else if (e.type === 'substitution') {
-          const inPlayer = getPlayerShortName(e.relatedPlayerId);
+          const inPid = e.related_player_id || e.relatedPlayerId;
+          const inPlayer = inPid ? getPlayerShortName(inPid) : 'Remplaçant';
           title = '🔁 Changement';
-          desc = `Entrée de ${inPlayer} à la place de ${pName}`;
+          desc = `Entrée de ${inPlayer} à la place de ${getPlayerShortName(rawPid)}`;
         } else if (e.type === 'assist') {
           title = '⭐ Passe Décisive';
           desc = `Passe décisive délivrée par ${pName}`;
         } else if (e.type === 'penalty') {
           title = '🎯 Penalty';
           desc = `Tir au but converti par ${pName}`;
+        } else if (e.type === 'own_goal') {
+          title = '⚽ But C.S.C.';
+          desc = `But contre son camp concédé à la ${e.minute || 0}'`;
+        } else if (e.type === 'missed_penalty') {
+          title = '❌ Penalty manqué';
+          desc = `Penalty non converti par ${pName}`;
+        } else if (e.type === 'corner') {
+          title = '🚩 Corner';
+          desc = `Corner exécuté par ${pName}`;
+        } else if (e.type === 'foul') {
+          title = '⚠️ Faute';
+          desc = `Faute sifflée contre ${pName}`;
+        } else if (e.type === 'offside') {
+          title = '🚩 Hors-jeu';
+          desc = `Position de hors-jeu signalée pour ${pName}`;
+        } else if (e.type === 'save') {
+          title = '🧤 Arrêt';
+          desc = `Parade décisive de ${pName}`;
+        } else if (e.type === 'injury') {
+          title = '🩹 Soins';
+          desc = `Intervention médicale pour ${pName}`;
         }
+
+        const commentaryText = typeof e.commentary === 'string' && e.commentary.trim() 
+          ? e.commentary 
+          : (e.extra?.commentary || desc);
+
+        const photoUrl = playerObj?.photo_url && playerObj.photo_url !== 'null' ? playerObj.photo_url : null;
 
         return {
           id: e.id,
           minute: e.minute || 0,
           type: e.type,
+          isPeriodMarker: false,
           player: String(pName),
-          photo: playerObj?.photo_url && playerObj.photo_url !== 'null' ? playerObj.photo_url : null,
+          photo: photoUrl,
           title,
-          desc: typeof e.commentary === 'string' ? e.commentary : desc,
+          desc: commentaryText,
           isLeft: isOur,
         };
       });
     }
     return [];
-  }, [events, players, ourPlayerIds]);
+  }, [events, players, ourPlayerIds, matchLineupPlayers]);
 
-  // Real Event dots along the 0' - 90' timeline bar
+  // Real Event dots along the timeline bar adapted to match duration
   const timelineBarDots = useMemo(() => {
-    return (events || []).slice(0, 10).map((e: any) => {
-      const min = Math.min(90, Math.max(0, e.minute || 0));
-      const leftPercent = `${(min / 90) * 100}%`;
-      let colorClass = 'bg-[#4d94ff]';
-      if (e.type === 'goal') colorClass = 'bg-[#2ecc71] ring-2 ring-emerald-300';
-      else if (e.type === 'yellow_card') colorClass = 'bg-[#f1c40f]';
+    return (events || [])
+      .filter((e: any) => e.type !== 'period_marker')
+      .slice(0, 15)
+      .map((e: any) => {
+        const min = Math.min(totalDuration, Math.max(0, e.minute || 0));
+        const leftPercent = `${(min / totalDuration) * 100}%`;
+        let colorClass = 'bg-[#4d94ff]';
+        if (e.type === 'goal') colorClass = 'bg-[#2ecc71] ring-2 ring-emerald-300';
+        else if (e.type === 'yellow_card') colorClass = 'bg-[#f1c40f]';
       else if (e.type === 'red_card') colorClass = 'bg-[#e74c3c]';
       else if (e.type === 'substitution') colorClass = 'bg-[#9b59b6]';
       return { minute: min, left: leftPercent, color: colorClass };
     });
-  }, [events]);
+  }, [events, totalDuration]);
 
   // Real Upcoming Matches List from DB
   const upcomingMatches = useMemo(() => {
@@ -477,9 +558,9 @@ export const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
     };
   };
 
-  // Real Tactical Positions
-  const topTeamPositions = getFormationPositions(formationKey);
-  const bottomTeamPositions = getFormationPositions(opponentFormationKey);
+  // Real Tactical Positions (respecting matchFormat)
+  const topTeamPositions = getFormationPositions(formationKey, matchFormat);
+  const bottomTeamPositions = getFormationPositions(opponentFormationKey, matchFormat);
 
   return (
     <motion.div
@@ -623,7 +704,7 @@ export const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
                 <div className="px-3 flex flex-col items-center">
                   <span className="text-slate-500 font-bold text-lg mb-1">—</span>
                   <div className="w-11 h-11 rounded-full border-2 border-slate-600 bg-slate-800/80 flex items-center justify-center text-xs font-black text-emerald-400 shadow-inner">
-                    {isFinished ? '90\'' : isLive ? '70\'' : '00\''}
+                    {isFinished ? `${totalDuration}'` : isLive ? `${Math.min(totalDuration, Math.round((match.time_elapsed_seconds || halfDuration * 60) / 60))}'` : '00\''}
                   </div>
                 </div>
 
@@ -646,7 +727,7 @@ export const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
                 </div>
               </div>
 
-              {/* 0' - 90' Timeline Slider Bar with real DB events */}
+              {/* Timeline Slider Bar with real DB events adapted to match format */}
               <div className="pt-2 space-y-1">
                 <div className="relative w-full h-2 bg-slate-700/80 rounded-full flex items-center">
                   <div className="absolute left-1/2 -translate-x-1/2 w-0.5 h-3 bg-slate-500" />
@@ -659,10 +740,10 @@ export const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
                     />
                   ))}
                 </div>
-                <div className="flex items-center justify-between text-[8px] text-slate-500 font-bold px-0.5">
+                <div className="flex items-center justify-between text-[8px] text-slate-400 font-bold px-0.5">
                   <span>0'</span>
-                  <span>45'</span>
-                  <span>90'</span>
+                  <span className="text-slate-500 font-semibold">{halfDuration}' (MT)</span>
+                  <span>{totalDuration}'</span>
                 </div>
               </div>
             </div>
@@ -681,7 +762,7 @@ export const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
                     : 'bg-slate-100 text-slate-400 hover:text-slate-600'
                 }`}
               >
-                <Target className="w-3.5 h-3.5" /> PLAY TO PLAY ({timelineEvents.length})
+                <Target className="w-3.5 h-3.5" /> PLAY TO PLAY ({(events || []).filter(e => e.type !== 'period_marker').length})
               </button>
               <button
                 onClick={() => setFeedTab('narration')}
@@ -717,6 +798,20 @@ export const MatchOverviewPanel: React.FC<MatchOverviewPanelProps> = ({
                 <div className="absolute left-1/2 top-2 bottom-2 w-0.5 bg-emerald-300 -translate-x-1/2 pointer-events-none" />
 
                 {timelineEvents.map((item: any, idx: number) => {
+                  // Marqueur officiel de période (Coup d'envoi, Mi-temps, Fin du match)
+                  if (item.isPeriodMarker) {
+                    return (
+                      <div key={item.id || idx} className="relative flex items-center justify-center my-3 py-1 w-full z-20">
+                        <div className="absolute inset-x-0 h-px bg-slate-200" />
+                        <div className="relative z-10 px-3.5 py-1 bg-slate-800 text-white rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md border border-slate-700">
+                          <span className="text-xs">{item.markerIcon}</span>
+                          <span>{item.markerLabel}</span>
+                          <span className="text-emerald-400 font-bold ml-1">· {item.minute}'</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   const isLeft = item.isLeft;
                   return (
                     <div key={item.id || idx} className="relative flex items-center justify-between gap-3 text-xs">

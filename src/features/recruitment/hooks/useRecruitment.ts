@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { recruitmentService } from '../services/recruitmentService';
+import { usePlugins } from '../../../context/PluginsContext';
 import type {
   Scout,
   TrialCandidate,
@@ -23,34 +24,50 @@ export const RECRUITMENT_KEYS = {
 export function useRecruitment(candidateIdForTimeline?: string) {
   const queryClient = useQueryClient();
 
+  // Détection d'activation du plugin (Null Object Pattern)
+  let isPluginActive = true;
+  try {
+    const plugins = usePlugins();
+    isPluginActive = plugins.isPluginActive('recruitment_v1');
+  } catch {
+    // Si appelé hors provider, conserver la valeur active par défaut
+    isPluginActive = true;
+  }
+
   const scoutsQuery = useQuery({
     queryKey: RECRUITMENT_KEYS.scouts,
     queryFn: () => recruitmentService.getScouts(),
+    enabled: isPluginActive,
   });
 
   const candidatesQuery = useQuery({
     queryKey: RECRUITMENT_KEYS.candidates,
     queryFn: () => recruitmentService.getCandidates(),
+    enabled: isPluginActive,
   });
 
   const testsQuery = useQuery({
     queryKey: RECRUITMENT_KEYS.tests,
     queryFn: () => recruitmentService.getTests(),
+    enabled: isPluginActive,
   });
 
   const evaluationsQuery = useQuery({
     queryKey: RECRUITMENT_KEYS.evaluations,
     queryFn: () => recruitmentService.getEvaluations(),
+    enabled: isPluginActive,
   });
 
   const observationsQuery = useQuery({
     queryKey: RECRUITMENT_KEYS.observations,
     queryFn: () => recruitmentService.getObservations(),
+    enabled: isPluginActive,
   });
 
   const timelineQuery = useQuery({
     queryKey: RECRUITMENT_KEYS.timeline(candidateIdForTimeline),
     queryFn: () => recruitmentService.getTimeline(candidateIdForTimeline),
+    enabled: isPluginActive && !!candidateIdForTimeline,
   });
 
   // SCOUTS MUTATIONS
@@ -67,7 +84,11 @@ export function useRecruitment(candidateIdForTimeline?: string) {
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Scout> }) => recruitmentService.updateScout(id, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.scouts });
-      toast.success('Profil scout mis à jour');
+      toast.success('Profil scout mis à jour avec succès');
+    },
+    onError: (err: any) => {
+      console.error('[useRecruitment] updateScout mutation error:', err);
+      toast.error(`Erreur mise à jour scout: ${err?.message || 'Erreur inconnue'}`);
     },
   });
 
@@ -76,6 +97,10 @@ export function useRecruitment(candidateIdForTimeline?: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.scouts });
       toast.success('Scout retiré de la cellule');
+    },
+    onError: (err: any) => {
+      console.error('[useRecruitment] deleteScout mutation error:', err);
+      toast.error(`Erreur suppression scout: ${err?.message || 'Erreur inconnue'}`);
     },
   });
 
@@ -162,7 +187,7 @@ export function useRecruitment(candidateIdForTimeline?: string) {
 
   // EVALUATIONS MUTATIONS
   const saveEvaluationMutation = useMutation({
-    mutationFn: ({ evalData, options }: { evalData: Omit<CandidateEvaluation, 'id' | 'created_at'>; options?: { isReevaluation?: boolean; updateId?: string } }) =>
+    mutationFn: ({ evalData, options }: { evalData: Omit<CandidateEvaluation, 'id' | 'created_at'>; options?: { isReevaluation?: boolean; updateId?: string; promoteToShortlist?: boolean } }) =>
       recruitmentService.saveEvaluation(evalData, options),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.evaluations });
@@ -211,32 +236,58 @@ export function useRecruitment(candidateIdForTimeline?: string) {
   });
 
   return {
-    scouts: scoutsQuery.data || [],
-    isLoadingScouts: scoutsQuery.isLoading,
-    candidates: candidatesQuery.data || [],
-    isLoadingCandidates: candidatesQuery.isLoading,
-    tests: testsQuery.data || [],
-    isLoadingTests: testsQuery.isLoading,
-    evaluations: evaluationsQuery.data || [],
-    isLoadingEvaluations: evaluationsQuery.isLoading,
-    observations: observationsQuery.data || [],
-    isLoadingObservations: observationsQuery.isLoading,
-    timeline: timelineQuery.data || [],
-    isLoadingTimeline: timelineQuery.isLoading,
+    isPluginActive,
+    scouts: isPluginActive ? (scoutsQuery.data || []) : [],
+    isLoadingScouts: isPluginActive ? scoutsQuery.isLoading : false,
+    candidates: isPluginActive ? (candidatesQuery.data || []) : [],
+    candidatesQuery,
+    isLoadingCandidates: isPluginActive ? candidatesQuery.isLoading : false,
+    tests: isPluginActive ? (testsQuery.data || []) : [],
+    isLoadingTests: isPluginActive ? testsQuery.isLoading : false,
+    evaluations: isPluginActive ? (evaluationsQuery.data || []) : [],
+    isLoadingEvaluations: isPluginActive ? evaluationsQuery.isLoading : false,
+    observations: isPluginActive ? (observationsQuery.data || []) : [],
+    isLoadingObservations: isPluginActive ? observationsQuery.isLoading : false,
+    timeline: isPluginActive ? (timelineQuery.data || []) : [],
+    isLoadingTimeline: isPluginActive ? timelineQuery.isLoading : false,
 
     createScout: createScoutMutation.mutateAsync,
-    updateScout: updateScoutMutation.mutateAsync,
+    updateScout: (
+      arg1: string | { id: string; updates: Partial<Scout> },
+      arg2?: Partial<Scout>
+    ) => {
+      if (typeof arg1 === 'string') {
+        return updateScoutMutation.mutateAsync({ id: arg1, updates: arg2 || {} });
+      }
+      return updateScoutMutation.mutateAsync(arg1);
+    },
     deleteScout: deleteScoutMutation.mutateAsync,
 
     createCandidate: createCandidateMutation.mutateAsync,
-    updateCandidate: updateCandidateMutation.mutateAsync,
+    updateCandidate: (
+      arg1: string | { id: string; updates: Partial<TrialCandidate> },
+      arg2?: Partial<TrialCandidate>
+    ) => {
+      if (typeof arg1 === 'string') {
+        return updateCandidateMutation.mutateAsync({ id: arg1, updates: arg2 || {} });
+      }
+      return updateCandidateMutation.mutateAsync(arg1);
+    },
     updatePipelineStage: updatePipelineStageMutation.mutateAsync,
     deleteCandidate: deleteCandidateMutation.mutateAsync,
 
     createTest: createTestMutation.mutateAsync,
-    updateTest: updateTestMutation.mutateAsync,
+    updateTest: (
+      arg1: string | { id: string; updates: Partial<PlayerTest> },
+      arg2?: Partial<PlayerTest>
+    ) => {
+      if (typeof arg1 === 'string') {
+        return updateTestMutation.mutateAsync({ id: arg1, updates: arg2 || {} });
+      }
+      return updateTestMutation.mutateAsync(arg1);
+    },
     deleteTest: deleteTestMutation.mutateAsync,
-    saveEvaluation: (evalData: Omit<CandidateEvaluation, 'id' | 'created_at'>, options?: { isReevaluation?: boolean; updateId?: string }) =>
+    saveEvaluation: (evalData: Omit<CandidateEvaluation, 'id' | 'created_at'>, options?: { isReevaluation?: boolean; updateId?: string; promoteToShortlist?: boolean }) =>
       saveEvaluationMutation.mutateAsync({ evalData, options }),
     deleteEvaluation: (id: string) => deleteEvaluationMutation.mutateAsync(id),
     createObservation: createObservationMutation.mutateAsync,

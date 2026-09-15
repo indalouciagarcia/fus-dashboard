@@ -217,9 +217,10 @@ const StaffManagement: React.FC = () => {
                       <LayoutGrid className="w-4 h-4" />
                     </Button>
                   </div>
-                  <Button onClick={handleOpenAdd} className="gap-2 shadow-lg shadow-primary/20 h-11 px-6 font-bold uppercase tracking-widest text-xs transition-all active:scale-95">
+                  <Button onClick={handleOpenAdd} className="gap-2 shadow-lg shadow-primary/20 h-11 px-4 sm:px-6 font-bold uppercase tracking-widest text-xs transition-all active:scale-95">
                     <UserPlus className="w-4 h-4" />
-                    Recruter un Membre
+                    <span className="hidden sm:inline">Recruter un Membre</span>
+                    <span className="sm:hidden">Recruter</span>
                   </Button>
               </div>
             </div>
@@ -419,7 +420,7 @@ const StaffManagement: React.FC = () => {
                             </div>
                          </td>
                         <td className="px-8 py-3 text-right">
-                           <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                           <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                               <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(person)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
                                  <Edit2 className="w-4 h-4" />
                               </Button>

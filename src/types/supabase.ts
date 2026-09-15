@@ -13,7 +13,7 @@ export type BackupStatus      = 'pending' | 'running' | 'completed' | 'failed';
 export type BackupType        = 'full' | 'database_only' | 'storage_only';
 export type BackupDestination = 'local' | 'google_drive' | 'onedrive' | 'desktop';
 export type BlogPostStatus    = 'draft' | 'published';
-export type AgeCategory       = 'U7' | 'U9' | 'U11' | 'U13' | 'U14' | 'U15' | 'U16' | 'U17' | 'U18' | 'U19' | 'U21' | 'U23' | 'SENIOR' | 'PRO' | 'OTHER';
+export type AgeCategory       = 'U13' | 'U14' | 'U15' | 'U16' | 'U17' | 'U18' | 'U19' | 'U20' | 'U21' | 'U22' | 'U23' | 'OTHER';
 export type PreferredFoot     = 'left' | 'right' | 'both';
 export type MatchEventType    =
   | 'goal' | 'own_goal' | 'assist'

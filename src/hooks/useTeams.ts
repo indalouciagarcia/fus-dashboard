@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import type { Team } from '../services/teamService';
 import { AuditLogger } from '../services/auditLogger';
 
+const EMPTY_TEAMS: Team[] = [];
+
 export const useTeams = () => {
   const queryClient = useQueryClient();
 
@@ -82,7 +84,7 @@ export const useTeams = () => {
   });
 
   return {
-    teams: query.data || [],
+    teams: query.data || EMPTY_TEAMS,
     isLoading: query.isLoading,
     isError: query.isError,
     addTeam: createMutation.mutateAsync,

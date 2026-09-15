@@ -12,6 +12,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Skeleton } from '../../components/ui/skeleton';
 import PlayerMatchEvaluationModal from './components/PlayerMatchEvaluationModal';
+import { inferMatchFormat, getHorizontalFormationPositions, FORMATIONS_BY_FORMAT } from './tacticalFormations';
 import {
   Trophy,
   Target,
@@ -739,7 +740,7 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
                               )}
                            </div>
                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mt-1">
-                              {currentMatch.lineup?.formation || "Tactique non définie"} · Évaluations actives (cliquer sur un joueur)
+                              {currentMatch.lineup?.formation || "Tactique"} {currentMatch.opponent_formation ? `vs ${currentMatch.opponent_formation}` : ''} ({inferMatchFormat(currentMatch)}v{inferMatchFormat(currentMatch)}) · Évaluations actives (cliquer sur un joueur)
                            </p>
                         </div>
                      </div>
@@ -784,125 +785,129 @@ const MatchStatsView: React.FC<MatchStatsViewProps> = ({ matchId, match: initial
 
                      {/* PLAYER ICONS ON PITCH */}
                      <div className="absolute inset-0 z-20">
-                        {/* HOME TEAM (Left Side or Bottom Side depending on rotation, we use rectangular) */}
-                        {(currentMatch.lineup?.startingXI || []).map((pId: string, idx: number) => {
-                           const player = players.find(p => p.id === pId);
-                           if (!player) return null;
-                           
-                           // Formation-based positioning - HOME TEAM (Left half only: 5%-45%)
-                           // Formation-based positioning
-                           const fallbackPos = [
-                             { left: '8%', top: '50%' }, // GK
-                             { left: '18%', top: '15%' }, { left: '18%', top: '38%' }, { left: '18%', top: '62%' }, { left: '18%', top: '85%' }, // DF
-                             { left: '32%', top: '25%' }, { left: '30%', top: '50%' }, { left: '32%', top: '75%' }, // MF
-                             { left: '42%', top: '20%' }, { left: '45%', top: '50%' }, { left: '42%', top: '80%' }, // FW
-                           ][idx] || { left: `${8 + idx*3}%`, top: '50%' };
-
-                           // Match Events for this player
-                           const pEvents = events.filter(e => e.player_id === pId);
-                           const mpRecord = currentMatch.match_players?.find((mp: any) => mp.player_id === pId);
+                        {(() => {
+                           const matchFormat = inferMatchFormat(currentMatch);
+                           const homeFormation = currentMatch.lineup?.formation || currentMatch.formation || (FORMATIONS_BY_FORMAT[matchFormat]?.[0] || '4-3-3');
+                           const oppFormation = currentMatch.opponent_formation || (FORMATIONS_BY_FORMAT[matchFormat]?.[0] || '4-3-3');
+                           const homePositions = getHorizontalFormationPositions(homeFormation, matchFormat, 'home');
+                           const awayPositions = getHorizontalFormationPositions(oppFormation, matchFormat, 'away');
+                           const startingList = (currentMatch.lineup?.startingXI || []).slice(0, matchFormat);
+                           const oppLineupList = Array.isArray(currentMatch.opponent_lineup) ? currentMatch.opponent_lineup : [];
 
                            return (
-                              <div 
-                                 key={pId} 
-                                 className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer" 
-                                 style={fallbackPos}
-                                 onClick={() => {
-                                    setRatingModalPlayer(player);
-                                    setModalRating(mpRecord?.rating != null ? Number(mpRecord.rating) : 7);
-                                    setModalComment(mpRecord?.rating_comment || '');
-                                 }}
-                                 title={mpRecord?.rating != null ? `Note : ${mpRecord.rating}/10 (Cliquer pour modifier)` : `Cliquer pour évaluer ${player.full_name} (${isCurrentMatchFriendly ? 'Amical' : currentLeagueName})`}
-                              >
-                                 <div className="relative flex flex-col items-center">
-                                    {/* Event Badges Layer */}
-                                    <div className="absolute -top-8 flex gap-1 group-hover:scale-125 transition-transform">
-                                       {pEvents.map(e => (
-                                          <div key={e.id} className="relative flex items-center justify-center p-1 rounded-md bg-white shadow-lg border border-slate-200">
-                                             {e.type === 'goal' && <Target className="w-3 h-3 text-emerald-500" />}
-                                             {e.type === 'yellow_card' && <div className="w-1.5 h-2.5 bg-amber-400 rounded-sm" />}
-                                             {e.type === 'red_card' && <div className="w-1.5 h-2.5 bg-red-500 rounded-sm" />}
-                                             {e.type === 'substitution' && <RotateCw className="w-2.5 h-2.5 text-blue-500" />}
-                                             <span className="text-[7px] font-black ml-0.5">{e.minute}'</span>
-                                          </div>
-                                       ))}
-                                    </div>
+                              <>
+                                 {/* HOME TEAM (Left Side - 5% to 45%) */}
+                                 {startingList.map((pId: string, idx: number) => {
+                                    const player = players.find(p => p.id === pId);
+                                    if (!player) return null;
+                                    const pos = homePositions[idx] || { left: `${8 + idx * 4}%`, top: '50%' };
+                                    const pEvents = events.filter(e => e.player_id === pId);
+                                    const mpRecord = currentMatch.match_players?.find((mp: any) => mp.player_id === pId);
 
-                                    {/* Match Rating Badge (Top Left of Circle) */}
-                                    <div className="absolute -top-2.5 -left-2.5 z-20">
-                                       {mpRecord?.rating != null ? (
-                                          <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black text-[9px] shadow-lg border-2 border-white animate-in zoom-in">
-                                             ★ {mpRecord.rating}
-                                          </span>
-                                       ) : (
-                                          <span className="hidden group-hover:flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-[8px] shadow-lg border border-white">
-                                             +⭐ Noter
-                                          </span>
-                                       )}
-                                    </div>
+                                    return (
+                                       <div 
+                                          key={pId} 
+                                          className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer" 
+                                          style={{ left: pos.left, top: pos.top }}
+                                          onClick={() => {
+                                             setRatingModalPlayer(player);
+                                             setModalRating(mpRecord?.rating != null ? Number(mpRecord.rating) : 7);
+                                             setModalComment(mpRecord?.rating_comment || '');
+                                          }}
+                                          title={mpRecord?.rating != null ? `Note : ${mpRecord.rating}/10 (Cliquer pour modifier)` : `Cliquer pour évaluer ${player.full_name} (${isCurrentMatchFriendly ? 'Amical' : currentLeagueName})`}
+                                       >
+                                          <div className="relative flex flex-col items-center">
+                                             {/* Event Badges Layer */}
+                                             <div className="absolute -top-8 flex gap-1 group-hover:scale-125 transition-transform">
+                                                {pEvents.map(e => (
+                                                   <div key={e.id} className="relative flex items-center justify-center p-1 rounded-md bg-white shadow-lg border border-slate-200">
+                                                      {e.type === 'goal' && <Target className="w-3 h-3 text-emerald-500" />}
+                                                      {e.type === 'yellow_card' && <div className="w-1.5 h-2.5 bg-amber-400 rounded-sm" />}
+                                                      {e.type === 'red_card' && <div className="w-1.5 h-2.5 bg-red-500 rounded-sm" />}
+                                                      {e.type === 'substitution' && <RotateCw className="w-2.5 h-2.5 text-blue-500" />}
+                                                      <span className="text-[7px] font-black ml-0.5">{e.minute}'</span>
+                                                   </div>
+                                                ))}
+                                             </div>
 
-                                    {/* Player Circle */}
-                                    <div className={`w-10 h-10 md:w-14 md:h-14 rounded-full bg-white shadow-2xl flex items-center justify-center border-4 ${mpRecord?.rating != null ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-primary'} relative overflow-hidden group-hover:border-white group-hover:scale-110 transition-all duration-300`}>
-                                       {player.photo_url ? (
-                                          <img 
-                                             src={player.photo_url} 
-                                             alt={player.full_name} 
-                                             className="w-full h-full object-cover"
-                                          />
-                                       ) : (
-                                          <span className="text-slate-900 font-black text-xs md:text-base">{player.jersey_number || '?'}</span>
-                                       )}
-                                       {/* Small Overlay jersey number if photo exists */}
-                                       {player.photo_url && (
-                                          <div className="absolute bottom-0 right-0 bg-primary text-white text-[8px] font-black px-1 rounded-tl-md border-t border-l border-white/20">
-                                             #{player.jersey_number}
+                                             {/* Match Rating Badge (Top Left of Circle) */}
+                                             <div className="absolute -top-2.5 -left-2.5 z-20">
+                                                {mpRecord?.rating != null ? (
+                                                   <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black text-[9px] shadow-lg border-2 border-white animate-in zoom-in">
+                                                      ★ {mpRecord.rating}
+                                                   </span>
+                                                ) : (
+                                                   <span className="hidden group-hover:flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-black text-[8px] shadow-lg border border-white">
+                                                      +⭐ Noter
+                                                   </span>
+                                                )}
+                                             </div>
+
+                                             {/* Player Circle */}
+                                             <div className={`w-10 h-10 md:w-14 md:h-14 rounded-full bg-white shadow-2xl flex items-center justify-center border-4 ${mpRecord?.rating != null ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-primary'} relative overflow-hidden group-hover:border-white group-hover:scale-110 transition-all duration-300`}>
+                                                {player.photo_url ? (
+                                                   <img 
+                                                      src={player.photo_url} 
+                                                      alt={player.full_name} 
+                                                      className="w-full h-full object-cover"
+                                                   />
+                                                ) : (
+                                                   <span className="text-slate-900 font-black text-xs md:text-base">{player.jersey_number || '?'}</span>
+                                                )}
+                                                {/* Small Overlay jersey number if photo exists */}
+                                                {player.photo_url && (
+                                                   <div className="absolute bottom-0 right-0 bg-primary text-white text-[8px] font-black px-1 rounded-tl-md border-t border-l border-white/20">
+                                                      #{player.jersey_number}
+                                                   </div>
+                                                )}
+                                             </div>
+                                             <div className="mt-2 bg-slate-950/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 whitespace-nowrap group-hover:bg-primary transition-colors">
+                                                <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-white">{player.full_name.split(' ').pop()}</span>
+                                             </div>
                                           </div>
-                                       )}
-                                    </div>
-                                    <div className="mt-2 bg-slate-950/80 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 whitespace-nowrap group-hover:bg-primary transition-colors">
-                                       <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-white">{player.full_name.split(' ').pop()}</span>
-                                    </div>
-                                 </div>
-                              </div>
+                                       </div>
+                                    );
+                                 })}
+
+                                 {/* OPPONENT TEAM (Right Side - 5% to 45% from right) */}
+                                 {[...Array(matchFormat)].map((_, idx) => {
+                                    const pos = awayPositions[idx] || { right: `${8 + idx * 4}%`, top: '50%' };
+                                    const rawOpp = oppLineupList[idx];
+                                    const oppPlayerObj = rawOpp ? (players.find(p => p.id === rawOpp || (typeof rawOpp === 'object' && p.id === (rawOpp.id || rawOpp.player_id))) || null) : null;
+                                    const oppName = oppPlayerObj
+                                       ? (oppPlayerObj.full_name.split(' ').pop() || oppPlayerObj.full_name)
+                                       : (typeof rawOpp === 'object' ? (rawOpp.full_name || rawOpp.name) : (rawOpp && isNaN(Number(rawOpp)) ? String(rawOpp) : `ADV N°${idx + 1}`));
+                                    const oppJersey = oppPlayerObj?.jersey_number ?? (typeof rawOpp === 'object' ? (rawOpp.jersey_number || rawOpp.number) : (rawOpp && !isNaN(Number(rawOpp)) ? Number(rawOpp) : (idx + 1)));
+                                    const oppRef = oppPlayerObj ? oppPlayerObj.id : (typeof rawOpp === 'object' && rawOpp?.id ? rawOpp.id : `OPPONENT-${idx + 1}`);
+                                    const oppEvents = events.filter(e => e.extra?.opponent_ref === oppRef || e.player_id === oppRef || (e.extra?.opponent_ref && e.extra.opponent_ref.split('-')[1] === (idx + 1).toString()));
+
+                                    return (
+                                       <div key={idx} className="absolute translate-x-1/2 -translate-y-1/2 group" style={{ right: pos.right, top: pos.top }}>
+                                          <div className="relative flex flex-col items-center">
+                                             {/* Event Badges Layer */}
+                                             <div className="absolute -top-8 flex gap-1">
+                                                {oppEvents.map(e => (
+                                                   <div key={e.id} className="relative flex items-center justify-center p-1 rounded-md bg-white shadow-lg border border-slate-200">
+                                                      {e.type === 'goal' && <Target className="w-3 h-3 text-red-500" />}
+                                                      {e.type === 'yellow_card' && <div className="w-1.5 h-2.5 bg-amber-400 rounded-sm" />}
+                                                      {e.type === 'red_card' && <div className="w-1.5 h-2.5 bg-red-500 rounded-sm" />}
+                                                      {e.type === 'substitution' && <RotateCw className="w-2.5 h-2.5 text-blue-500" />}
+                                                      <span className="text-[7px] font-black ml-0.5">{e.minute}'</span>
+                                                   </div>
+                                                ))}
+                                             </div>
+
+                                             <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-900 shadow-xl flex items-center justify-center border-4 border-slate-800 relative group-hover:scale-110 transition-all">
+                                                <span className="text-white font-black text-xs md:text-sm">{oppJersey}</span>
+                                             </div>
+                                             <div className="mt-2 text-white/40 text-[7px] font-bold uppercase tracking-widest whitespace-nowrap">{oppName}</div>
+                                          </div>
+                                       </div>
+                                    );
+                                 })}
+                              </>
                            );
-                        })}
-
-                        {/* OPPONENT TEAM (Right Side) - Right half only: 5%-45% from right = 55%-95% from left */}
-                        {[...Array(11)].map((_, idx) => {
-                           const fallbackPos = [
-                             { right: '8%', top: '50%' }, // GK
-                             { right: '18%', top: '15%' }, { right: '18%', top: '38%' }, { right: '18%', top: '62%' }, { right: '18%', top: '85%' }, // DF
-                             { right: '32%', top: '25%' }, { right: '30%', top: '50%' }, { right: '32%', top: '75%' }, // MF
-                             { right: '42%', top: '20%' }, { right: '45%', top: '50%' }, { right: '42%', top: '80%' }, // FW (max 45%)
-                           ][idx];
-
-                           const oppRef = `OPPONENT-${idx + 1}`;
-                           const oppEvents = events.filter(e => e.extra?.opponent_ref === oppRef || (e.extra?.opponent_ref && e.extra.opponent_ref.split('-')[1] === (idx+1).toString()));
-
-                           return (
-                              <div key={idx} className="absolute translate-x-1/2 -translate-y-1/2 group" style={fallbackPos}>
-                                 <div className="relative flex flex-col items-center">
-                                    {/* Event Badges Layer */}
-                                    <div className="absolute -top-8 flex gap-1">
-                                       {oppEvents.map(e => (
-                                          <div key={e.id} className="relative flex items-center justify-center p-1 rounded-md bg-white shadow-lg border border-slate-200">
-                                             {e.type === 'goal' && <Target className="w-3 h-3 text-red-500" />}
-                                             {e.type === 'yellow_card' && <div className="w-1.5 h-2.5 bg-amber-400 rounded-sm" />}
-                                             {e.type === 'red_card' && <div className="w-1.5 h-2.5 bg-red-500 rounded-sm" />}
-                                             {e.type === 'substitution' && <RotateCw className="w-2.5 h-2.5 text-blue-500" />}
-                                             <span className="text-[7px] font-black ml-0.5">{e.minute}'</span>
-                                          </div>
-                                       ))}
-                                    </div>
-
-                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-900 shadow-xl flex items-center justify-center border-4 border-slate-800 relative group-hover:scale-110 transition-all">
-                                       <span className="text-white font-black text-xs md:text-sm">{idx + 1}</span>
-                                    </div>
-                                    <div className="mt-2 text-white/40 text-[7px] font-bold uppercase tracking-widest whitespace-nowrap">ADV N°{idx + 1}</div>
-                                 </div>
-                              </div>
-                           );
-                        })}
+                        })()}
                      </div>
                   </div>
 

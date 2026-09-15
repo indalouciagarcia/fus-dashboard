@@ -40,8 +40,12 @@ import UserManagement from './features/user-management/UserManagement';
 import ArbitresPage from './features/people-management/ArbitresPage';
 import AuditLogsPage from './features/audit-logs/AuditLogsPage';
 import RecruitmentPage from './features/recruitment/RecruitmentPage';
+import RecruitmentV2Page from './features/recruitment_v2/RecruitmentV2Page';
 import TrainingsPage from './features/trainings/TrainingsPage';
 import OfficialShortlistPage from './features/match-management/OfficialShortlistPage';
+import PluginsPage from './features/plugins/PluginsPage';
+import PluginDisabledView from './features/plugins/PluginDisabledView';
+import { PluginsProvider, usePlugins } from './context/PluginsContext';
 
 const pageTitles: Record<string, string> = {
   '/': 'Tableau de Bord',
@@ -56,8 +60,9 @@ const pageTitles: Record<string, string> = {
   '/arbitres': 'Rubrique Arbitres',
   '/trainings': 'Gestion des Entraînements',
   '/trainings/*': 'Gestion des Entraînements',
-  '/recruitment': 'Cellule Détection & Recrutement',
-  '/recruitment/*': 'Cellule Détection & Recrutement',
+  '/recruitment': 'Recrutement & Détection v1',
+  '/recruitment/*': 'Recrutement & Détection v1',
+  '/plugins': 'Gestion des Plugins & Extensions',
   '/leagues': 'Gestion des Compétitions',
   '/opponents': 'Clubs Adversaires',
   '/stadiums': 'Gestion des Stades',
@@ -77,6 +82,7 @@ const AppContent: React.FC = () => {
   const currentTitle = pageTitles[location.pathname] || 'Tableau de Bord';
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { isPluginActive } = usePlugins();
 
   return (
     <div className="min-h-screen bg-slate-50/50">
@@ -92,8 +98,8 @@ const AppContent: React.FC = () => {
         sidebarCollapsed={sidebarCollapsed}
       />
 
-      <main className={cn("pt-20 transition-all duration-300 md:pl-20", sidebarCollapsed ? "lg:pl-20" : "lg:pl-72")}>
-        <div className="p-4 sm:p-6 md:p-8 lg:p-8 xl:p-10 max-w-[1750px] mx-auto">
+      <main className={cn("pt-20 transition-all duration-300 md:pl-20 w-full min-w-0 overflow-x-hidden", sidebarCollapsed ? "lg:pl-20" : "lg:pl-72")}>
+        <div className="p-3 sm:p-5 md:p-8 xl:p-10 max-w-[1750px] mx-auto w-full min-w-0">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
@@ -124,11 +130,34 @@ const AppContent: React.FC = () => {
                   </ProtectedRoute>
                 } />
                 <Route path="/arbitres"           element={<ArbitresPage />} />
-                <Route path="/official-shortlist" element={<OfficialShortlistPage />} />
+                <Route path="/official-shortlist" element={
+                  isPluginActive('recruitment_v1')
+                    ? <OfficialShortlistPage />
+                    : <PluginDisabledView pluginId="recruitment_v1" pluginName="Recrutement & Détection v1" />
+                } />
                 <Route path="/trainings"          element={<TrainingsPage />} />
                 <Route path="/trainings/*"   element={<TrainingsPage />} />
-                <Route path="/recruitment"   element={<RecruitmentPage />} />
-                <Route path="/recruitment/*" element={<RecruitmentPage />} />
+                <Route path="/recruitment"   element={
+                  isPluginActive('recruitment_v1') 
+                    ? <RecruitmentPage /> 
+                    : <PluginDisabledView pluginId="recruitment_v1" pluginName="Recrutement & Détection v1" />
+                } />
+                <Route path="/recruitment/*" element={
+                  isPluginActive('recruitment_v1') 
+                    ? <RecruitmentPage /> 
+                    : <PluginDisabledView pluginId="recruitment_v1" pluginName="Recrutement & Détection v1" />
+                } />
+                <Route path="/recruitment-v2" element={
+                  isPluginActive('recruitment_v2')
+                    ? <RecruitmentV2Page />
+                    : <PluginDisabledView pluginId="recruitment_v2" pluginName="Recrutement & Détection V2" />
+                } />
+                <Route path="/recruitment-v2/*" element={
+                  isPluginActive('recruitment_v2')
+                    ? <RecruitmentV2Page />
+                    : <PluginDisabledView pluginId="recruitment_v2" pluginName="Recrutement & Détection V2" />
+                } />
+                <Route path="/plugins" element={<PluginsPage />} />
                 <Route path="/leagues"       element={
                   <ProtectedRoute requiredPermission="manage_teams">
                     <LeagueManagement />
@@ -207,7 +236,9 @@ function App() {
               <ProtectedRoute>
                 <ClubProvider>
                   <MatchReminderProvider>
-                    <AppContent />
+                    <PluginsProvider>
+                      <AppContent />
+                    </PluginsProvider>
                   </MatchReminderProvider>
                 </ClubProvider>
               </ProtectedRoute>

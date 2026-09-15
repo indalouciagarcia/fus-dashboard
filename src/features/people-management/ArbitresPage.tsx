@@ -76,24 +76,24 @@ export const ArbitresPage: React.FC = () => {
   return (
     <div className="space-y-8 pb-20 overflow-visible">
       {/* Header Row */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
         <div>
-          <h2 className="text-3xl font-black tracking-tight text-foreground uppercase italic flex items-center gap-2">
-            Rubrique Arbitres <Sparkles className="w-6 h-6 text-primary" />
+          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground uppercase italic flex items-center gap-2">
+            Rubrique Arbitres <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
           </h2>
-          <p className="text-muted-foreground text-sm font-medium">
+          <p className="text-muted-foreground text-xs sm:text-sm font-medium">
             Gestion du corps d'arbitrage, fiches officielles, licences et qualifications
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
           {/* View Toggle */}
           <div className="flex bg-secondary/30 p-1 rounded-2xl border border-border">
             <Button
               variant={displayMode === 'list' ? 'default' : 'ghost'}
               size="icon"
               onClick={() => setDisplayMode('list')}
-              className="w-10 h-10 rounded-xl"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl"
             >
               <ListIcon className="w-4 h-4" />
             </Button>
@@ -101,7 +101,7 @@ export const ArbitresPage: React.FC = () => {
               variant={displayMode === 'grid' ? 'default' : 'ghost'}
               size="icon"
               onClick={() => setDisplayMode('grid')}
-              className="w-10 h-10 rounded-xl"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl"
             >
               <LayoutGrid className="w-4 h-4" />
             </Button>
@@ -111,7 +111,7 @@ export const ArbitresPage: React.FC = () => {
             onClick={refresh}
             variant="outline"
             size="icon"
-            className="w-11 h-11 rounded-xl shrink-0"
+            className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl shrink-0"
             title="Rafraîchir"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-primary' : ''}`} />
@@ -119,10 +119,11 @@ export const ArbitresPage: React.FC = () => {
 
           <Button
             onClick={handleOpenAdd}
-            className="gap-2 shadow-lg shadow-primary/20 h-11 px-6 font-bold uppercase tracking-widest text-xs transition-all active:scale-95 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl"
+            className="gap-2 shadow-lg shadow-primary/20 h-9 sm:h-11 px-3.5 sm:px-6 font-bold uppercase tracking-widest text-xs transition-all active:scale-95 bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl"
           >
             <UserPlus className="w-4 h-4" />
-            Ajouter un Officiel
+            <span className="hidden sm:inline">Ajouter un Officiel</span>
+            <span className="sm:hidden">Ajouter</span>
           </Button>
         </div>
       </div>

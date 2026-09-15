@@ -238,14 +238,14 @@ const OpponentClubs: React.FC = () => {
                 />
               </div>
               
-              <div className="flex items-center gap-2 w-full lg:w-auto">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto">
                 <select 
                   value={continentFilter}
                   onChange={(e) => {
                     setContinentFilter(e.target.value);
                     setCountryFilter('');
                   }}
-                  className="h-12 px-4 rounded-xl bg-secondary/30 border-transparent font-black text-[10px] uppercase tracking-widest outline-none focus:ring-2 ring-primary/20 appearance-none cursor-pointer min-w-[140px]"
+                  className="h-12 px-4 rounded-xl bg-secondary/30 border-transparent font-black text-[10px] uppercase tracking-widest outline-none focus:ring-2 ring-primary/20 appearance-none cursor-pointer flex-1 sm:flex-initial min-w-[130px]"
                 >
                   <option value="">Tous les Continents</option>
                   {Object.keys(GEOGRAPHY_DATA).map(c => <option key={c} value={c}>{c}</option>)}
@@ -255,13 +255,13 @@ const OpponentClubs: React.FC = () => {
                   disabled={!continentFilter}
                   value={countryFilter}
                   onChange={(e) => setCountryFilter(e.target.value)}
-                  className="h-12 px-4 rounded-xl bg-secondary/30 border-transparent font-black text-[10px] uppercase tracking-widest outline-none focus:ring-2 ring-primary/20 appearance-none cursor-pointer min-w-[140px] disabled:opacity-30"
+                  className="h-12 px-4 rounded-xl bg-secondary/30 border-transparent font-black text-[10px] uppercase tracking-widest outline-none focus:ring-2 ring-primary/20 appearance-none cursor-pointer flex-1 sm:flex-initial min-w-[130px] disabled:opacity-30"
                 >
                   <option value="">Tous les Pays</option>
                   {continentFilter && Object.keys(GEOGRAPHY_DATA[continentFilter]).map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
 
-                <Badge variant="secondary" className="h-12 px-6 text-[10px] font-black uppercase tracking-widest bg-secondary/50 rounded-xl whitespace-nowrap">
+                <Badge variant="secondary" className="h-12 px-4 sm:px-6 text-[10px] font-black uppercase tracking-widest bg-secondary/50 rounded-xl whitespace-nowrap">
                   Clubs: {filteredClubs.length}
                 </Badge>
               </div>
@@ -298,35 +298,38 @@ const OpponentClubs: React.FC = () => {
                               <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-primary/10 hover:text-primary transition-all" onClick={() => handleOpenForm(club)}>
                                 <Edit2 className="w-4 h-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-destructive/10 hover:text-destructive transition-all" onClick={() => deleteOpponent(club.id)}>
+                              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all" onClick={() => deleteOpponent(club.id)}>
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
                           </div>
 
-                          <div className="space-y-4">
-                            <div>
-                              <h3 className="font-black text-lg tracking-tight uppercase group-hover:text-primary transition-colors truncate">{club.name}</h3>
-                              <div className="flex items-center gap-4 mt-1">
-                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                                  <MapPin className="w-3.5 h-3.5 text-primary/50" /> {club.city}
-                                </p>
-                              </div>
+                          <div className="space-y-1 mb-6">
+                            <div className="flex items-center gap-2">
+                               <h3 className="font-black text-lg tracking-tight uppercase italic">{club.name}</h3>
+                               {club.short_name && (
+                                 <Badge variant="outline" className="text-[10px] font-black border-secondary text-muted-foreground uppercase">{club.short_name}</Badge>
+                               )}
                             </div>
+                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-primary" />
+                              {club.city}, {club.country}
+                            </p>
+                          </div>
 
+                          <div className="pt-4 border-t border-secondary/50 flex items-center justify-between">
                             <Button 
-                              onClick={() => setSelectedSquadClub(club)} 
-                              variant="outline" 
-                              className="w-full h-10 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary hover:text-white font-black text-[10px] uppercase tracking-widest gap-2 transition-all"
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setSelectedSquadClub(club)}
+                              className="h-10 px-4 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary hover:text-white font-black text-[10px] uppercase gap-2 transition-all group/btn"
                             >
-                              <Users className="w-3.5 h-3.5" />
-                              Gérer l'Effectif
+                              <Users className="w-4 h-4 text-primary group-hover/btn:text-white transition-colors" />
+                              Effectif
                             </Button>
-
-                            <div className="pt-4 border-t border-secondary/50 flex items-center justify-between">
-                               <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest bg-secondary/30 px-2 py-0.5 rounded">ID: #{club.id.substr(0, 6)}</span>
-                               <Badge variant="outline" className="text-[9px] font-black text-primary border-primary/20 uppercase tracking-widest italic">RIVAL</Badge>
-                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 italic">
+                              Rabat & Proche
+                            </span>
                           </div>
                         </CardContent>
                       </Card>
@@ -336,53 +339,55 @@ const OpponentClubs: React.FC = () => {
               </div>
             ) : (
               <div className="bg-white border rounded-[2rem] overflow-hidden shadow-sm">
-                <table className="w-full">
-                  <thead className="bg-secondary/10 border-b">
-                    <tr>
-                      <th className="text-left px-8 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Club</th>
-                      <th className="text-left py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localisation</th>
-                      <th className="text-left py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Secteur</th>
-                      <th className="text-right px-8 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-secondary/30">
-                    {paginatedClubs.map(club => (
-                      <tr key={club.id} className="group hover:bg-secondary/5 transition-colors">
-                        <td className="px-8 py-3">
-                           <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-xl bg-secondary/30 overflow-hidden border-2 border-white shadow-md">
-                                 <img src={(club.logo_url && club.logo_url !== 'null') ? club.logo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(club.name)}&background=random&color=fff&size=200`} className="w-full h-full object-contain p-1" />
-                              </div>
-                              <span className="font-black text-sm uppercase italic tracking-tighter">{club.name}</span>
-                           </div>
-                        </td>
-                        <td className="py-3 text-[10px] font-black uppercase text-muted-foreground">{club.city}, {club.country}</td>
-                        <td className="py-3">
-                           <Badge variant="outline" className="text-[9px] font-black italic border-primary/20 text-primary uppercase">Opposant</Badge>
-                        </td>
-                        <td className="px-8 py-3 text-right">
-                           <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => setSelectedSquadClub(club)}
-                                className="h-9 px-3 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary hover:text-white font-black text-[10px] uppercase gap-1.5 transition-all"
-                              >
-                                <Users className="w-3.5 h-3.5" />
-                                Effectif
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleOpenForm(club)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
-                                 <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => deleteOpponent(club.id)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
-                                 <Trash2 className="w-4 h-4" />
-                              </Button>
-                           </div>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[580px]">
+                    <thead className="bg-secondary/10 border-b">
+                      <tr>
+                        <th className="text-left px-8 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Club</th>
+                        <th className="text-left py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localisation</th>
+                        <th className="text-left py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Secteur</th>
+                        <th className="text-right px-8 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-secondary/30">
+                      {paginatedClubs.map(club => (
+                        <tr key={club.id} className="group hover:bg-secondary/5 transition-colors">
+                          <td className="px-8 py-3">
+                             <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-secondary/30 overflow-hidden border-2 border-white shadow-md">
+                                   <img src={(club.logo_url && club.logo_url !== 'null') ? club.logo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(club.name)}&background=random&color=fff&size=200`} className="w-full h-full object-contain p-1" />
+                                </div>
+                                <span className="font-black text-sm uppercase italic tracking-tighter">{club.name}</span>
+                             </div>
+                          </td>
+                          <td className="py-3 text-[10px] font-black uppercase text-muted-foreground">{club.city}, {club.country}</td>
+                          <td className="py-3">
+                             <Badge variant="outline" className="text-[9px] font-black italic border-primary/20 text-primary uppercase">Opposant</Badge>
+                          </td>
+                          <td className="px-8 py-3 text-right">
+                             <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                               <Button 
+                                 variant="outline" 
+                                 size="sm" 
+                                 onClick={() => setSelectedSquadClub(club)}
+                                 className="h-9 px-3 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary hover:text-white font-black text-[10px] uppercase gap-1.5 transition-all"
+                               >
+                                 <Users className="w-3.5 h-3.5" />
+                                 Effectif
+                               </Button>
+                               <Button variant="ghost" size="icon" onClick={() => handleOpenForm(club)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
+                                  <Edit2 className="w-4 h-4" />
+                               </Button>
+                               <Button variant="ghost" size="icon" onClick={() => deleteOpponent(club.id)} className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
+                                  <Trash2 className="w-4 h-4" />
+                               </Button>
+                             </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 

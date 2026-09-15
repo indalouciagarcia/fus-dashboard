@@ -54,24 +54,24 @@ export const TopScorerHeroCard: React.FC<TopScorerHeroCardProps> = ({
     : `https://ui-avatars.com/api/?name=${encodeURIComponent(topScorer.full_name)}&background=e03d3d&color=fff&size=300`;
 
   return (
-    <Card className="relative overflow-hidden rounded-3xl border-none shadow-xl bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 text-white p-6 sm:p-7 flex flex-col justify-between group">
+    <Card className="relative overflow-hidden rounded-2xl sm:rounded-3xl border-none shadow-xl bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 text-white p-4 sm:p-6 sm:p-7 flex flex-col justify-between group">
       {/* Background glow & accents */}
       <div className="absolute top-0 right-0 w-72 h-72 bg-rose-600/15 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20 group-hover:bg-rose-600/25 transition-all duration-700" />
       <div className="absolute bottom-0 left-0 w-60 h-60 bg-amber-500/10 rounded-full blur-3xl pointer-events-none -ml-20 -mb-20" />
 
       {/* Top Header Badge */}
-      <div className="relative z-10 flex items-center justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center gap-1.5 text-xs font-black uppercase tracking-wider">
-            <Crown className="w-4 h-4 text-amber-400 fill-amber-400" />
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className="px-2.5 sm:px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center gap-1.5 text-[11px] sm:text-xs font-black uppercase tracking-wider">
+            <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 fill-amber-400" />
             <span>Soulier d'Or • N°1 Buteur</span>
           </div>
-          <span className="text-[11px] text-slate-400 font-medium">
+          <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
             {categoryLabel} • {periodLabel}
           </span>
         </div>
 
-        <Badge variant="outline" className="bg-white/10 text-white border-white/20 text-[10px] font-black uppercase tracking-widest px-2.5 py-1">
+        <Badge variant="outline" className="bg-white/10 text-white border-white/20 text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 py-0.5 sm:px-2.5 sm:py-1">
           {topScorer.position || 'FW'} • #{topScorer.jersey_number ?? 9}
         </Badge>
       </div>

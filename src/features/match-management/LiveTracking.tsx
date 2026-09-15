@@ -6,6 +6,7 @@ import { useTeams } from '../../hooks/useTeams';
 import { useMatchEvents } from '../../hooks/useMatchEvents';
 import { useOpponentPlayers } from '../../hooks/useOpponentPlayers';
 import { usePermissions } from '../../context/PermissionsContext';
+import { inferMatchFormat } from './tacticalFormations';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { 
@@ -1064,31 +1065,47 @@ const LiveTracking: React.FC<{ matchId: string; onMatchFinished?: () => Promise<
                             )}
                          </select>
                       ) : (
-                         <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                            {opponentPlayers.length > 0 ? (
-                               opponentPlayers.map(op => (
-                                  <button 
-                                    key={op.id} 
-                                    onClick={() => setSelectedPlayerId(op.id)}
-                                    className={`h-12 rounded-xl flex items-center justify-center text-[10px] font-black uppercase transition-all border-2 px-1 text-center leading-tight ${selectedPlayerId === op.id ? 'bg-primary border-primary text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
-                                     #{op.jersey_number ?? '?'} {op.full_name.split(' ').pop()}
-                                  </button>
-                               ))
-                            ) : (
-                               [...Array(99)].map((_, i) => {
-                                  const num = i + 1;
-                                  const ref = `OPPONENT-${num}`;
-                                  return (
-                                     <button 
-                                       key={ref} 
-                                       onClick={() => setSelectedPlayerId(ref)}
-                                       className={`h-12 rounded-xl flex items-center justify-center text-xs font-black transition-all border-2 ${selectedPlayerId === ref ? 'bg-primary border-primary text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
-                                        {num}
-                                     </button>
-                                  );
-                               })
-                            )}
-                         </div>
+                          <div className="space-y-3">
+                             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                {opponentPlayers.length > 0 ? (
+                                   opponentPlayers.map(op => (
+                                      <button 
+                                        key={op.id} 
+                                        onClick={() => setSelectedPlayerId(op.id)}
+                                        className={`h-12 rounded-xl flex items-center justify-center text-[10px] font-black uppercase transition-all border-2 px-1 text-center leading-tight ${selectedPlayerId === op.id ? 'bg-primary border-primary text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
+                                         #{op.jersey_number ?? '?'} {op.full_name.split(' ').pop()}
+                                      </button>
+                                   ))
+                                ) : (() => {
+                                   const matchFmt = inferMatchFormat(match);
+                                   const oppLineup = Array.isArray(match.opponent_lineup) ? match.opponent_lineup : [];
+                                   const slotsCount = Math.max(matchFmt, oppLineup.length || 0);
+
+                                   return (
+                                      <>
+                                         {[...Array(slotsCount)].map((_, i) => {
+                                            const num = i + 1;
+                                            const rawOpp = oppLineup[i];
+                                            const oppPlayerObj = rawOpp ? (players.find(p => p.id === rawOpp || (typeof rawOpp === 'object' && p.id === (rawOpp.id || rawOpp.player_id))) || null) : null;
+                                            const displayLabel = oppPlayerObj
+                                               ? `#${oppPlayerObj.jersey_number ?? num} ${oppPlayerObj.full_name.split(' ').pop()}`
+                                               : (typeof rawOpp === 'object' ? (rawOpp.full_name || rawOpp.name || `#${num}`) : (rawOpp && isNaN(Number(rawOpp)) ? String(rawOpp) : `ADV #${num}`));
+                                            const ref = oppPlayerObj ? oppPlayerObj.id : (typeof rawOpp === 'object' && rawOpp?.id ? rawOpp.id : `OPPONENT-${num}`);
+                                            
+                                            return (
+                                               <button 
+                                                 key={ref} 
+                                                 onClick={() => setSelectedPlayerId(ref)}
+                                                 className={`h-12 rounded-xl flex flex-col items-center justify-center text-[10px] font-black transition-all border-2 px-1 text-center ${selectedPlayerId === ref ? 'bg-primary border-primary text-white shadow-lg' : 'bg-white border-slate-200 text-slate-700 hover:border-primary/40'}`}>
+                                                  <span className="leading-tight truncate max-w-full">{displayLabel}</span>
+                                               </button>
+                                            );
+                                         })}
+                                      </>
+                                   );
+                                })()}
+                             </div>
+                          </div>
                       )}
                    </div>
                 )}

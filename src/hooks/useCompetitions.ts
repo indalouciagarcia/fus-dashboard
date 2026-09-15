@@ -3,6 +3,9 @@ import { competitionService } from '../services/competitionService';
 import { toast } from 'sonner';
 import type { League, Stadium } from '../types';
 
+const EMPTY_LEAGUES: League[] = [];
+const EMPTY_STADIUMS: Stadium[] = [];
+
 export const useCompetitions = () => {
   const queryClient = useQueryClient();
 
@@ -85,8 +88,8 @@ export const useCompetitions = () => {
   });
 
   return {
-    leagues: leaguesQuery.data || [],
-    stadiums: stadiumsQuery.data || [],
+    leagues: leaguesQuery.data || EMPTY_LEAGUES,
+    stadiums: stadiumsQuery.data || EMPTY_STADIUMS,
     isLoading: leaguesQuery.isLoading || stadiumsQuery.isLoading,
     addLeague: addLeagueMutation.mutateAsync,
     updateLeague: updateLeagueMutation.mutateAsync,

@@ -5,11 +5,12 @@ import {
   FileText, Settings, LogOut, Activity,
   Swords, Building2, Target, Calendar, LayoutTemplate,
   X, ChevronLeft, ChevronDown, Sparkles, UserPlus, Compass,
-  Dumbbell, Award, Zap
+  Dumbbell, Award, Zap, Menu, Blocks
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { usePermissions } from '../context/PermissionsContext';
 import { useClubData } from '../hooks/useClubData';
+import { usePlugins } from '../context/PluginsContext';
 import defaultClubLogo from '../assets/fus-logo.png';
 import { AuditLogger } from '../services/auditLogger';
 
@@ -25,6 +26,7 @@ interface SubNavItem {
 interface NavCategory {
   id: string;
   title: string;
+  badge?: string;
   icon: React.ElementType;
   items: SubNavItem[];
 }
@@ -44,6 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { logout, can } = usePermissions();
   const { mainClub } = useClubData();
+  const { isPluginActive } = usePlugins();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
@@ -60,7 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       icon: Trophy,
       items: [
         { path: '/matches',            label: 'Calendrier',            icon: Calendar },
-        { path: '/official-shortlist', label: 'Shortlist Officielle',  icon: Trophy },
+        ...(isPluginActive('recruitment_v1') ? [{ path: '/official-shortlist', label: 'Shortlist Officielle',  icon: Trophy }] : []),
         { path: '/arbitres',           label: 'Arbitres',              icon: UserCheck },
         ...(can('manage_teams') ? [
           { path: '/leagues',   label: 'Compétitions', icon: Trophy },
@@ -98,26 +101,45 @@ const Sidebar: React.FC<SidebarProps> = ({
         ...(can('manage_roles') ? [{ path: '/staff', label: 'Staff Technique', icon: UserCog }] : []),
       ],
     },
-    {
-      id: 'recruitment',
-      title: 'Recrutement & Détection',
-      icon: Compass,
-      items: [
-        { path: '/recruitment?tab=scouts',       label: 'Cellule Scouts',          icon: UserCheck },
-        { path: '/recruitment?tab=kanban',       label: 'Pipeline Kanban',         icon: LayoutTemplate },
-        { path: '/recruitment?tab=candidates',   label: 'Fiches & Tuteurs',        icon: UserPlus },
-        { path: '/recruitment?tab=shortlist',    label: 'Shortlist & Onze Idéal',  icon: Trophy },
-        { path: '/recruitment?tab=observations', label: 'Observations Matchs',     icon: FileText },
-        { path: '/recruitment?tab=sessions',     label: 'Planning des Tests',      icon: Calendar },
-        { path: '/recruitment?tab=evaluations',  label: 'Évaluations (1–10)',      icon: Sparkles },
-        { path: '/recruitment?tab=compare',      label: 'Comparateur Radar',       icon: Swords },
-      ],
-    },
+    ...(isPluginActive('recruitment_v1') ? [
+      {
+        id: 'recruitment',
+        title: 'Recrutement & Détection v1',
+        badge: 'v1.0',
+        icon: Compass,
+        items: [
+          { path: '/recruitment?tab=scouts',       label: 'Cellule Scouts',          icon: UserCheck },
+          { path: '/recruitment?tab=kanban',       label: 'Pipeline Kanban',         icon: LayoutTemplate },
+          { path: '/recruitment?tab=candidates',   label: 'Fiches & Tuteurs',        icon: UserPlus },
+          { path: '/recruitment?tab=shortlist',    label: 'Shortlist & Onze Idéal',  icon: Trophy },
+          { path: '/recruitment?tab=observations', label: 'Observations Matchs',     icon: FileText },
+          { path: '/recruitment?tab=sessions',     label: 'Planning des Tests',      icon: Calendar },
+          { path: '/recruitment?tab=evaluations',  label: 'Évaluations (1–10)',      icon: Sparkles },
+          { path: '/recruitment?tab=compare',      label: 'Comparateur Radar',       icon: Swords },
+        ],
+      }
+    ] : []),
+    ...(isPluginActive('recruitment_v2') ? [
+      {
+        id: 'recruitment_v2',
+        title: 'Recrutement & Détection V2',
+        badge: 'v2.0',
+        icon: Compass,
+        items: [
+          { path: '/recruitment-v2?tab=scouts',       label: 'Personnel',               icon: UserCheck },
+          { path: '/recruitment-v2?tab=candidates',   label: 'Database',                icon: UserPlus },
+          { path: '/recruitment-v2?tab=shortlist',    label: 'Shadow list',             icon: Trophy },
+          { path: '/recruitment-v2?tab=sessions',     label: 'Planning des Tests',      icon: Calendar },
+          { path: '/recruitment-v2?tab=compare',      label: 'Comparateur Radar',       icon: Swords },
+        ],
+      }
+    ] : []),
     {
       id: 'system',
       title: 'Système & Contenu',
       icon: LayoutTemplate,
       items: [
+        { path: '/plugins',  label: 'Plugins',       icon: Blocks },
         { path: '/blog',     label: 'Blog',          icon: FileText },
         { path: '/store',    label: 'Store',         icon: LayoutTemplate },
         ...(can('manage_users') ? [{ path: '/users', label: 'Utilisateurs', icon: Shield }] : []),
@@ -297,7 +319,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                   !isCollapsedMode && "group-hover:scale-110"
                 )} />
                 {!isCollapsedMode && (
-                  <span className="truncate text-xs font-black">{category.title}</span>
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="truncate text-xs font-black">{category.title}</span>
+                    {category.badge && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase tracking-tight">
+                        {category.badge}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -440,9 +469,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       {isMobile && (
         <button
           onClick={onMobileClose}
-          className="absolute top-4 right-4 p-2 rounded-lg hover:bg-secondary transition-colors lg:hidden"
+          className="absolute top-4 right-4 p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors lg:hidden active:scale-95 z-20"
+          aria-label="Fermer le menu"
         >
-          <X className="w-5 h-5 text-muted-foreground" />
+          <X className="w-5 h-5 text-foreground" />
         </button>
       )}
 
@@ -584,27 +614,30 @@ const Sidebar: React.FC<SidebarProps> = ({
       {desktopSidebar}
 
       {mobileOpen && (
-        <>
+        <div className="fixed inset-0 z-[60] lg:hidden">
           <div 
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
             onClick={onMobileClose}
           />
-          <aside className="fixed left-0 top-0 h-full w-80 bg-white border-r flex flex-col z-50 lg:hidden shadow-2xl">
+          <aside className="fixed left-0 top-0 h-full w-[285px] sm:w-80 max-w-[85vw] bg-white border-r flex flex-col z-[65] shadow-2xl animate-in slide-in-from-left duration-300">
             {sidebarContent}
           </aside>
-        </>
+        </div>
       )}
     </>
   );
 };
 
-export const MobileMenuButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+export const MobileMenuButton: React.FC<{ onClick: () => void; className?: string }> = ({ onClick, className }) => (
   <button
     onClick={onClick}
-    className="lg:hidden p-2 -ml-2 rounded-xl hover:bg-secondary transition-colors"
+    className={cn(
+      "p-2 rounded-2xl hover:bg-secondary text-foreground active:scale-95 transition-all flex items-center justify-center border border-slate-200/80 dark:border-slate-800 shadow-xs",
+      className
+    )}
     aria-label="Ouvrir le menu"
   >
-    <ChevronLeft className="w-5 h-5 text-foreground rotate-180" />
+    <Menu className="w-5 h-5 text-foreground" />
   </button>
 );
 

@@ -147,8 +147,8 @@ export const TopScorers: React.FC<TopScorersProps> = ({ onSelectPlayer }) => {
 
         {/* Right Column: Full Leaderboard & Filters */}
         <div className="lg:col-span-7 flex flex-col">
-          <Card className="h-full border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow rounded-3xl overflow-hidden flex flex-col justify-between">
-            <CardHeader className="flex flex-col gap-4 pb-4">
+          <Card className="h-full border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow rounded-2xl sm:rounded-3xl overflow-hidden flex flex-col justify-between">
+            <CardHeader className="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4 pb-3 sm:pb-4">
               <div className="flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">

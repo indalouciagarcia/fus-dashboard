@@ -53,6 +53,7 @@ import { supabase } from '../../lib/supabase';
 import { PLAYER_CATEGORIES, normalizeAgeCategory } from '../../constants';
 import { useRecruitment } from '../recruitment/hooks/useRecruitment';
 import type { TrialCandidate } from '../recruitment/types/recruitment';
+import FeatureGate from '../../components/FeatureGate';
 import { toast } from 'sonner';
 
 const CATEGORY_FILTERS = [
@@ -86,7 +87,7 @@ const TeamManagement: React.FC = () => {
   const { teams, isLoading: teamsLoading, addTeam, updateTeam, deleteTeam } = useTeams();
   const { staff } = useStaff();
   const { players, addPlayer, updatePlayer } = usePlayers();
-  const { candidates, updatePipelineStage, updateCandidate } = useRecruitment();
+  const { candidates, updatePipelineStage, updateCandidate, isPluginActive: isRecruitmentActive } = useRecruitment();
   const { matches } = useMatches();
   const { mainClub, opponentClubs, isLoading: clubLoading } = useClubData();
   const { can } = usePermissions();
@@ -233,7 +234,7 @@ const TeamManagement: React.FC = () => {
     if (!rosterTeam) return [];
     return candidates
       .filter(c =>
-        c.pipeline_stage === 'shortlisted' &&
+        ['under_evaluation', 'trial', 'club_trial', 'shortlisted'].includes(c.pipeline_stage) &&
         c.assigned_team_id === rosterTeam.id &&
         !players.some(p => p.id === c.id || (p.full_name && p.full_name.toLowerCase() === `${c.first_name} ${c.last_name}`.toLowerCase()))
       )
@@ -263,12 +264,13 @@ const TeamManagement: React.FC = () => {
       !surclassedIdsForRoster.has(p.id)
     );
 
-    // Candidats sous observation (shortlistés) non encore affectés à cette équipe
+    // Candidats sous observation non encore confirmés dans cette équipe
     const observationCandidates = candidates
       .filter(c =>
-        c.pipeline_stage === 'shortlisted' &&
+        ['shortlisted', 'under_evaluation', 'trial', 'club_trial'].includes(c.pipeline_stage) &&
         c.assigned_team_id !== rosterTeam.id &&
         normalizeAgeCategory(c.age_category || '') === normalizeAgeCategory(rosterTeam.category || '') &&
+        !rosterObservationPlayers.some(ro => ro.id === c.id) &&
         !players.some(p => p.id === c.id || (p.full_name && p.full_name.toLowerCase() === `${c.first_name} ${c.last_name}`.toLowerCase()))
       )
       .map(c => ({
@@ -287,7 +289,7 @@ const TeamManagement: React.FC = () => {
       } as unknown as Player & { isObservation: boolean; current_club?: string; candidateData: TrialCandidate }));
 
     return [...clubPlayers, ...observationCandidates];
-  }, [rosterTeam, players, candidates, surclassedIdsForRoster]);
+  }, [rosterTeam, players, candidates, surclassedIdsForRoster, rosterObservationPlayers]);
 
   // =========================================================================
   // AUTOMATIC STATS & MATCH HISTORY COMPUTATION FOR ANY TEAM
@@ -1520,12 +1522,12 @@ const TeamManagement: React.FC = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                      <div className={isAssignMode ? "lg:col-span-7 space-y-6" : "lg:col-span-12 space-y-6"}>
                         {/* SECTION 1 : EFFECTIF OFFICIEL (SIGNÉS) */}
-                        <Card className="border-border shadow-2xl rounded-[3rem] bg-card overflow-hidden p-8 md:p-10">
-                           <h4 className="text-xs font-black uppercase tracking-widest text-primary mb-8 flex items-center gap-3">
+                        <Card className="border-border shadow-xl rounded-3xl bg-card overflow-hidden p-6 md:p-8">
+                           <h4 className="text-xs font-black uppercase tracking-widest text-primary mb-5 flex items-center gap-3">
                               <div className="w-8 h-px bg-primary/30" /> Effectif Officiel ({rosterOfficialPlayers.length})
                            </h4>
                            
-                           <div className={`grid gap-4 ${isAssignMode ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
+                           <div className={`grid gap-3 ${isAssignMode ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
                               {rosterOfficialPlayers.length > 0 ? (
                                  rosterOfficialPlayers.map(player => {
                                     const originCat = surclassedOriginMap[player.id];
@@ -1533,28 +1535,28 @@ const TeamManagement: React.FC = () => {
                                     const displayJersey = surclassedJerseyMap[player.id] ?? player.jersey_number;
                                     const isEditingJersey = editingJerseyId === player.id;
                                     return (
-                                       <motion.div key={player.id} layout className={`flex items-center gap-6 p-4 rounded-3xl border transition-all ${isAssignMode ? 'bg-red-50/20 border-red-100 dark:bg-red-950/20 dark:border-red-900/30' : isSurclasse ? 'bg-amber-50/30 border-amber-200 dark:bg-amber-950/20' : 'bg-secondary/20 border-border'} group`}>
-                                          <div className="w-16 h-16 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 border border-border shadow-sm">
-                                             <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} alt={player.full_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                       <motion.div key={player.id} layout className={`flex items-center gap-3.5 p-3 rounded-2xl border transition-all ${isAssignMode ? 'bg-red-50/20 border-red-100 dark:bg-red-950/20 dark:border-red-900/30' : isSurclasse ? 'bg-amber-50/30 border-amber-200 dark:bg-amber-950/20' : 'bg-secondary/20 border-border'} group`}>
+                                          <div className="w-11 h-11 bg-card rounded-xl overflow-hidden flex items-center justify-center relative shrink-0 border border-border shadow-xs">
+                                             <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} alt={player.full_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                           </div>
                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            <h4 className="font-black text-lg uppercase truncate leading-none text-foreground">{player.full_name}</h4>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <h4 className="font-black text-sm uppercase truncate leading-tight text-foreground">{player.full_name}</h4>
                                             {isSurclasse && (
-                                              <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-100 border border-amber-200 text-amber-700 text-[9px] font-black uppercase">
+                                              <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-100 border border-amber-200 text-amber-700 text-[8px] font-black uppercase">
                                                 ↑ {originCat}
                                               </span>
                                             )}
                                             {(player as any).isSignedCandidate && (
-                                              <span className="shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-[9px] font-black uppercase tracking-wider">
-                                                <CheckCircle2 className="w-3 h-3" /> Signé • Recrue
+                                              <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-[8px] font-black uppercase tracking-wider">
+                                                <CheckCircle2 className="w-2.5 h-2.5" /> Signé
                                               </span>
                                             )}
                                           </div>
-                                          <div className="flex items-center gap-3 mt-2">
+                                          <div className="flex items-center gap-2 mt-1.5">
                                              {isEditingJersey ? (
-                                               <div className="flex items-center gap-2">
-                                                 <span className="text-[10px] font-black text-muted-foreground">#</span>
+                                               <div className="flex items-center gap-1.5">
+                                                 <span className="text-[9px] font-black text-muted-foreground">#</span>
                                                  <input
                                                    type="number"
                                                    min={1} max={99}
@@ -1577,16 +1579,16 @@ const TeamManagement: React.FC = () => {
                                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                                                      if (e.key === 'Escape') setEditingJerseyId(null);
                                                    }}
-                                                   className="w-16 px-2 py-1 text-xs font-black text-center rounded-lg border-2 border-primary bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                   className="w-12 px-1 py-0.5 text-xs font-black text-center rounded-md border-2 border-primary bg-primary/5 focus:outline-none focus:ring-1 focus:ring-primary/30"
                                                  />
-                                                 <span className="text-[9px] text-muted-foreground">↵ valider</span>
+                                                 <span className="text-[8px] text-muted-foreground">↵</span>
                                                </div>
                                              ) : (
-                                               <div className="flex items-center gap-2">
+                                               <div className="flex items-center gap-1.5">
                                                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">
                                                    #{displayJersey ?? '—'}
                                                    {isSurclasse && surclassedJerseyMap[player.id] != null && (
-                                                     <span className="ml-1 text-amber-500 text-[9px]">(surclassé)</span>
+                                                     <span className="ml-0.5 text-amber-500 text-[8px]">(surclassé)</span>
                                                    )}
                                                  </span>
                                                  <button
@@ -1598,14 +1600,14 @@ const TeamManagement: React.FC = () => {
                                                      setEditingJerseyValue(String(player.jersey_number ?? ''));
                                                    }}
                                                    title="Modifier le numéro de maillot"
-                                                   className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-border bg-card hover:border-primary hover:text-primary text-muted-foreground transition-all text-[9px] font-black uppercase cursor-pointer"
+                                                   className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border border-border bg-card hover:border-primary hover:text-primary text-muted-foreground transition-all text-[8px] font-black uppercase cursor-pointer"
                                                  >
-                                                   <Edit2 className="w-2.5 h-2.5" />
+                                                   <Edit2 className="w-2 h-2" />
                                                    Modifier
                                                  </button>
                                                </div>
                                              )}
-                                             <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest h-5">{player.position}</Badge>
+                                             <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest h-4 px-1.5">{player.position}</Badge>
                                           </div>
                                        </div>
                                        {isAssignMode && !isSurclasse && (
@@ -1620,17 +1622,17 @@ const TeamManagement: React.FC = () => {
                                               }
                                             }} 
                                             title={(player as any).isSignedCandidate ? "Replacer en observation" : "Retirer de l'effectif"}
-                                            className="h-12 w-12 rounded-xl bg-red-100 text-red-600 hover:bg-red-600 hover:text-white transition-all shrink-0"
+                                            className="h-8 w-8 rounded-lg bg-red-100 text-red-600 hover:bg-red-600 hover:text-white transition-all shrink-0"
                                           >
-                                             <X className="w-5 h-5" />
+                                             <X className="w-4 h-4" />
                                           </Button>
                                        )}
                                     </motion.div>
                                     );
                                  })
                               ) : (
-                                 <div className="col-span-full flex flex-col items-center justify-center py-16 text-center opacity-40 border-2 border-dashed border-border rounded-[3rem]">
-                                    <Users className="w-12 h-12 mb-4" />
+                                 <div className="col-span-full flex flex-col items-center justify-center py-12 text-center opacity-40 border-2 border-dashed border-border rounded-2xl">
+                                    <Users className="w-10 h-10 mb-3" />
                                     <p className="text-xs font-black uppercase tracking-widest">Effectif Officiel Vide</p>
                                  </div>
                               )}
@@ -1638,72 +1640,73 @@ const TeamManagement: React.FC = () => {
                         </Card>
 
                         {/* SECTION 2 : GROUPE SOUS OBSERVATION / À L'ESSAI */}
-                        {(rosterObservationPlayers.length > 0 || isAssignMode) && (
-                           <Card className="border-2 border-amber-500/30 shadow-xl rounded-[3rem] bg-amber-500/[0.03] overflow-hidden p-8 md:p-10">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                                 <div>
-                                    <h4 className="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-3">
-                                       <div className="w-8 h-px bg-amber-500/40" />
-                                       <Eye className="w-4 h-4 text-amber-500" />
-                                       Groupe Sous Observation & Essais ({rosterObservationPlayers.length})
-                                    </h4>
-                                    <p className="text-[11px] font-bold text-muted-foreground mt-1">
-                                       Joueurs rattachés à l'équipe pour évaluation et séances d'essai avant signature définitive
-                                    </p>
+                        <FeatureGate pluginId="recruitment_v1">
+                           {(rosterObservationPlayers.length > 0 || isAssignMode) && (
+                              <Card className="border-2 border-amber-500/30 shadow-xl rounded-3xl bg-amber-500/[0.03] overflow-hidden p-6 md:p-8">
+                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                                    <div>
+                                       <h4 className="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-2.5">
+                                          <div className="w-6 h-px bg-amber-500/40" />
+                                          <Eye className="w-3.5 h-3.5 text-amber-500" />
+                                          Groupe Sous Observation & Essais ({rosterObservationPlayers.length})
+                                       </h4>
+                                       <p className="text-[10px] font-bold text-muted-foreground mt-0.5">
+                                          Joueurs rattachés à l'équipe pour évaluation et séances d'essai avant signature définitive
+                                       </p>
+                                    </div>
+                                    {rosterObservationPlayers.length > 1 && (
+                                       <Button 
+                                         size="sm"
+                                         onClick={() => {
+                                           handleBatchValidateSignature(rosterObservationPlayers.map(p => p.id));
+                                         }}
+                                         className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] uppercase tracking-wider px-3 py-1.5 gap-1.5 shadow-xs shrink-0"
+                                       >
+                                          <CheckCircle2 className="w-3 h-3" /> Tout signer ({rosterObservationPlayers.length})
+                                       </Button>
+                                    )}
                                  </div>
-                                 {rosterObservationPlayers.length > 1 && (
-                                    <Button
-                                      size="sm"
-                                      onClick={() => {
-                                        handleBatchValidateSignature(rosterObservationPlayers.map(p => p.id));
-                                      }}
-                                      className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider px-4 py-2 gap-1.5 shadow-sm shrink-0"
-                                    >
-                                       <CheckCircle2 className="w-3.5 h-3.5" /> Tout signer ({rosterObservationPlayers.length})
-                                    </Button>
-                                 )}
-                              </div>
 
-                              <div className={`grid gap-4 ${isAssignMode ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
-                                 {rosterObservationPlayers.length > 0 ? (
-                                    rosterObservationPlayers.map(player => (
+                                 <div className={`grid gap-3 ${isAssignMode ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
+                                    {rosterObservationPlayers.length > 0 ? (
+                                       rosterObservationPlayers.map(player => (
                                        <motion.div
                                           key={player.id}
                                           layout
-                                          className="flex items-center gap-4 p-4 rounded-3xl border-2 border-amber-500/30 bg-card hover:border-amber-500/50 shadow-sm transition-all group"
+                                          className="flex items-center gap-3.5 p-3 rounded-2xl border-2 border-amber-500/30 bg-card hover:border-amber-500/50 shadow-xs transition-all group"
                                        >
-                                          <div className="w-14 h-14 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 border border-amber-500/30 shadow-xs">
+                                          <div className="w-11 h-11 bg-card rounded-xl overflow-hidden flex items-center justify-center relative shrink-0 border border-amber-500/30 shadow-xs">
                                              <img
                                                 src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`}
                                                 alt={player.full_name}
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                                              />
-                                             <div className="absolute top-0 right-0 p-1 bg-amber-500 text-black rounded-bl-lg shadow-xs">
-                                                <Eye className="w-3 h-3" />
+                                             <div className="absolute top-0 right-0 p-0.5 bg-amber-500 text-black rounded-bl-md shadow-xs">
+                                                <Eye className="w-2.5 h-2.5" />
                                              </div>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <h4 className="font-black text-base uppercase truncate text-foreground leading-none">{player.full_name}</h4>
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                                   <Eye className="w-2.5 h-2.5" /> Sous observation
+                                             <div className="flex items-center gap-1.5 flex-wrap">
+                                                <h4 className="font-black text-sm uppercase truncate text-foreground leading-tight">{player.full_name}</h4>
+                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                                   <Eye className="w-2 h-2" /> À l'essai
                                                 </span>
                                              </div>
-                                             <p className="text-[10px] font-bold text-muted-foreground mt-1.5 flex items-center gap-2">
-                                                <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest h-4 px-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400">
+                                             <p className="text-[10px] font-bold text-muted-foreground mt-1 flex items-center gap-1.5">
+                                                <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest h-4 px-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400">
                                                    {player.position}
                                                 </Badge>
-                                                <span className="truncate">{(player as any).current_club || 'Scouting'}</span>
+                                                <span className="truncate text-[9px]">{(player as any).current_club || 'Scouting'}</span>
                                              </p>
                                           </div>
-                                          <div className="flex items-center gap-1.5 shrink-0">
+                                          <div className="flex items-center gap-1 shrink-0">
                                              <Button
                                                 size="sm"
                                                 onClick={() => handleAssignCandidate(player)}
                                                 title="Valider la signature officielle du joueur"
-                                                className="rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider px-3 py-2 gap-1.5 shadow-sm"
+                                                className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider px-2.5 py-1 gap-1 shadow-xs h-7"
                                              >
-                                                <CheckCircle2 className="w-3.5 h-3.5" /> Valider Signature
+                                                <CheckCircle2 className="w-3 h-3" /> Signer
                                              </Button>
                                              {isAssignMode && (
                                                 <Button
@@ -1711,19 +1714,19 @@ const TeamManagement: React.FC = () => {
                                                    variant="ghost"
                                                    onClick={() => handleRemoveFromObservationGroup(player)}
                                                    title="Libérer du groupe sous observation"
-                                                   className="h-9 w-9 rounded-xl bg-red-100 text-red-600 hover:bg-red-600 hover:text-white transition-all shrink-0"
+                                                   className="h-7 w-7 rounded-lg bg-red-100 text-red-600 hover:bg-red-600 hover:text-white transition-all shrink-0"
                                                 >
-                                                   <X className="w-4 h-4" />
+                                                   <X className="w-3.5 h-3.5" />
                                                 </Button>
                                              )}
                                           </div>
                                        </motion.div>
                                     ))
                                  ) : (
-                                    <div className="col-span-full flex flex-col items-center justify-center py-8 text-center opacity-60 border-2 border-dashed border-amber-500/30 rounded-3xl p-6">
+                                    <div className="col-span-full flex flex-col items-center justify-center py-8 text-center opacity-60 border-2 border-dashed border-amber-500/30 rounded-2xl p-6">
                                        <Eye className="w-8 h-8 text-amber-500 mb-2" />
                                        <p className="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Aucun joueur en observation actuellement</p>
-                                       <p className="text-[11px] text-muted-foreground mt-1 max-w-sm">
+                                       <p className="text-[10px] text-muted-foreground mt-1 max-w-sm">
                                           Sélectionnez des talents dans la colonne « Joueurs Disponibles » à droite pour les affecter en groupe d'essai.
                                        </p>
                                     </div>
@@ -1731,6 +1734,7 @@ const TeamManagement: React.FC = () => {
                               </div>
                            </Card>
                         )}
+                        </FeatureGate>
                      </div>
 
                      {isAssignMode && (
@@ -1778,6 +1782,7 @@ const TeamManagement: React.FC = () => {
                                              </span>
                                           </div>
                                           <div className="flex items-center gap-2 flex-wrap justify-end">
+                                             <FeatureGate pluginId="recruitment_v1">
                                              <Button
                                                 size="sm"
                                                 onClick={handleBatchAssignToObservation}
@@ -1786,13 +1791,18 @@ const TeamManagement: React.FC = () => {
                                              >
                                                 <Eye className="w-3.5 h-3.5" /> Affecter (Observation)
                                              </Button>
+                                             </FeatureGate>
                                              <Button
                                                 size="sm"
                                                 onClick={handleBatchValidateSignature}
                                                 className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-xl gap-1.5 shadow-sm"
-                                                title="Signer directement tous les joueurs sélectionnés"
+                                                title={isRecruitmentActive ? "Signer directement tous les joueurs sélectionnés" : "Ajouter à l'équipe"}
                                              >
-                                                <CheckCircle2 className="w-3.5 h-3.5" /> Valider Signature
+                                                {isRecruitmentActive ? (
+                                                  <><CheckCircle2 className="w-3.5 h-3.5" /> Valider Signature</>
+                                                ) : (
+                                                  <><Plus className="w-3.5 h-3.5" /> Ajouter ({selectedAvailableIds.length})</>
+                                                )}
                                              </Button>
                                              <button
                                                 onClick={() => setSelectedAvailableIds([])}
@@ -1827,34 +1837,34 @@ const TeamManagement: React.FC = () => {
                                                    e.stopPropagation();
                                                    toggleSelectAvailable(player.id);
                                                  }}
-                                                 className="shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1"
+                                                 className="shrink-0 text-muted-foreground hover:text-foreground transition-colors p-0.5"
                                                >
                                                   {isChecked ? (
-                                                     <CheckSquare className="w-5 h-5 text-amber-500" />
+                                                     <CheckSquare className="w-4 h-4 text-amber-500" />
                                                   ) : (
-                                                     <Square className="w-5 h-5 text-muted-foreground/40 group-hover:text-muted-foreground" />
+                                                     <Square className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground" />
                                                   )}
                                                </button>
 
-                                               <div className="w-13 h-13 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 shadow-sm border border-amber-500/30">
+                                               <div className="w-10 h-10 min-w-[40px] max-w-[40px] min-h-[40px] max-h-[40px] bg-card rounded-xl overflow-hidden flex items-center justify-center relative shrink-0 shadow-xs border border-amber-500/30">
                                                   <img 
-                                                    src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} 
-                                                    alt={player.full_name} 
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                                                     src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} 
+                                                     alt={player.full_name} 
+                                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
                                                   />
-                                                  <div className="absolute top-0 right-0 p-1 bg-amber-500 text-black rounded-bl-lg shadow-xs">
-                                                     <Eye className="w-3 h-3" />
+                                                  <div className="absolute top-0 right-0 p-0.5 bg-amber-500 text-black rounded-bl-md shadow-xs">
+                                                     <Eye className="w-2.5 h-2.5" />
                                                   </div>
                                                </div>
                                                <div className="flex-1 min-w-0">
-                                                  <div className="flex items-center gap-2 flex-wrap">
-                                                     <h4 className="font-black text-sm uppercase truncate text-foreground leading-none">{player.full_name}</h4>
-                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                                        <Eye className="w-2.5 h-2.5" /> Sous observation
+                                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                                     <h4 className="font-black text-xs uppercase truncate text-foreground leading-tight">{player.full_name}</h4>
+                                                     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                                        <Eye className="w-2 h-2" /> À l'essai
                                                      </span>
                                                   </div>
-                                                  <p className="text-[10px] font-bold text-muted-foreground mt-1.5 flex items-center gap-2">
-                                                     <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest h-4 px-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400">
+                                                  <p className="text-[9px] font-bold text-muted-foreground mt-1 flex items-center gap-1.5">
+                                                     <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest h-3.5 px-1 border-amber-500/30 text-amber-600 dark:text-amber-400">
                                                         {player.position}
                                                      </Badge>
                                                      <span className="truncate">{(player as any).current_club || 'Scouting'}</span>
@@ -1862,34 +1872,36 @@ const TeamManagement: React.FC = () => {
                                                </div>
 
                                                {/* Actions individuelles : Affecter en observation OU Signer directement */}
-                                               <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                                               <FeatureGate pluginId="recruitment_v1">
+                                               <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                                                   <Button 
                                                     size="icon" 
                                                     variant="ghost" 
                                                     onClick={() => handleAssignToObservationGroup(player.id)} 
                                                     title="Affecter au groupe sous observation de l'équipe (sans signer)"
-                                                    className="h-9 w-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-slate-950 font-bold shadow-xs transition-all"
+                                                    className="h-7 w-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-slate-950 font-bold shadow-xs transition-all"
                                                   >
-                                                     <Eye className="w-4 h-4" />
+                                                     <Eye className="w-3.5 h-3.5" />
                                                   </Button>
                                                   <Button 
                                                     size="icon" 
                                                     variant="ghost" 
                                                     onClick={() => handleAssignCandidate(player)} 
                                                     title="Signer officiellement et intégrer à l'effectif"
-                                                    className="h-9 w-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-xs transition-all"
+                                                    className="h-7 w-7 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-xs transition-all"
                                                   >
-                                                     <CheckCircle2 className="w-4 h-4" />
+                                                     <CheckCircle2 className="w-3.5 h-3.5" />
                                                   </Button>
                                                </div>
+                                               </FeatureGate>
                                             </div>
                                            ) : (
                                              <div 
                                                key={player.id} 
                                                onClick={() => toggleSelectAvailable(player.id)}
-                                               className={`flex items-center gap-3.5 p-3.5 rounded-3xl border transition-all cursor-pointer group ${
+                                               className={`flex items-center gap-3 p-2.5 rounded-2xl border transition-all cursor-pointer group ${
                                                  isChecked
-                                                   ? 'border-emerald-500 bg-emerald-500/15 shadow-sm'
+                                                   ? 'border-emerald-500 bg-emerald-500/15 shadow-xs'
                                                    : 'border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40'
                                                }`}
                                              >
@@ -1899,20 +1911,20 @@ const TeamManagement: React.FC = () => {
                                                     e.stopPropagation();
                                                     toggleSelectAvailable(player.id);
                                                   }}
-                                                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1"
+                                                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors p-0.5"
                                                 >
                                                    {isChecked ? (
-                                                      <CheckSquare className="w-5 h-5 text-emerald-500" />
+                                                      <CheckSquare className="w-4 h-4 text-emerald-500" />
                                                    ) : (
-                                                      <Square className="w-5 h-5 text-muted-foreground/40 group-hover:text-muted-foreground" />
+                                                      <Square className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground" />
                                                    )}
                                                 </button>
-                                                <div className="w-13 h-13 bg-card rounded-2xl overflow-hidden flex items-center justify-center relative shrink-0 shadow-sm border border-emerald-500/20">
+                                                <div className="w-10 h-10 min-w-[40px] max-w-[40px] min-h-[40px] max-h-[40px] bg-card rounded-xl overflow-hidden flex items-center justify-center relative shrink-0 shadow-xs border border-emerald-500/20">
                                                    <img src={(player.photo_url && player.photo_url !== 'null') ? player.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(player.full_name)}&background=random&color=fff&size=200`} alt={player.full_name} className="w-full h-full object-cover" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                   <h4 className="font-black text-sm uppercase truncate text-foreground leading-none">{player.full_name}</h4>
-                                                   <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mt-2">#{player.jersey_number ?? '—'} • {player.position}</p>
+                                                   <h4 className="font-black text-xs uppercase truncate text-foreground leading-tight">{player.full_name}</h4>
+                                                   <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mt-1">#{player.jersey_number ?? '—'} • {player.position}</p>
                                                 </div>
                                                 <Button 
                                                   size="icon" 
@@ -1922,9 +1934,9 @@ const TeamManagement: React.FC = () => {
                                                     handleAssignPlayer(player);
                                                   }} 
                                                   title="Ajouter à l'effectif"
-                                                  className="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white shrink-0 shadow-sm transition-all"
+                                                  className="h-7 w-7 rounded-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-600 hover:text-white shrink-0 shadow-xs transition-all"
                                                 >
-                                                   <Plus className="w-4 h-4" />
+                                                   <Plus className="w-3.5 h-3.5" />
                                                 </Button>
                                              </div>
                                            );

@@ -169,6 +169,7 @@ export interface ScoutObservation {
 export interface PlayerTest {
   id: string;
   candidate_id?: string;
+  candidate_ids?: string[];
   match_id?: string;
   match_name?: string;
   test_name: string;

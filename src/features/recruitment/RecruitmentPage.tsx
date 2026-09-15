@@ -134,7 +134,7 @@ export const RecruitmentPage: React.FC = () => {
 
   // Filtre unique complet transversal multi-critères
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [categoryFilter, setCategoryFilter] = useState('U13');
   const [positionFilter, setPositionFilter] = useState('ALL');
   const [stageFilter, setStageFilter] = useState('ALL');
   const [footFilter, setFootFilter] = useState('ALL');
@@ -143,7 +143,7 @@ export const RecruitmentPage: React.FC = () => {
 
   const isAnyFilterActive = Boolean(
     searchQuery.trim() ||
-    categoryFilter !== 'ALL' ||
+    categoryFilter !== 'U13' ||
     positionFilter !== 'ALL' ||
     stageFilter !== 'ALL' ||
     footFilter !== 'ALL' ||
@@ -153,7 +153,7 @@ export const RecruitmentPage: React.FC = () => {
 
   const handleResetAllFilters = () => {
     setSearchQuery('');
-    setCategoryFilter('ALL');
+    setCategoryFilter('U13');
     setPositionFilter('ALL');
     setStageFilter('ALL');
     setFootFilter('ALL');
@@ -396,10 +396,13 @@ export const RecruitmentPage: React.FC = () => {
         <div className="relative z-10 space-y-1">
           <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
             <Sparkles className="w-4 h-4" />
-            Cellule Détection & Recrutement Professionnel
+            Recrutement & Détection
+            <span className="px-1.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 text-[10px] font-black lowercase">
+              v1.0
+            </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-black tracking-tight">
-            Scouting, Pipeline & Évaluations 4 Piliers
+            Recrutement & Détection v1 — Pipeline, Scouting & Radar
           </h1>
           <p className="text-slate-300 text-sm max-w-2xl">
             Plateforme complète de prospection : gestion des scouts, pipeline Kanban 9 étapes, grille d'évaluation 1–10 par poste et comparateur radar.
@@ -497,7 +500,7 @@ export const RecruitmentPage: React.FC = () => {
       </div>
 
       {/* Main Tab Navigation */}
-      <div className="bg-white rounded-2xl p-2 border shadow-sm flex flex-wrap gap-2">
+      <div className="bg-white rounded-2xl p-1.5 sm:p-2 border shadow-sm flex overflow-x-auto no-scrollbar sm:flex-wrap gap-1.5 sm:gap-2">
         {[
           { id: 'scouts', label: 'Cellule Scouts', icon: UserCheck, count: scouts.length, isPrimary: true },
           { id: 'kanban', label: 'Pipeline Kanban (9 Étapes)', icon: Kanban, count: filteredCandidates.length },
@@ -515,7 +518,7 @@ export const RecruitmentPage: React.FC = () => {
               key={tab.id}
               onClick={() => setTab(tab.id)}
               className={cn(
-                "flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2",
+                "whitespace-nowrap shrink-0 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2",
                 isActive
                   ? "bg-primary text-white shadow-md shadow-primary/20 font-black"
                   : tab.isHighlighted
@@ -790,7 +793,7 @@ export const RecruitmentPage: React.FC = () => {
           evaluations={evaluations}
           observations={observations}
           onCreateScout={createScout}
-          onUpdateScout={updateScout}
+          onUpdateScout={(id, updates) => updateScout(id, updates)}
           onDeleteScout={deleteScout}
         />
       )}
@@ -806,23 +809,24 @@ export const RecruitmentPage: React.FC = () => {
           }}
           onOpenCandidateDetail={(c) => openCandidateDetail(c)}
           onOpenEvaluation={(c) => {
-            const candTests = tests.filter(t => t.candidate_id === c.id);
-            const eligible = candTests.filter(t => t.test_date <= todayStr);
-            if (eligible.length === 0) {
-              const future = candTests.filter(t => t.test_date > todayStr);
-              if (future.length > 0) {
-                toast.error(`Évaluation verrouillée : ce joueur a un test planifié pour le ${future[0].test_date}. Impossible d'évaluer avant cette date.`);
-              } else {
-                toast.warning("Aucun test planifié pour ce joueur. Planifiez d'abord un test dans l'agenda.");
-              }
-              openCandidateDetail(c);
-              return;
-            }
             setEvaluatingCandidate(c);
-            const hasEval = evaluations.some(e => e.candidate_id === c.id);
-            setEvaluationInitialMode(hasEval ? 'edit' : 'create');
-            setEvaluationInitialTestId(eligible[0].id);
+            const existingEval = evaluations.find(e => e.candidate_id === c.id);
+            setEvaluationInitialMode(existingEval ? 'edit' : 'create');
+            const candTests = tests.filter(t => t.candidate_id === c.id);
+            setEvaluationInitialTestId(candTests[0]?.id || '');
             setIsEvaluationModalOpen(true);
+          }}
+          onOpenScheduleTest={(c, test) => {
+            if (test) {
+              setEditingTest(test);
+              setDefaultDateForTest(test.test_date);
+              setDefaultCandidateIdForTest(c.id);
+            } else {
+              setEditingTest(null);
+              setDefaultDateForTest(todayStr);
+              setDefaultCandidateIdForTest(c.id);
+            }
+            setIsTrialModalOpen(true);
           }}
         />
       )}
@@ -960,52 +964,24 @@ export const RecruitmentPage: React.FC = () => {
 
                     {(() => {
                       const candTests = tests.filter(t => t.candidate_id === c.id);
-                      const eligible = candTests.filter(t => t.test_date <= todayStr);
-                      const future = candTests.filter(t => t.test_date > todayStr);
-
-                      if (eligible.length > 0) {
-                        return (
-                          <button
-                            onClick={() => {
-                              setEvaluatingCandidate(c);
-                              setEvaluationInitialMode(evalData ? 'edit' : 'create');
-                              setEvaluationInitialTestId(eligible[0].id);
-                              setIsEvaluationModalOpen(true);
-                            }}
-                            className={cn(
-                              "py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all",
-                              evalData
-                                ? "bg-primary/10 hover:bg-primary text-primary hover:text-white border border-primary/20"
-                                : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
-                            )}
-                            title={evalData ? "Modifier l'évaluation du test" : "Évaluer sur la session de test"}
-                          >
-                            <Award className="w-3.5 h-3.5" />
-                            {evalData ? 'Évalué' : 'Évaluer'}
-                          </button>
-                        );
-                      }
-
-                      if (future.length > 0) {
-                        return (
-                          <div
-                            className="py-2 px-2 rounded-xl text-[11px] font-semibold bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center gap-1 cursor-not-allowed"
-                            title={`Test prévu le ${future[0].test_date}. Impossible d'évaluer avant cette date.`}
-                          >
-                            <Lock className="w-3 h-3 text-slate-400" />
-                            <span>Test {future[0].test_date.slice(5)}</span>
-                          </div>
-                        );
-                      }
-
                       return (
                         <button
-                          onClick={() => handleOpenScheduleTestForCandidate(c)}
-                          className="py-2 px-2.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 flex items-center justify-center gap-1"
-                          title="Planifier d'abord un test dans l'agenda"
+                          onClick={() => {
+                            setEvaluatingCandidate(c);
+                            setEvaluationInitialMode(evalData ? 'edit' : 'create');
+                            setEvaluationInitialTestId(eligible[0]?.id || '');
+                            setIsEvaluationModalOpen(true);
+                          }}
+                          className={cn(
+                            "py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer",
+                            evalData
+                              ? "bg-primary/10 hover:bg-primary text-primary hover:text-white border border-primary/20"
+                              : "bg-slate-900 hover:bg-slate-800 text-white shadow-2xs"
+                          )}
+                          title={evalData ? `Note Scout : ${evalData.overall_score}/10 (Modifier l'évaluation)` : "Saisir l'évaluation scout"}
                         >
-                          <Calendar className="w-3.5 h-3.5" />
-                          Planifier Test
+                          <Award className="w-3.5 h-3.5" />
+                          {evalData ? `${evalData.overall_score}/10` : 'Évaluer'}
                         </button>
                       );
                     })()}
@@ -1321,37 +1297,22 @@ export const RecruitmentPage: React.FC = () => {
                           <span className="text-3xl font-black text-primary">{targetEval.overall_score}/10</span>
                         </div>
                         {(() => {
-                          const eligible = candTests.filter(t => t.test_date <= todayStr);
-                          const future = candTests.filter(t => t.test_date > todayStr);
-
-                          if (eligible.length > 0) {
+                          if (candTests.length > 0) {
                             return (
                               <button
                                 type="button"
                                 onClick={() => {
                                   setEvaluatingCandidate(targetCandidate);
-                                  setEvaluationInitialMode('edit');
-                                  setEvaluationInitialTestId(activeSession?.testId || eligible[0].id);
+                                  setEvaluationInitialMode(targetEval ? 'edit' : 'create');
+                                  setEvaluationInitialTestId(activeSession?.testId || candTests[0].id);
                                   setIsEvaluationModalOpen(true);
                                 }}
-                                className="px-3 py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-primary/20 transition-all hover:scale-105 active:scale-95"
-                                title="Modifier l'évaluation de cette session"
+                                className="px-3 py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-primary/20 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                                title="Évaluer cette session"
                               >
                                 <Award className="w-3.5 h-3.5" />
-                                Modifier l'Évaluation
+                                {targetEval ? "Modifier l'Évaluation" : "Évaluer"}
                               </button>
-                            );
-                          }
-
-                          if (future.length > 0) {
-                            return (
-                              <div
-                                className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold flex items-center gap-1.5 cursor-not-allowed"
-                                title={`Test prévu le ${future[0].test_date}. Impossible d'évaluer avant cette date.`}
-                              >
-                                <Lock className="w-3.5 h-3.5 text-slate-400" />
-                                <span>Verrouillé (Test {future[0].test_date})</span>
-                              </div>
                             );
                           }
 
@@ -1359,7 +1320,7 @@ export const RecruitmentPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleOpenScheduleTestForCandidate(targetCandidate)}
-                              className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold flex items-center gap-1.5"
+                              className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                               title="Planifier un test pour ce joueur"
                             >
                               <Calendar className="w-3.5 h-3.5" />

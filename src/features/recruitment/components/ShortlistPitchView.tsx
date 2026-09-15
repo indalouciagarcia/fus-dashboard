@@ -179,7 +179,7 @@ export const ShortlistPitchView: React.FC<ShortlistPitchViewProps> = ({
   const isCandidateShortlisted = (cand: TrialCandidate): boolean => {
     const hasEval = playerEvaluationsMap.get(cand.id);
     const hasShortlistVerdict = hasEval && (['shortlist', 'recommend_academy', 'contract_proposal'].includes(hasEval.verdict) || hasEval.overall_score >= 7.0);
-    return ['shortlisted', 'shortlist', 'academy', 'selected', 'signed'].includes(cand.pipeline_stage) || !!hasShortlistVerdict;
+    return ['shortlisted', 'shortlist', 'under_evaluation', 'trial', 'club_trial', 'academy', 'selected', 'signed'].includes(cand.pipeline_stage) || !!hasShortlistVerdict;
   };
 
   // Décompte total des joueurs de la shortlist
@@ -579,10 +579,10 @@ export const ShortlistPitchView: React.FC<ShortlistPitchViewProps> = ({
       </div>
 
       {/* ── TERRAIN DE FOOTBALL VERTICAL OFFICIEL PLEINE LARGEUR ──────────── */}
-      <div className="w-full relative bg-white p-4 sm:p-6 rounded-3xl border border-slate-200 shadow-sm">
+      <div className="w-full relative bg-white p-2.5 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm overflow-x-auto no-scrollbar">
         <div 
           className={cn(
-            "w-full rounded-3xl relative overflow-hidden bg-gradient-to-b from-emerald-800 via-emerald-700 to-emerald-900 border-4 border-emerald-950 shadow-2xl select-none transition-all duration-300",
+            "w-full min-w-[620px] sm:min-w-0 rounded-2xl sm:rounded-3xl relative overflow-hidden bg-gradient-to-b from-emerald-800 via-emerald-700 to-emerald-900 border-4 border-emerald-950 shadow-2xl select-none transition-all duration-300",
             pitchHeightClass
           )}
         >
@@ -783,9 +783,15 @@ export const ShortlistPitchView: React.FC<ShortlistPitchViewProps> = ({
                                   "px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 border",
                                   ['shortlisted', 'shortlist'].includes(cand.pipeline_stage)
                                     ? "bg-emerald-50 text-emerald-700 border-emerald-300 font-black shadow-2xs"
-                                    : "bg-slate-100 text-slate-700 border-slate-200"
+                                    : ['under_evaluation', 'trial', 'club_trial'].includes(cand.pipeline_stage)
+                                      ? "bg-amber-50 text-amber-800 border-amber-300 font-black shadow-2xs"
+                                      : "bg-slate-100 text-slate-700 border-slate-200"
                                 )}>
-                                  {['shortlisted', 'shortlist'].includes(cand.pipeline_stage) ? '⭐ SHORTLIST' : (cand.pipeline_stage?.replace('_', ' ').toUpperCase() || 'PROSPECT')}
+                                  {['shortlisted', 'shortlist'].includes(cand.pipeline_stage)
+                                    ? '⭐ SHORTLIST'
+                                    : ['under_evaluation', 'trial', 'club_trial'].includes(cand.pipeline_stage)
+                                      ? '🟡 TEST CLUB'
+                                      : (cand.pipeline_stage?.replace('_', ' ').toUpperCase() || 'PROSPECT')}
                                 </span>
                               </div>
 

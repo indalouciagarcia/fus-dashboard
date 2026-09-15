@@ -40,7 +40,7 @@ const MiniStatRow: React.FC = () => {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="mini-stat-row">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" id="mini-stat-row">
       {stats.map((s, idx) => {
         const Icon = s.icon;
         return (
@@ -51,11 +51,11 @@ const MiniStatRow: React.FC = () => {
             transition={{ duration: 0.4, delay: idx * 0.1 }}
             whileHover={{ y: -5 }}
           >
-            <Card className="hover:shadow-lg shadow-sm border overflow-hidden relative group">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-4">
+            <Card className="hover:shadow-lg shadow-sm border overflow-hidden relative group rounded-2xl sm:rounded-3xl">
+              <CardContent className="p-3.5 sm:p-5">
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
                   <div 
-                    className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors shadow-sm"
+                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-colors shadow-sm shrink-0"
                     style={{ background: `${s.color}15`, color: s.color }}
                   >
                     <Icon className="w-5 h-5 group-hover:scale-110 transition-transform" />

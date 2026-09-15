@@ -15,6 +15,7 @@ Ce dossier rassemble l'ensemble de la documentation technique, fonctionnelle et 
 | [`design_system.md`](file:///Users/macbook/Desktop/FuscClub/fus-dashboard/.agents/docs/design_system.md) | Charte graphique, tokens de design et échelle typographique |
 | [`database.md`](file:///Users/macbook/Desktop/FuscClub/fus-dashboard/.agents/docs/database.md) | Documentation de la base de données Supabase (tables, RLS, RPC, migrations) |
 | [`ai_conventions.md`](file:///Users/macbook/Desktop/FuscClub/fus-dashboard/.agents/docs/ai_conventions.md) | Directives et standards de code pour les agents IA sur le projet |
+| [`internal_scrimmages.md`](file:///Users/macbook/Desktop/FuscClub/fus-dashboard/.agents/docs/internal_scrimmages.md) | Règles et spécifications des oppositions internes (intra-groupe & inter-catégorie) |
 
 ---
 

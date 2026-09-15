@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Bell, ChevronDown, Settings, Calendar,
-  Search, LogOut, Shield, User, Radio, Swords,
+  Search, LogOut, Shield, User, Radio, Swords, X
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '../lib/utils';
@@ -36,8 +36,16 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
 
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen]       = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (mobileSearchOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [mobileSearchOpen]);
 
   // Fermer le dropdown si clic hors du composant
   useEffect(() => {
@@ -86,15 +94,48 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
 
   return (
     <header className={cn(
-      "fixed top-0 right-0 h-20 left-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b flex items-center px-4 sm:px-6 lg:px-8 z-40 transition-all duration-300",
+      "fixed top-0 right-0 h-20 left-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b flex items-center px-3 sm:px-6 lg:px-8 z-40 transition-all duration-300",
       // md+ : sidebar icône (80px)
       "md:left-20",
       // lg+ : sidebar pleine largeur (288px) ou collapsed (80px)
       sidebarCollapsed ? "lg:left-20" : "lg:left-72"
     )}>
+      {/* Mobile Search Overlay */}
+      {mobileSearchOpen && (
+        <div className="absolute inset-0 bg-white dark:bg-slate-900 z-50 flex items-center px-3 gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (globalSearchQuery.trim()) {
+                setMobileSearchOpen(false);
+                navigate(`/players?search=${encodeURIComponent(globalSearchQuery.trim())}`);
+              }
+            }}
+            className="flex-1 flex items-center bg-secondary rounded-2xl px-3 py-1.5"
+          >
+            <Search className="w-4 h-4 text-primary shrink-0 mr-2" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Rechercher joueur, club..."
+              value={globalSearchQuery}
+              onChange={(e) => setGlobalSearchQuery(e.target.value)}
+              className="w-full bg-transparent outline-none text-sm font-semibold text-foreground placeholder:text-muted-foreground"
+            />
+          </form>
+          <button
+            onClick={() => setMobileSearchOpen(false)}
+            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0"
+            aria-label="Fermer la recherche"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       {/* Menu burger — uniquement sous md (mobile), la sidebar est visible sur tablette */}
       {onMobileMenuClick && (
-        <div className="md:hidden mr-2">
+        <div className="md:hidden mr-1 sm:mr-2 shrink-0">
           <MobileMenuButton onClick={onMobileMenuClick} />
         </div>
       )}
@@ -103,9 +144,9 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
       <Link
         to="/settings"
         title={`Registre du Club : ${clubName} (Cliquez pour configurer)`}
-        className="flex items-center gap-2.5 sm:gap-3 mr-3 sm:mr-4 group shrink-0 focus:outline-none focus:ring-2 focus:ring-primary/20 rounded-2xl p-1 -ml-1 transition-all"
+        className="flex items-center gap-2 sm:gap-3 mr-2 sm:mr-4 group shrink-0 focus:outline-none focus:ring-2 focus:ring-primary/20 rounded-2xl p-1 -ml-1 transition-all"
       >
-        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-sm p-1.5 flex items-center justify-center overflow-hidden group-hover:border-primary/50 group-hover:shadow-md transition-all">
+        <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 shadow-sm p-1.5 flex items-center justify-center overflow-hidden group-hover:border-primary/50 group-hover:shadow-md transition-all">
           <img
             src={clubLogo}
             alt={clubName}
@@ -125,12 +166,12 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
       </Link>
 
       {/* Titre + date / match du jour */}
-      <div className="flex-1 flex flex-col min-w-0 ml-1 sm:ml-2">
-        <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight truncate">{title}</h1>
+      <div className="flex-1 flex flex-col min-w-0 ml-0.5 sm:ml-2">
+        <h1 className="text-base sm:text-xl md:text-2xl font-extrabold text-foreground tracking-tight truncate leading-tight">{title}</h1>
         {todayMatch && opponent ? (
           <button
             onClick={() => navigate('/matchday')}
-            className="flex items-center gap-2 group hover:opacity-80 transition-opacity overflow-hidden mt-0.5"
+            className="flex items-center gap-1.5 sm:gap-2 group hover:opacity-80 transition-opacity overflow-hidden mt-0.5 text-left"
           >
             {todayMatch.status === 'live' ? (
               <span className="flex items-center gap-1 bg-red-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full animate-pulse shrink-0">
@@ -139,27 +180,39 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
             ) : (
               <Swords className="w-3.5 h-3.5 text-primary shrink-0" />
             )}
-            <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-foreground truncate">
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-foreground truncate">
               {todayMatch.status === 'live' ? 'En cours' : 'Match ce soir'}
             </span>
-            <span className="text-[11px] sm:text-xs font-bold text-muted-foreground truncate hidden sm:inline">vs {opponent.name}</span>
+            <span className="text-[10px] sm:text-xs font-bold text-muted-foreground truncate hidden sm:inline">vs {opponent.name}</span>
             {todayMatch.match_time && (
-              <span className="text-[10px] sm:text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">{todayMatch.match_time}</span>
+              <span className="text-[9px] sm:text-[11px] font-bold text-primary bg-primary/10 px-1.5 sm:px-2 py-0.5 rounded-full shrink-0">{todayMatch.match_time}</span>
             )}
             <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary/60 underline underline-offset-2 group-hover:text-primary transition-colors shrink-0 hidden md:inline">
               → Live
             </span>
           </button>
         ) : (
-          <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] sm:text-xs font-semibold uppercase tracking-wider mt-0.5">
-            <Calendar className="w-3.5 h-3.5 shrink-0 text-muted-foreground/80" />
+          <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] sm:text-xs font-semibold uppercase tracking-wider mt-0.5">
+            <Calendar className="w-3.5 h-3.5 shrink-0 text-muted-foreground/80 hidden xs:inline" />
             <span className="capitalize truncate">{today}</span>
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
-        {/* Recherche - avec validation et navigation au submit */}
+      <div className="flex items-center gap-1.5 sm:gap-3.5 shrink-0">
+        {/* Mobile Search Button (visible only on <sm) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setMobileSearchOpen(true)}
+          className="sm:hidden relative group rounded-2xl h-9 w-9 text-muted-foreground hover:text-primary"
+          title="Rechercher"
+          aria-label="Ouvrir la recherche"
+        >
+          <Search className="w-4.5 h-4.5" />
+        </Button>
+
+        {/* Recherche Desktop/Tablette - avec validation et navigation au submit */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -169,54 +222,54 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
           }}
           className={cn(
             "relative hidden sm:flex items-center rounded-2xl bg-secondary transition-all duration-300 overflow-hidden",
-            isSearchFocused ? "w-52 md:w-72 lg:w-88 ring-2 ring-primary/20 bg-white" : "w-36 md:w-52 lg:w-72"
+            isSearchFocused ? "w-48 md:w-64 lg:w-80 ring-2 ring-primary/20 bg-white" : "w-32 md:w-48 lg:w-64"
           )}
         >
           <Search className={cn(
-            "absolute left-3.5 w-4.5 h-4.5 transition-colors",
+            "absolute left-3.5 w-4 h-4 transition-colors",
             isSearchFocused ? "text-primary" : "text-muted-foreground"
           )} />
           <input
             type="text"
-            placeholder="Rechercher (ex: joueur, club)…"
+            placeholder="Rechercher..."
             value={globalSearchQuery}
             onChange={(e) => setGlobalSearchQuery(e.target.value)}
-            className="w-full h-11 pl-10 pr-4 bg-transparent outline-none text-sm font-medium"
+            className="w-full h-10 pl-9 pr-3 bg-transparent outline-none text-xs sm:text-sm font-medium"
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
           />
         </form>
 
         {/* Notifications */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center">
           <Button
             variant="ghost"
             size="icon"
-            className="relative group rounded-2xl h-10 w-10 sm:h-11 sm:w-11"
+            className="relative group rounded-2xl h-9 w-9 sm:h-10 sm:w-10"
             title="Notifications (aucune alerte non lue)"
             onClick={() => {
               toast.info('Aucune nouvelle notification pour le moment.');
             }}
           >
-            <Bell className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+            <Bell className="w-4.5 h-4.5 text-muted-foreground group-hover:text-primary transition-colors" />
           </Button>
         </div>
 
-        <div className="h-7 sm:h-9 w-px bg-border mx-0.5 sm:mx-1" />
+        <div className="h-6 sm:h-8 w-px bg-border mx-0.5" />
 
         {/* Profil utilisateur + dropdown */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen(v => !v)}
-            className="flex items-center gap-2.5 sm:gap-3.5 pl-1 group cursor-pointer rounded-2xl hover:bg-secondary px-2 sm:px-3 py-1.5 sm:py-2 transition-colors"
+            className="flex items-center gap-2 sm:gap-3 group cursor-pointer rounded-2xl hover:bg-secondary px-1 sm:px-2 py-1 transition-colors"
           >
             {/* Nom + rôle (masqué sur mobile) */}
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-sm font-bold text-foreground leading-none mb-1 truncate max-w-[140px]">
+              <span className="text-xs sm:text-sm font-bold text-foreground leading-none mb-1 truncate max-w-[140px]">
                 {displayName}
               </span>
               <span className={cn(
-                "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border",
+                "text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md border",
                 roleBadge,
               )}>
                 {roleLabel}
@@ -224,12 +277,12 @@ const Header: React.FC<HeaderProps> = ({ title, onMobileMenuClick, sidebarCollap
             </div>
 
             {/* Avatar */}
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-primary flex items-center justify-center shadow-md shadow-primary/20 group-hover:scale-105 transition-transform overflow-hidden shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-primary flex items-center justify-center shadow-md shadow-primary/20 group-hover:scale-105 transition-transform overflow-hidden shrink-0">
               <img src={avatarUrl} className="w-full h-full object-cover" alt={displayName} />
             </div>
 
             <ChevronDown className={cn(
-              "w-4.5 h-4.5 text-muted-foreground transition-transform hidden sm:block",
+              "w-4 h-4 text-muted-foreground transition-transform hidden sm:block",
               dropdownOpen && "rotate-180"
             )} />
           </button>

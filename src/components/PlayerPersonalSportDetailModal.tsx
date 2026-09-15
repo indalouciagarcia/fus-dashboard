@@ -299,17 +299,17 @@ export const PlayerPersonalSportDetailModal: React.FC<PlayerPersonalSportDetailM
   const isMinor = calculatedAge < 18;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-4xl max-h-[94vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Modal Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-800 bg-gradient-to-r from-slate-950 via-slate-900 to-rose-950 text-white flex items-center justify-between relative overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-slate-800 bg-gradient-to-r from-slate-950 via-slate-900 to-rose-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-80 h-80 bg-rose-600/20 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
           
-          <div className="relative z-10 flex items-center gap-4">
+          <div className="relative z-10 flex items-center gap-3 sm:gap-4 pr-10 sm:pr-0">
             {/* Player Avatar */}
-            <div className="relative">
-              <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl overflow-hidden bg-slate-800 ring-2 ring-amber-400/40 shadow-xl">
+            <div className="relative shrink-0">
+              <div className="w-14 h-14 sm:w-18 sm:h-18 rounded-2xl overflow-hidden bg-slate-800 ring-2 ring-amber-400/40 shadow-xl">
                 <img
                   src={photo}
                   alt={player.full_name}
@@ -319,31 +319,31 @@ export const PlayerPersonalSportDetailModal: React.FC<PlayerPersonalSportDetailM
                   }}
                 />
               </div>
-              <div className="absolute -bottom-1.5 -right-1.5 px-1.5 py-0.5 rounded-lg bg-amber-400 text-slate-950 text-[10px] font-black border border-slate-900 shadow">
+              <div className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-lg bg-amber-400 text-slate-950 text-[9px] sm:text-[10px] font-black border border-slate-900 shadow">
                 #{player.jersey_number ?? 10}
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <h3 className="text-lg sm:text-2xl font-black tracking-tight text-white uppercase truncate">
                   {player.full_name}
                 </h3>
-                <Badge className={`border text-[11px] font-black uppercase px-2.5 py-0.5 shadow-xs ${getPositionDetails(player.position).badgeBg}`}>
+                <Badge className={`border text-[10px] sm:text-[11px] font-black uppercase px-2 sm:px-2.5 py-0.5 shadow-xs ${getPositionDetails(player.position).badgeBg}`}>
                   {getPositionDetails(player.position).code} — {getPositionDetails(player.position).label}
                 </Badge>
                 {(player as any).category && (
-                  <Badge variant="outline" className="bg-white/10 text-white border-white/20 text-[10px] font-black uppercase px-2 py-0.5">
+                  <Badge variant="outline" className="bg-white/10 text-white border-white/20 text-[9px] sm:text-[10px] font-black uppercase px-1.5 sm:px-2 py-0.5">
                     {(player as any).category}
                   </Badge>
                 )}
                 {playerSurclassement && (
-                  <Badge className="bg-amber-400 text-slate-950 font-black text-[10px] uppercase">
+                  <Badge className="bg-amber-400 text-slate-950 font-black text-[9px] sm:text-[10px] uppercase">
                     ⭐ Surclassé {playerSurclassement.target_category}
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-slate-300 mt-1 flex items-center gap-2 flex-wrap">
+              <p className="text-[11px] sm:text-xs text-slate-300 mt-1 flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <span>Club : <strong>FUS Rabat</strong></span>
                 <span>•</span>
                 <span>Nationalité : <strong>{player.nationality || 'Marocaine'}</strong></span>
@@ -356,9 +356,9 @@ export const PlayerPersonalSportDetailModal: React.FC<PlayerPersonalSportDetailM
           <button
             type="button"
             onClick={onClose}
-            className="relative z-10 p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors"
+            className="absolute top-3 right-3 sm:relative sm:top-auto sm:right-auto z-20 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 

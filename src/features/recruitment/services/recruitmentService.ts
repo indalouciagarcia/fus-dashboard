@@ -21,9 +21,9 @@ import {
 
 // Storage keys
 const KEY_SCOUTS = 'fus_rec_scouts_v2';
-const KEY_CANDIDATES = 'fus_rec_candidates_v2';
-const KEY_TESTS = 'fus_rec_tests_v2';
-const KEY_EVALS = 'fus_rec_evaluations_v2';
+const KEY_CANDIDATES = 'fus_rec_candidates_u13_v1';
+const KEY_TESTS = 'fus_rec_tests_u13_v1';
+const KEY_EVALS = 'fus_rec_evaluations_u13_v1';
 const KEY_OBS = 'fus_rec_observations_v2';
 const KEY_TIMELINE = 'fus_rec_timeline_v2';
 const KEY_CLEARED = 'fus_rec_is_cleared_v2';
@@ -104,7 +104,21 @@ export const recruitmentService = {
   },
 
   async updateScout(id: string, updates: Partial<Scout>): Promise<Scout> {
-    const updatedFields = { ...updates, updated_at: new Date().toISOString() };
+    if (!id) {
+      console.error('[RecruitmentService] updateScout called without id:', { id, updates });
+      throw new Error("Identifiant du scout manquant pour la mise à jour.");
+    }
+
+    // Filter out undefined keys so Supabase payload is clean
+    const cleanedUpdates: Record<string, any> = {};
+    for (const [key, val] of Object.entries(updates)) {
+      if (val !== undefined) {
+        cleanedUpdates[key] = val;
+      }
+    }
+    const updatedFields = { ...cleanedUpdates, updated_at: new Date().toISOString() };
+
+    let dbUpdated: Scout | null = null;
     try {
       const { data, error } = await supabase
         .from('scouts')
@@ -112,25 +126,48 @@ export const recruitmentService = {
         .eq('id', id)
         .select()
         .single();
+
       if (error) {
         console.warn(`[RecruitmentService] Erreur Supabase updateScout (${id}):`, error.message);
       } else if (data) {
-        const list = getLocal<Scout[]>(KEY_SCOUTS, initialMockScouts);
-        const updated = list.map(s => s.id === id ? data : s);
-        setLocal(KEY_SCOUTS, updated);
-        return data;
+        dbUpdated = data;
       }
     } catch (err) {
       console.warn(`[RecruitmentService] Exception updateScout (${id}):`, err);
     }
 
+    // Mettre à jour le cache local (résilience offline / dev)
     const list = getLocal<Scout[]>(KEY_SCOUTS, initialMockScouts);
-    const updated = list.map(s => s.id === id ? { ...s, ...updates } : s);
+    const existingScout = list.find(s => s.id === id);
+    const oldName = existingScout?.full_name;
+
+    const updated = list.map(s => {
+      if (s.id === id) {
+        return dbUpdated || { ...s, ...updatedFields };
+      }
+      return s;
+    });
     setLocal(KEY_SCOUTS, updated);
-    return updated.find(s => s.id === id)!;
+
+    // Si le nom a changé, synchroniser le nom du scout dans les candidats découverts
+    if (updates.full_name && oldName && updates.full_name !== oldName) {
+      try {
+        const candList = getLocal<TrialCandidate[]>(KEY_CANDIDATES, []);
+        const updatedCands = candList.map(c => {
+          if (c.discovering_scout_id === id || c.discovering_scout_name === oldName) {
+            return { ...c, discovering_scout_name: updates.full_name! };
+          }
+          return c;
+        });
+        setLocal(KEY_CANDIDATES, updatedCands);
+      } catch (_) {}
+    }
+
+    return dbUpdated || updated.find(s => s.id === id)!;
   },
 
   async deleteScout(id: string): Promise<void> {
+    if (!id) return;
     try {
       const { error } = await supabase.from('scouts').delete().eq('id', id);
       if (error) {
@@ -157,8 +194,11 @@ export const recruitmentService = {
       } else if (data) {
         if (data.length > 0) {
           if (isCleared) setLocal(KEY_CLEARED, false);
-          setLocal(KEY_CANDIDATES, data);
-          return data;
+          const u13Data = data.filter((d: any) => d.age_category === 'U13');
+          const missingMocks = initialMockCandidates.filter(m => !u13Data.some((d: any) => d.id === m.id));
+          const allData = missingMocks.length > 0 ? [...u13Data, ...missingMocks] : (u13Data.length > 0 ? u13Data : initialMockCandidates);
+          setLocal(KEY_CANDIDATES, allData);
+          return allData;
         }
         // Base de données vide (ex: suite à réinitialisation)
         if (isCleared) {
@@ -167,7 +207,11 @@ export const recruitmentService = {
         }
         const local = getLocal<TrialCandidate[] | null>(KEY_CANDIDATES, null);
         if (local !== null) {
-          return local;
+          const u13Local = local.filter(l => l.age_category === 'U13');
+          const missingMocks = initialMockCandidates.filter(m => !u13Local.some(l => l.id === m.id));
+          const allLocal = missingMocks.length > 0 ? [...u13Local, ...missingMocks] : (u13Local.length > 0 ? u13Local : initialMockCandidates);
+          setLocal(KEY_CANDIDATES, allLocal);
+          return allLocal;
         }
         return initialMockCandidates;
       }
@@ -176,7 +220,14 @@ export const recruitmentService = {
     }
     if (isCleared) return [];
     const local = getLocal<TrialCandidate[] | null>(KEY_CANDIDATES, null);
-    return local !== null ? local : initialMockCandidates;
+    if (local !== null) {
+      const u13Local = local.filter(l => l.age_category === 'U13');
+      const missingMocks = initialMockCandidates.filter(m => !u13Local.some(l => l.id === m.id));
+      const allLocal = missingMocks.length > 0 ? [...u13Local, ...missingMocks] : (u13Local.length > 0 ? u13Local : initialMockCandidates);
+      setLocal(KEY_CANDIDATES, allLocal);
+      return allLocal;
+    }
+    return initialMockCandidates;
   },
 
   async createCandidate(candidate: Omit<TrialCandidate, 'id' | 'created_at' | 'updated_at'>): Promise<TrialCandidate> {
@@ -355,8 +406,20 @@ export const recruitmentService = {
   },
 
   async createTest(test: Omit<PlayerTest, 'id' | 'created_at' | 'updated_at'>): Promise<PlayerTest> {
+    const targetCandidateIds: string[] = test.candidate_ids && test.candidate_ids.length > 0
+      ? test.candidate_ids
+      : test.candidate_id ? [test.candidate_id] : [];
+
+    const primaryCandidateId = targetCandidateIds[0] || test.candidate_id;
     const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `test-${Date.now()}`;
-    const newTest: PlayerTest = { ...test, id: newId, created_at: new Date().toISOString() };
+    const newTest: PlayerTest = {
+      ...test,
+      id: newId,
+      candidate_id: primaryCandidateId,
+      candidate_ids: targetCandidateIds,
+      created_at: new Date().toISOString()
+    };
+
     try {
       const { error } = await supabase.from('trial_sessions').insert([{
         id: newId,
@@ -370,42 +433,74 @@ export const recruitmentService = {
         console.warn('[RecruitmentService] Erreur Supabase createTest, persistance en local:', error.message);
       }
 
-      // Liaison avec la feuille de match si match_id et candidate_id sont définis
-      if (test.match_id && test.candidate_id) {
-        try {
-          await supabase.from('match_players').insert([{
-            match_id: test.match_id,
-            player_id: test.candidate_id,
-            is_starting: false,
-            position_index: null,
-          }]);
-        } catch (mpErr) {
-          console.warn('[RecruitmentService] Note: liaison match_players candidate:', mpErr);
+      // Liaison avec la feuille de match pour TOUS les candidats sélectionnés
+      if (test.match_id && targetCandidateIds.length > 0) {
+        for (const cId of targetCandidateIds) {
+          try {
+            await supabase.from('match_players').insert([{
+              match_id: test.match_id,
+              player_id: cId,
+              is_starting: false,
+              position_index: null,
+            }]);
+          } catch (mpErr) {
+            console.warn('[RecruitmentService] Note: liaison match_players candidate:', mpErr);
+          }
         }
       }
     } catch (err) {
       console.warn('[RecruitmentService] Exception réseau createTest, persistance en local:', err);
     }
+
+    // Persistance locale : créer un enregistrement de test pour chaque candidat afin qu'il apparaisse dans leur calendrier et historique
     const list = getLocal<PlayerTest[]>(KEY_TESTS, initialMockTests);
-    const updated = [newTest, ...list];
+    const newTestsForList: PlayerTest[] = [];
+
+    if (targetCandidateIds.length > 0) {
+      for (const cId of targetCandidateIds) {
+        newTestsForList.push({
+          ...test,
+          id: cId === primaryCandidateId ? newId : `${newId}-${cId.slice(0, 6)}`,
+          candidate_id: cId,
+          candidate_ids: targetCandidateIds,
+          created_at: new Date().toISOString()
+        });
+      }
+    } else {
+      newTestsForList.push(newTest);
+    }
+
+    const updated = [...newTestsForList, ...list];
     setLocal(KEY_TESTS, updated);
 
-    if (test.candidate_id) {
-      // Déplacer automatiquement le joueur dans la colonne 'test_scheduled' du Kanban
-      await this.updateCandidate(test.candidate_id, {
-        pipeline_stage: 'test_scheduled',
-        status: 'in_trial',
-      });
+    // Mettre à jour TOUS les candidats convoqués dans le Pipeline Kanban
+    if (targetCandidateIds.length > 0) {
+      try {
+        const candidates = await this.getCandidates();
+        for (const cId of targetCandidateIds) {
+          const cand = candidates.find(c => c.id === cId);
+          const isClubTest = Boolean(test.match_id || (cand && ['shortlisted', 'shortlist'].includes(cand.pipeline_stage)));
+          const targetStage = isClubTest ? 'under_evaluation' : 'test_scheduled';
 
-      await this.addTimelineEvent({
-        candidate_id: test.candidate_id,
-        event_type: 'test_scheduled',
-        event_title: `Test Planifié : ${test.test_name}`,
-        event_description: `Session prévue ${test.match_name ? `lors du ${test.match_name}` : `le ${test.test_date}`} à ${test.location}. Le joueur est inscrit pour observation en match officiel/amical.`,
-        performed_by: 'Direction Technique & Cellule Recrutement',
-        event_date: test.test_date,
-      });
+          await this.updateCandidate(cId, {
+            pipeline_stage: targetStage,
+            status: 'in_trial',
+          });
+
+          await this.addTimelineEvent({
+            candidate_id: cId,
+            event_type: 'test_scheduled',
+            event_title: isClubTest ? `🟡 Test Club en Match Amical : ${test.test_name}` : `Test Scout Planifié : ${test.test_name}`,
+            event_description: `Session prévue ${test.match_name ? `lors du ${test.match_name}` : `le ${test.test_date}`} à ${test.location}. Le joueur est intégré avec le groupe sous mention « Sous Test ».`,
+            performed_by: isClubTest ? 'Coach Catégorie & Staff Technique' : 'Département Scout',
+            event_date: test.test_date,
+          });
+        }
+      } catch (candErr) {
+        console.warn('[RecruitmentService] Erreur mise à jour statut candidats lors du test:', candErr);
+      }
     }
+
     return newTest;
   },
 
@@ -482,7 +577,7 @@ export const recruitmentService = {
 
   async saveEvaluation(
     evaluation: Omit<CandidateEvaluation, 'id' | 'created_at'>,
-    options?: { isReevaluation?: boolean; updateId?: string }
+    options?: { isReevaluation?: boolean; updateId?: string; promoteToShortlist?: boolean }
   ): Promise<CandidateEvaluation> {
     // Calcul weighted score : Tech 30%, Phys 25%, Tact 25%, Ment 20%
     const overall = (
@@ -492,13 +587,17 @@ export const recruitmentService = {
       evaluation.mental_score * 0.20
     );
 
-    const isUpdate = Boolean(options?.updateId && !options?.isReevaluation);
-    const newId = isUpdate ? options!.updateId! : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `eval-${Date.now()}`);
+    const list = getLocal<CandidateEvaluation[]>(KEY_EVALS, initialMockEvaluations);
+    const existingCandidateEval = list.find(e => e.candidate_id === evaluation.candidate_id);
+    const isUpdate = Boolean(options?.updateId || (!options?.isReevaluation && existingCandidateEval));
+    const targetId = options?.updateId || (isUpdate && existingCandidateEval ? existingCandidateEval.id : undefined);
+    const newId = targetId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `eval-${Date.now()}`);
+
     const newEval: CandidateEvaluation = {
       ...evaluation,
       id: newId,
       overall_score: Math.round(overall * 10) / 10,
-      created_at: new Date().toISOString(),
+      created_at: existingCandidateEval?.created_at || new Date().toISOString(),
     };
 
     try {
@@ -513,7 +612,6 @@ export const recruitmentService = {
       console.warn('[RecruitmentService] Exception réseau saveEvaluation, persistance en local:', err);
     }
 
-    const list = getLocal<CandidateEvaluation[]>(KEY_EVALS, initialMockEvaluations);
     let updated: CandidateEvaluation[];
     if (isUpdate) {
       const idx = list.findIndex(e => e.id === newId);
@@ -524,61 +622,58 @@ export const recruitmentService = {
         updated = [newEval, ...list];
       }
     } else {
-      // Nouvelle évaluation ou réévaluation : ajoutée en tête d'historique
       updated = [newEval, ...list];
     }
     setLocal(KEY_EVALS, updated);
 
-    // Si un test est rattaché à l'évaluation, marquer automatiquement ce test comme 'completed'
+    // Si un test est rattaché à l'évaluation, marquer ce test comme 'completed'
     if (evaluation.test_id) {
       try {
         await this.updateTest(evaluation.test_id, { status: 'completed' });
-        if (evaluation.candidate_id) {
-          const candidates = await this.getCandidates();
-          const cand = candidates.find(c => c.id === evaluation.candidate_id);
-          if (cand && cand.pipeline_stage === 'test_scheduled') {
-            await this.updateCandidate(evaluation.candidate_id, {
-              pipeline_stage: 'test_completed',
-            });
-          }
-        }
       } catch (testErr) {
         console.warn('[RecruitmentService] Impossible de mettre à jour le statut du test rattaché:', testErr);
       }
-    } else if (evaluation.candidate_id) {
-      // Si aucun test_id n'était spécifié, créer automatiquement la session de test correspondante
+    }
+
+    // Gestion de l'avancement dans le Pipeline Kanban
+    if (evaluation.candidate_id) {
       try {
-        const autoTest = await this.createTest({
-          candidate_id: evaluation.candidate_id,
-          test_name: evaluation.test_name || `Session d'Évaluation — ${evaluation.evaluator_name || 'Staff FUS'}`,
-          test_date: evaluation.evaluation_date,
-          start_time: '10:00',
-          end_time: '12:00',
-          location: 'Complexe Sportif FUS - Académie',
-          training_ground: 'Terrain Synthétique 1',
-          target_team: 'Académie FUS',
-          age_category: 'U19',
-          test_type: 'comprehensive',
-          status: 'completed',
-          assigned_coaches: ['Staff Technique Académie FUS'],
-          assigned_scouts: [evaluation.evaluator_name || 'Cellule Recrutement'],
-          notes: `Évaluation enregistrée : Note ${newEval.overall_score}/10 (${newEval.verdict})`,
-        });
-        newEval.test_id = autoTest.id;
-      } catch (err) {
-        console.warn('[RecruitmentService] Auto-création de test pour évaluation échouée:', err);
+        const candidates = await this.getCandidates();
+        const cand = candidates.find(c => c.id === evaluation.candidate_id);
+        if (cand && !['signed', 'academy', 'rejected', 'archived'].includes(cand.pipeline_stage)) {
+          if (options?.promoteToShortlist) {
+            // Confirmation explicite de passation vers Shortlist & Onze Idéal
+            await this.updateCandidate(evaluation.candidate_id, {
+              pipeline_stage: 'shortlisted',
+              discovering_scout_name: evaluation.evaluator_name || cand.discovering_scout_name,
+            });
+          } else if (['prospect', 'test_scheduled'].includes(cand.pipeline_stage)) {
+            // Durant la semaine de test, le dossier avance à "3. Test Réalisé Scout"
+            await this.updateCandidate(evaluation.candidate_id, {
+              pipeline_stage: 'test_completed',
+              discovering_scout_name: evaluation.evaluator_name || cand.discovering_scout_name,
+            });
+          }
+        }
+      } catch (candErr) {
+        console.warn('[RecruitmentService] Erreur mise à jour candidat lors de l\'évaluation:', candErr);
       }
     }
 
     // Auto-log in timeline
     const isReeval = options?.isReevaluation;
+    const isShortlist = Boolean(options?.promoteToShortlist);
     const testNote = evaluation.test_name ? ` (Session : ${evaluation.test_name})` : '';
     await this.addTimelineEvent({
       candidate_id: evaluation.candidate_id,
       event_type: 'evaluated',
-      event_title: isReeval ? `Réévaluation 1–10 : Note ${newEval.overall_score}/10${testNote}` : `Évaluation 1–10 Validée : Note ${newEval.overall_score}/10${testNote}`,
-      event_description: `Par ${evaluation.evaluator_name}. Verdict : ${evaluation.verdict}.`,
-      performed_by: evaluation.evaluator_name,
+      event_title: isShortlist
+        ? `⭐ Évaluation Validée : Note ${newEval.overall_score}/10 — Passation en Shortlist & Onze Idéal`
+        : isReeval
+          ? `Réévaluation Scout : Note ${newEval.overall_score}/10${testNote}`
+          : `Évaluation Scout (Test Réalisé) : Note ${newEval.overall_score}/10${testNote}`,
+      event_description: `Par le scout ${evaluation.evaluator_name || 'Staff FUS'}. Verdict : ${evaluation.verdict}.${isShortlist ? ' Intégré officiellement à la Shortlist et au Onze Idéal.' : ' Métriques conservées pour les prochaines sessions de la semaine de test.'}`,
+      performed_by: evaluation.evaluator_name || 'Cellule Recrutement',
       event_date: evaluation.evaluation_date,
     });
 

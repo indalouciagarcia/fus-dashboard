@@ -418,9 +418,9 @@ export const OfficialShortlistPage: React.FC = () => {
       });
     });
 
-    // 2. Trial Candidates (in stage 'trial', 'shortlist', 'shortlisted', or 'invited')
+    // 2. Trial Candidates (in stage 'under_evaluation', 'trial', 'club_trial', 'shortlist', 'shortlisted', or 'invited')
     candidates
-      .filter(c => c.pipeline_stage === 'trial' || c.pipeline_stage === 'shortlist' || c.pipeline_stage === 'shortlisted' || c.pipeline_stage === 'invited')
+      .filter(c => ['under_evaluation', 'trial', 'club_trial', 'shortlist', 'shortlisted', 'invited'].includes(c.pipeline_stage))
       .forEach(c => {
         const evals = recruitmentEvals.filter(e => e.candidate_id === c.id);
         const lastEval = evals[0];
@@ -721,12 +721,13 @@ export const OfficialShortlistPage: React.FC = () => {
       {/* ========================================================================= */}
       {/* FULL WIDTH TACTICAL FOOTBALL PITCH                                         */}
       {/* ========================================================================= */}
-      <div
-        className={`w-full ${pitchHeightClass} rounded-3xl border border-emerald-800/40 relative overflow-hidden shadow-2xl transition-all duration-300`}
-        style={{
-          background: 'linear-gradient(180deg, #064e3b 0%, #065f46 50%, #064e3b 100%)',
-        }}
-      >
+      <div className="w-full overflow-x-auto no-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
+        <div
+          className={`w-full min-w-[620px] sm:min-w-0 ${pitchHeightClass} rounded-2xl sm:rounded-3xl border border-emerald-800/40 relative overflow-hidden shadow-2xl transition-all duration-300`}
+          style={{
+            background: 'linear-gradient(180deg, #064e3b 0%, #065f46 50%, #064e3b 100%)',
+          }}
+        >
         {/* Pitch mowing stripes */}
         <div className="absolute inset-0 flex flex-col pointer-events-none opacity-25">
           {Array.from({ length: 12 }).map((_, i) => (
@@ -879,6 +880,7 @@ export const OfficialShortlistPage: React.FC = () => {
             </div>
           );
         })}
+        </div>
       </div>
 
       {/* ========================================================================= */}

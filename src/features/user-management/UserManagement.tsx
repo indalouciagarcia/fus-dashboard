@@ -508,13 +508,13 @@ const UserManagement: React.FC = () => {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
          <div>
-            <h2 className="text-3xl font-black tracking-tight text-foreground uppercase italic flex items-center gap-2">
-              Gestion des Utilisateurs & Périmètres <ShieldCheck className="w-6 h-6 text-primary" />
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground uppercase italic flex items-center gap-2">
+              Gestion des Utilisateurs <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
             </h2>
-            <p className="text-muted-foreground text-sm font-medium">
-               Création de comptes par le Super Admin, attribution des intitulés de poste et des périmètres d'accès
+            <p className="text-muted-foreground text-xs sm:text-sm font-medium">
+               Création de comptes, attribution des intitulés de poste et périmètres d'accès
             </p>
          </div>
          <Button onClick={() => {
@@ -522,7 +522,7 @@ const UserManagement: React.FC = () => {
            setAvatarFile(null);
            setAvatarPreview(null);
            setModalMode('create');
-         }} className="gap-2 shadow-lg shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs uppercase tracking-wider rounded-xl">
+         }} className="gap-2 shadow-lg shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs uppercase tracking-wider rounded-xl h-11 px-5 w-full sm:w-auto shrink-0">
            <UserPlus className="w-4 h-4" /> Nouvel Utilisateur
          </Button>
       </div>
@@ -712,7 +712,7 @@ const UserManagement: React.FC = () => {
                        )}
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button onClick={() => openViewMode(u)} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors" title="Détails">
                           <Eye className="w-4 h-4" />
                         </button>

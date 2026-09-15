@@ -77,6 +77,9 @@ import ErrorEmptyState from '../../components/ErrorEmptyState';
 import { useSurclassements, usePlayerSurclassements } from '../../hooks/useSurclassements';
 import SurclassementModal from './SurclassementModal';
 import { recruitmentService } from '../recruitment/services/recruitmentService';
+import { useRecruitment, RECRUITMENT_KEYS } from '../recruitment/hooks/useRecruitment';
+import type { TrialCandidate } from '../recruitment/types/recruitment';
+import FeatureGate from '../../components/FeatureGate';
 import { PlayerDepartureModal } from './components/PlayerDepartureModal';
 import { PlayerMatchCalendarModal } from './components/PlayerMatchCalendarModal';
 import { opponentPlayerService } from '../../services/opponentPlayerService';
@@ -249,6 +252,7 @@ const PlayerManagement: React.FC = () => {
   const { players, isLoading: playersLoading, isError: playersError, addPlayer, updatePlayer, deletePlayer, bulkDeletePlayers, isBulkDeleting, bulkAddPlayers, isBulkAdding } = usePlayers();
   const { teams, isLoading: teamsLoading, isError: teamsError } = useTeams();
   const { mainClub, opponentClubs = [], isLoading: clubLoading } = useClubData();
+  const { candidates: recruitmentCandidates = [], isPluginActive: isRecruitmentActive } = useRecruitment();
   const [departurePlayer, setDeparturePlayer] = useState<Player | null>(null);
   const [departureModalOpen, setDepartureModalOpen] = useState(false);
 
@@ -434,10 +438,18 @@ const PlayerManagement: React.FC = () => {
     const cat = new URLSearchParams(window.location.search).get('category');
     return cat ? cat.toUpperCase() : 'ALL';
   });
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OFFICIAL' | 'TRIAL'>('ALL');
   useEffect(() => {
     const cat = searchParams.get('category');
     if (cat) setCategoryFilter(cat.toUpperCase());
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!isRecruitmentActive && statusFilter === 'TRIAL') {
+      setStatusFilter('ALL');
+    }
+  }, [isRecruitmentActive, statusFilter]);
+
   const [viewState, setViewState] = useState<'LIST' | 'FORM' | 'VIEW' | 'STATS' | 'PLANNING' | 'BULK_ADD'>('LIST');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   // Multi-sélection
@@ -854,16 +866,61 @@ const PlayerManagement: React.FC = () => {
     return Math.abs(new Date(difference).getUTCFullYear() - 1970);
   };
 
+  // Candidats actuellement à l'essai / sous observation dans le club
+  const trialPlayersAsPlayer = useMemo(() => {
+    return recruitmentCandidates
+      .filter(c =>
+        ['under_evaluation', 'trial', 'club_trial', 'shortlisted'].includes(c.pipeline_stage) &&
+        !players.some(p => p.id === c.id || (p.full_name && p.full_name.toLowerCase() === `${c.first_name} ${c.last_name}`.toLowerCase()))
+      )
+      .map(c => ({
+        id: c.id,
+        full_name: `${c.first_name} ${c.last_name}`.trim(),
+        jersey_number: undefined,
+        position: c.primary_position || 'MF',
+        birth_date: c.birth_date || null,
+        nationality: c.nationality || 'Maroc',
+        height: c.height_cm || null,
+        weight: c.weight_kg || null,
+        preferred_foot: c.preferred_foot === 'left' ? 'left' : c.preferred_foot === 'both' ? 'both' : 'right',
+        photo_url: c.photo_url || null,
+        team_id: c.assigned_team_id || '',
+        category: c.age_category || 'U13',
+        status: 'under_evaluation',
+        created_at: c.created_at || new Date().toISOString(),
+        updated_at: c.updated_at || new Date().toISOString(),
+        isTrialCandidate: true,
+        candidateData: c
+      } as unknown as Player & { isTrialCandidate: boolean; candidateData: TrialCandidate; category: string }));
+  }, [recruitmentCandidates, players]);
+
+  const allCombinedPlayers = useMemo(() => {
+    return [
+      ...players.map(p => ({ ...p, isTrialCandidate: false })),
+      ...trialPlayersAsPlayer
+    ];
+  }, [players, trialPlayersAsPlayer]);
+
   const filteredPlayers = useMemo(() => {
-    return players.filter(p => {
+    return allCombinedPlayers.filter(p => {
+      // 1. Filtrer par statut : ALL, OFFICIAL, TRIAL
+      if (statusFilter === 'OFFICIAL' && (p as any).isTrialCandidate) return false;
+      if (statusFilter === 'TRIAL' && !(p as any).isTrialCandidate) return false;
+
+      // 2. Recherche texte
       const matchesSearch = p.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.jersey_number?.toString().includes(searchQuery);
+        (p.jersey_number !== undefined && p.jersey_number !== null && p.jersey_number.toString().includes(searchQuery));
+
+      // 3. Filtrer par poste
       const matchesPosition = matchesPositionFilter(p.position, positionFilter);
-      const playerCategory = teams.find(t => t.id === p.team_id)?.category;
-      const matchesCategory = categoryFilter === 'ALL' || normalizeAgeCategory(playerCategory) === categoryFilter.toUpperCase();
+
+      // 4. Filtrer par catégorie
+      const playerCategory = teams.find(t => t.id === p.team_id)?.category || (p as any).category;
+      const matchesCategory = categoryFilter === 'ALL' || normalizeAgeCategory(playerCategory || '') === categoryFilter.toUpperCase();
+
       return matchesSearch && matchesPosition && matchesCategory;
     });
-  }, [players, searchQuery, positionFilter, categoryFilter, teams]);
+  }, [allCombinedPlayers, statusFilter, searchQuery, positionFilter, categoryFilter, teams]);
 
   const paginatedPlayers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -874,7 +931,7 @@ const PlayerManagement: React.FC = () => {
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, positionFilter, categoryFilter, pageSize]);
+  }, [searchQuery, positionFilter, categoryFilter, statusFilter, pageSize]);
 
   // Auto-select team when category changes if there's only one team for that category
   React.useEffect(() => {
@@ -1130,6 +1187,42 @@ const PlayerManagement: React.FC = () => {
     }
   }, [viewState, selectedPlayer]);
 
+  const handleSignTrialCandidate = async (trialPlayer: any) => {
+    try {
+      await recruitmentService.updateCandidate({
+        id: trialPlayer.id,
+        updates: {
+          pipeline_stage: 'signed',
+          status: 'selected'
+        }
+      });
+      await recruitmentService.syncCandidateToSquad(trialPlayer.id, trialPlayer.team_id || undefined);
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.candidates });
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+      toast.success(`🎉 ${trialPlayer.full_name} a été signé et intégré à l'effectif officiel !`);
+    } catch (e: any) {
+      console.error("Sign candidate error:", e);
+      toast.error(e.message || "Erreur lors de la signature du candidat");
+    }
+  };
+
+  const handleRemoveTrialCandidate = async (trialPlayer: any) => {
+    try {
+      await recruitmentService.updateCandidate({
+        id: trialPlayer.id,
+        updates: {
+          pipeline_stage: 'rejected',
+          status: 'rejected'
+        }
+      });
+      queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.candidates });
+      toast.info(`${trialPlayer.full_name} a été retiré des essais`);
+    } catch (e: any) {
+      console.error("Remove candidate error:", e);
+      toast.error("Erreur lors de la mise à jour");
+    }
+  };
+
   const handleSave = async () => {
     try {
       const sanitizedData = {
@@ -1141,8 +1234,28 @@ const PlayerManagement: React.FC = () => {
       };
 
       if (selectedPlayer) {
-        const { id, created_at, ...updateData } = sanitizedData as any;
-        await updatePlayer({ id: selectedPlayer.id, data: updateData });
+        if ((selectedPlayer as any).isTrialCandidate) {
+          await recruitmentService.updateCandidate({
+            id: selectedPlayer.id,
+            updates: {
+              first_name: sanitizedData.full_name?.split(' ')[0] || '',
+              last_name: sanitizedData.full_name?.split(' ').slice(1).join(' ') || '',
+              primary_position: sanitizedData.position,
+              birth_date: sanitizedData.birth_date || undefined,
+              height_cm: sanitizedData.height || undefined,
+              weight_kg: sanitizedData.weight || undefined,
+              nationality: sanitizedData.nationality,
+              preferred_foot: sanitizedData.preferred_foot,
+              age_category: sanitizedData.category,
+              assigned_team_id: sanitizedData.team_id || undefined,
+            }
+          });
+          queryClient.invalidateQueries({ queryKey: RECRUITMENT_KEYS.candidates });
+          toast.success("Profil du joueur sous test mis à jour !");
+        } else {
+          const { id, created_at, ...updateData } = sanitizedData as any;
+          await updatePlayer({ id: selectedPlayer.id, data: updateData });
+        }
       } else {
         await addPlayer(sanitizedData as Omit<Player, 'id'>);
       }
@@ -1309,6 +1422,7 @@ const PlayerManagement: React.FC = () => {
                   <span className="sm:hidden">Multiple</span>
                 </Button>
 
+                <FeatureGate pluginId="recruitment_v1">
                 <Button
                   variant="outline"
                   disabled={isSyncingRecruitment}
@@ -1320,19 +1434,77 @@ const PlayerManagement: React.FC = () => {
                   <span className="hidden sm:inline">Sync Recrutement (Signés)</span>
                   <span className="sm:hidden">Sync Recrues</span>
                 </Button>
+                </FeatureGate>
               </div>
             </div>
 
             {/* Filters Bar */}
             <div className="flex flex-col gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white border shadow-sm">
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher par nom ou numéro..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-10 sm:h-11 bg-secondary/30 border-transparent focus:bg-white transition-all rounded-xl font-medium text-sm"
-                />
+              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Rechercher par nom ou numéro..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 h-10 sm:h-11 bg-secondary/30 border-transparent focus:bg-white transition-all rounded-xl font-medium text-sm"
+                  />
+                </div>
+
+                {/* Filtre Statut : Tous, Officiels, Sous Test Club */}
+                <div className="flex bg-secondary/30 p-1 rounded-xl shrink-0 overflow-x-auto no-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('ALL')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      statusFilter === 'ALL'
+                        ? 'bg-white text-foreground shadow-xs font-black'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Tous</span>
+                    <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-secondary/60 text-muted-foreground font-bold">
+                      {allCombinedPlayers.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('OFFICIAL')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      statusFilter === 'OFFICIAL'
+                        ? 'bg-emerald-600 text-white shadow-xs font-black'
+                        : 'text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400'
+                    }`}
+                  >
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Officiels</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                      statusFilter === 'OFFICIAL' ? 'bg-white/20 text-white' : 'bg-secondary/60 text-muted-foreground'
+                    }`}>
+                      {players.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('TRIAL')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                      statusFilter === 'TRIAL'
+                        ? 'bg-amber-500 text-black shadow-xs font-black'
+                        : 'text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Sous Test Club</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                      statusFilter === 'TRIAL' ? 'bg-black/20 text-black' : 'bg-amber-500/20 text-amber-700 dark:text-amber-400'
+                    }`}>
+                      {trialPlayersAsPlayer.length}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
@@ -1388,12 +1560,12 @@ const PlayerManagement: React.FC = () => {
                                   <img src={mainClub.logo_url} alt="Club" className="w-full h-full object-contain rounded-full" />
                                 </div>
                                 <Badge className="bg-white/90 backdrop-blur-sm text-primary font-black text-[10px] uppercase tracking-widest border-none shadow-md px-3 py-1">
-                                  {teams.find(t => t.id === player.team_id)?.category || 'N/A'}
+                                  {teams.find(t => t.id === player.team_id)?.category || (player as any).category || 'N/A'}
                                 </Badge>
                               </div>
                             )}
                             <div className="absolute top-3 right-4 text-3xl font-black italic text-black/5 select-none transition-all group-hover:text-primary/10">
-                              {player.jersey_number}
+                              {(player.jersey_number !== undefined && player.jersey_number !== null) ? player.jersey_number : '—'}
                             </div>
                           </div>
 
@@ -1409,13 +1581,22 @@ const PlayerManagement: React.FC = () => {
                               </span>
                             </div>
 
-                            {/* Badge Recrutement Pipeline */}
-                            <div className="mb-3 flex items-center justify-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1">
-                              <Sparkles className="w-3 h-3 text-emerald-600" />
-                              <span className="text-[9px] font-black text-emerald-700 uppercase tracking-wider">
-                                Pipeline Validé & Signé
-                              </span>
-                            </div>
+                            {/* Badge Recrutement Pipeline / Statut */}
+                            {(player as any).isTrialCandidate ? (
+                              <div className="mb-3 flex items-center justify-center gap-1.5 bg-amber-500/15 border border-amber-500/30 rounded-xl px-2.5 py-1 text-amber-700 dark:text-amber-400">
+                                <Eye className="w-3 h-3 text-amber-600" />
+                                <span className="text-[9px] font-black uppercase tracking-wider">
+                                  À l'essai • Test Club
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="mb-3 flex items-center justify-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1">
+                                <Sparkles className="w-3 h-3 text-emerald-600" />
+                                <span className="text-[9px] font-black text-emerald-700 uppercase tracking-wider">
+                                  Effectif Officiel
+                                </span>
+                              </div>
+                            )}
 
                             {/* Badge surclassement actif */}
                             {activeByPlayerId[player.id] && (
@@ -1435,24 +1616,38 @@ const PlayerManagement: React.FC = () => {
                                 <Button variant="secondary" size="icon" onClick={() => handleViewStats(player)} className="h-9 w-9 rounded-xl bg-secondary/50 hover:bg-emerald-500 hover:text-white transition-all" title="Statistiques">
                                   <BarChart3 className="w-4 h-4" />
                                 </Button>
-                                <Button variant="secondary" size="icon" onClick={() => handleOpenEdit(player)} className="h-9 w-9 rounded-xl bg-secondary/50 hover:bg-primary hover:text-white transition-all">
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  size="icon"
-                                  onClick={() => handleOpenSurclassement(player)}
-                                  title={activeByPlayerId[player.id] ? 'Réintégrer' : 'Surclasser'}
-                                  className={`h-9 w-9 rounded-xl transition-all ${activeByPlayerId[player.id]
-                                      ? 'bg-orange-100 text-orange-600 hover:bg-orange-200'
-                                      : 'bg-secondary/50 hover:bg-orange-500 hover:text-white'
-                                    }`}
-                                >
-                                  {activeByPlayerId[player.id]
-                                    ? <RotateCcw className="w-4 h-4" />
-                                    : <ArrowUpCircle className="w-4 h-4" />
-                                  }
-                                </Button>
+                                {(player as any).isTrialCandidate ? (
+                                  <Button
+                                    variant="secondary"
+                                    size="icon"
+                                    onClick={() => handleSignTrialCandidate(player)}
+                                    title="Signer officiellement et intégrer à l'effectif"
+                                    className="h-9 w-9 rounded-xl bg-emerald-500/15 hover:bg-emerald-600 hover:text-white text-emerald-700 dark:text-emerald-400 transition-all font-bold"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </Button>
+                                ) : (
+                                  <>
+                                    <Button variant="secondary" size="icon" onClick={() => handleOpenEdit(player)} className="h-9 w-9 rounded-xl bg-secondary/50 hover:bg-primary hover:text-white transition-all">
+                                      <Edit2 className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      size="icon"
+                                      onClick={() => handleOpenSurclassement(player)}
+                                      title={activeByPlayerId[player.id] ? 'Réintégrer' : 'Surclasser'}
+                                      className={`h-9 w-9 rounded-xl transition-all ${activeByPlayerId[player.id]
+                                          ? 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                                          : 'bg-secondary/50 hover:bg-orange-500 hover:text-white'
+                                        }`}
+                                    >
+                                      {activeByPlayerId[player.id]
+                                        ? <RotateCcw className="w-4 h-4" />
+                                        : <ArrowUpCircle className="w-4 h-4" />
+                                      }
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                               {selectionMode ? (
                                 <button
@@ -1462,9 +1657,15 @@ const PlayerManagement: React.FC = () => {
                                   {selectedIds.has(player.id) ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 rounded border-2 border-current" />}
                                 </button>
                               ) : (
-                                <Button variant="ghost" size="icon" onClick={() => handleOpenDeparture(player)} title="Sortie / Transfert du club" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
-                                  <X className="w-4 h-4 text-red-500" />
-                                </Button>
+                                (player as any).isTrialCandidate ? (
+                                  <Button variant="ghost" size="icon" onClick={() => handleRemoveTrialCandidate(player)} title="Retirer des essais" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
+                                    <X className="w-4 h-4 text-red-500" />
+                                  </Button>
+                                ) : (
+                                  <Button variant="ghost" size="icon" onClick={() => handleOpenDeparture(player)} title="Sortie / Transfert du club" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
+                                    <X className="w-4 h-4 text-red-500" />
+                                  </Button>
+                                )
                               )}
                             </div>
                           </div>
@@ -1504,11 +1705,19 @@ const PlayerManagement: React.FC = () => {
                             <div>
                               <div className="flex items-center gap-1.5">
                                 <p className="font-black text-sm uppercase italic tracking-tighter leading-none">{player.full_name}</p>
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 text-[8px] font-black uppercase">
-                                  ⭐ Signé FUS
-                                </span>
+                                {(player as any).isTrialCandidate ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 text-[8px] font-black uppercase">
+                                    <Eye className="w-2.5 h-2.5" /> À l'essai • Test Club
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 text-[8px] font-black uppercase">
+                                    ⭐ Signé FUS
+                                  </span>
+                                )}
                               </div>
-                              <p className="text-[10px] font-bold text-muted-foreground mt-1 uppercase">#{player.jersey_number}</p>
+                              <p className="text-[10px] font-bold text-muted-foreground mt-1 uppercase">
+                                #{(player.jersey_number !== undefined && player.jersey_number !== null) ? player.jersey_number : '—'}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -1525,7 +1734,7 @@ const PlayerManagement: React.FC = () => {
                         <td className="py-3">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="text-[9px] font-black border-primary/20 text-primary uppercase">
-                              {teams.find(t => t.id === player.team_id)?.category || 'N/A'}
+                              {teams.find(t => t.id === player.team_id)?.category || (player as any).category || 'N/A'}
                             </Badge>
                             {activeByPlayerId[player.id] && (
                               <Badge className="bg-orange-100 text-orange-600 border-orange-200 text-[9px] font-black uppercase gap-1 border">
@@ -1545,38 +1754,61 @@ const PlayerManagement: React.FC = () => {
                                 {selectedIds.has(player.id) ? <CheckSquare className="w-4 h-4" /> : <div className="w-4 h-4 rounded border-2 border-current" />}
                               </button>
                             ) : (
-                              <>
-                                <Button variant="ghost" size="icon" onClick={() => handleViewPlayer(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
-                                  <Eye className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleViewStats(player)} className="h-9 w-9 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-md transition-all" title="Statistiques">
-                                  <BarChart3 className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => setCalendarModalPlayer(player)} className="h-9 w-9 rounded-xl hover:bg-blue-50 hover:text-blue-600 hover:shadow-md transition-all" title="Calendrier & Stats Matchs Joueur">
-                                  <Calendar className="w-4 h-4 text-blue-600" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleOpenSurclassement(player)}
-                                  title={activeByPlayerId[player.id] ? 'Réintégrer' : 'Surclasser'}
-                                  className={`h-9 w-9 rounded-xl transition-all ${activeByPlayerId[player.id]
-                                      ? 'text-orange-500 bg-orange-50 hover:bg-orange-100'
-                                      : 'text-muted-foreground hover:text-orange-500 hover:bg-orange-50'
-                                    }`}
-                                >
-                                  {activeByPlayerId[player.id]
-                                    ? <RotateCcw className="w-4 h-4" />
-                                    : <ArrowUpCircle className="w-4 h-4" />
-                                  }
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleOpenDeparture(player)} title="Sortie / Transfert du club" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
-                                  <X className="w-4 h-4 text-red-500" />
-                                </Button>
-                              </>
+                              (player as any).isTrialCandidate ? (
+                                <>
+                                  <Button variant="ghost" size="icon" onClick={() => handleViewPlayer(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all" title="Voir le profil">
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleViewStats(player)} className="h-9 w-9 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-md transition-all" title="Statistiques">
+                                    <BarChart3 className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleSignTrialCandidate(player)}
+                                    title="Signer officiellement et intégrer à l'effectif"
+                                    className="h-9 w-9 rounded-xl text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 transition-all font-bold"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleRemoveTrialCandidate(player)} title="Retirer des essais" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
+                                    <X className="w-4 h-4 text-red-500" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button variant="ghost" size="icon" onClick={() => handleViewPlayer(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleViewStats(player)} className="h-9 w-9 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-md transition-all" title="Statistiques">
+                                    <BarChart3 className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => setCalendarModalPlayer(player)} className="h-9 w-9 rounded-xl hover:bg-blue-50 hover:text-blue-600 hover:shadow-md transition-all" title="Calendrier & Stats Matchs Joueur">
+                                    <Calendar className="w-4 h-4 text-blue-600" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(player)} className="h-9 w-9 rounded-xl hover:bg-white hover:shadow-md transition-all">
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleOpenSurclassement(player)}
+                                    title={activeByPlayerId[player.id] ? 'Réintégrer' : 'Surclasser'}
+                                    className={`h-9 w-9 rounded-xl transition-all ${activeByPlayerId[player.id]
+                                        ? 'text-orange-500 bg-orange-50 hover:bg-orange-100'
+                                        : 'text-muted-foreground hover:text-orange-500 hover:bg-orange-50'
+                                      }`}
+                                  >
+                                    {activeByPlayerId[player.id]
+                                      ? <RotateCcw className="w-4 h-4" />
+                                      : <ArrowUpCircle className="w-4 h-4" />
+                                    }
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleOpenDeparture(player)} title="Sortie / Transfert du club" className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive hover:bg-red-50 transition-all">
+                                    <X className="w-4 h-4 text-red-500" />
+                                  </Button>
+                                </>
+                              )
                             )}
                           </div>
                         </td>

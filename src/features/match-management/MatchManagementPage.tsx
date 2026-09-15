@@ -72,9 +72,15 @@ interface MatchListItemProps {
 const MatchListItem: React.FC<MatchListItemProps> = ({ 
    match, isSelected, isMultiSelected, onToggleMultiSelect, onSelect, onEdit, onDelete, onStartLive, opponentClubs, mainClub, getOpponentName, variant, leagues = [] 
 }) => {
-   const isFriendly = !match.league_id || match.category?.toLowerCase().includes('amical') || match.notes?.toLowerCase().includes('amical');
+   const isInternal = (match as any).match_type === 'internal_scrimmage'
+      || (match.lineup as any)?.internal_opposition?.is_internal_scrimmage
+      || (match.notes && match.notes.includes('[Opposition Interne]'))
+      || (mainClub && match.opponent_id === mainClub.id);
+   const isFriendly = !isInternal && (!match.league_id || match.category?.toLowerCase().includes('amical') || match.notes?.toLowerCase().includes('amical'));
    const league = leagues.find(l => l.id === match.league_id);
-   const leagueName = isFriendly ? 'Match Amical' : (league?.name || (match as any).league?.name || 'Compétition Officielle');
+   const leagueName = isInternal 
+      ? 'Opposition Interne' 
+      : (isFriendly ? 'Match Amical' : (league?.name || (match as any).league?.name || 'Compétition Officielle'));
 
    const getVariantStyles = () => {
       switch (variant) {
@@ -140,9 +146,13 @@ const MatchListItem: React.FC<MatchListItemProps> = ({
             </div>
          </div>
 
-         {/* Type de match (Amical vs Nom de Ligue) badge en haut à droite */}
+         {/* Type de match (Amical vs Interne vs Nom de Ligue) badge en haut à droite */}
          <div className="absolute top-3 right-3 z-10 pointer-events-none">
-            {isFriendly ? (
+            {isInternal ? (
+               <Badge className="bg-purple-100 text-purple-900 border-purple-300 text-[8px] font-black uppercase px-2 py-0.5 shadow-sm">
+                  ⚔️ Interne
+               </Badge>
+            ) : isFriendly ? (
                <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-[8px] font-black uppercase px-2 py-0.5 shadow-sm">
                   🤝 Amical
                </Badge>
@@ -174,8 +184,8 @@ const MatchListItem: React.FC<MatchListItemProps> = ({
                <p className="text-[8px] font-black uppercase tracking-wider mt-0.5 whitespace-nowrap flex items-center justify-center gap-1">
                   <span className="text-primary">{match.category || 'Équipe'}</span>
                   <span className="text-slate-300">•</span>
-                  <span className={isFriendly ? 'text-amber-700 font-bold' : 'text-emerald-700 font-bold'}>
-                     {isFriendly ? '🤝 Amical' : leagueName}
+                  <span className={isInternal ? 'text-purple-700 font-bold' : (isFriendly ? 'text-amber-700 font-bold' : 'text-emerald-700 font-bold')}>
+                     {isInternal ? '⚔️ Opp. Interne' : (isFriendly ? '🤝 Amical' : leagueName)}
                   </span>
                </p>
                {match.status === 'live' && (
@@ -188,7 +198,11 @@ const MatchListItem: React.FC<MatchListItemProps> = ({
             <div className="flex flex-col items-center gap-1 w-1/3">
                <div className={`w-12 h-12 rounded-xl bg-white border flex items-center justify-center p-1.5 shadow-sm transition-all ${isSelected ? 'ring-2 ring-primary/20' : ''}`}>
                   <img 
-                     src={opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`} 
+                     src={
+                        (isInternal && mainClub?.logo_url)
+                           ? mainClub.logo_url
+                           : (opponentClubs.find(c => c.id === match.opponent_id)?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(getOpponentName(match.opponent_id))}&background=random`)
+                     } 
                      alt="" 
                      className="w-full h-full object-contain" 
                   />
@@ -467,8 +481,14 @@ const MatchManagementPage: React.FC = () => {
       }
    };
 
-   const getOpponentName = (clubId: string) => opponentClubs.find(c => c.id === clubId)?.name || 'Adversaire Inconnu';
+   const getOpponentName = (clubId: string) => {
+      if (mainClub && clubId === mainClub.id) {
+         return `${mainClub.club_name || mainClub.name || 'FUS Rabat'} (Opposition Interne)`;
+      }
+      return opponentClubs.find(c => c.id === clubId)?.name || 'Adversaire Inconnu';
+   };
    const isSameAsMainClub = (clubId: string) => {
+      if (mainClub && clubId === mainClub.id) return false;
       const opp = opponentClubs.find(c => c.id === clubId);
       return !!opp && opp.name?.toLowerCase().trim() === mainClub?.name?.toLowerCase().trim();
    };
@@ -868,7 +888,7 @@ const MatchManagementPage: React.FC = () => {
                                                  setEditingMatch({ match_date: formattedDate } as any);
                                                  setActiveTab('wizard');
                                               }}
-                                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-primary hover:text-white rounded-md text-slate-400 transition-all shadow-sm"
+                                              className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 p-1 hover:bg-primary hover:text-white rounded-md text-slate-400 transition-all shadow-sm"
                                               title="Planifier un match pour ce jour"
                                            ><Plus className="w-2.5 h-2.5 sm:w-3 sm:h-3" /></button>
                                         )}
@@ -1205,7 +1225,7 @@ const MatchManagementPage: React.FC = () => {
                                           {match.status === 'finished' ? `${match.is_home ? match.score_home : match.score_away} - ${match.is_home ? match.score_away : match.score_home}` : '-'}
                                        </td>
                                        <td className="py-4 px-4 text-right whitespace-nowrap">
-                                          <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                              {match.status === 'scheduled' && (
                                                 <Button 
                                                    variant="ghost" 
@@ -1330,7 +1350,10 @@ const MatchManagementPage: React.FC = () => {
                         mainClub={mainClub}
                         opponentClubs={opponentClubs}
                         getOpponentName={getOpponentName}
-                        onOrchestrate={() => setActiveTab('preparation')}
+                        onOrchestrate={() => {
+                           setEditingMatch(selectedMatch);
+                           setActiveTab('wizard');
+                        }}
                         onStats={() => setActiveTab('stats')}
                         onBack={() => setActiveTab('details')}
                      />
@@ -1347,7 +1370,14 @@ const MatchManagementPage: React.FC = () => {
 
             {activeTab === 'preparation' && selectedMatchId && (
                <motion.div key="prep" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -100 }}>
-                  <MatchPreparation matchId={selectedMatchId} onBack={() => setActiveTab('overview')} />
+                  <ScheduleMatchWizard
+                     initialMatch={selectedMatch || matches.find(m => m.id === selectedMatchId) || editingMatch}
+                     onBack={() => setActiveTab('overview')}
+                     onSuccess={() => {
+                        handleWizardSuccess();
+                        setActiveTab('overview');
+                     }}
+                  />
                </motion.div>
             )}
 

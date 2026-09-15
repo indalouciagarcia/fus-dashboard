@@ -71,10 +71,25 @@ export const matchService = {
     if (!match.opponent_id) throw new Error('opponent_id est obligatoire');
 
     // Extract fields handled separately or not yet in DB schema
-    const { lineup, staff_ids, opponent_lineup, opponent_subs, ...payload } = match;
+    const { 
+      lineup, 
+      staff_ids, 
+      opponent_lineup, 
+      opponent_subs, 
+      match_type, 
+      match_format, 
+      ...payload 
+    } = match as any;
+
+    const mergedLineup = lineup ? {
+      ...lineup,
+      match_type: match_type || (lineup as any).match_type,
+      match_format: match_format || (lineup as any).match_format,
+    } : (match_type || match_format ? { match_type, match_format } : undefined);
 
     // Build the DB payload — only include opponent scouting if we have data
     const dbPayload: any = { ...payload, club_id: clubId, status: payload.status ?? 'scheduled' };
+    if (mergedLineup) dbPayload.lineup = mergedLineup;
     
     // Safely try to include opponent fields (they require the migration to be run)
     if (opponent_lineup !== undefined) dbPayload.opponent_lineup = opponent_lineup;
@@ -94,16 +109,16 @@ export const matchService = {
         (error as any)?.status === 400;
 
       if (isColumnError) {
-        const { 
-          opponent_lineup: _ol, 
-          opponent_subs: _os, 
-          referee_central_id: _rc,
-          referee_assistant1_id: _ra1,
-          referee_assistant2_id: _ra2,
-          referee_fourth_id: _r4,
-          referees_assigned: _ras,
-          ...safePayload 
-        } = dbPayload;
+        const safePayload = { ...dbPayload };
+        delete safePayload.match_type;
+        delete safePayload.match_format;
+        delete safePayload.opponent_lineup;
+        delete safePayload.opponent_subs;
+        delete safePayload.referee_central_id;
+        delete safePayload.referee_assistant1_id;
+        delete safePayload.referee_assistant2_id;
+        delete safePayload.referee_fourth_id;
+        delete safePayload.referees_assigned;
 
         const { data: retryData, error: retryError } = await supabase
           .from('matches')
@@ -129,10 +144,18 @@ export const matchService = {
   },
 
   async updateMatch(id: string, updates: Updates<'matches'> & { lineup?: MatchLineup; staff_ids?: string[] }): Promise<Match> {
-    const { lineup, staff_ids, ...payload } = updates;
+    const { lineup, staff_ids, match_type, match_format, ...payload } = updates as any;
 
     const sanitized = { ...payload } as any;
-    if (lineup) sanitized.lineup = lineup;
+    if (lineup) {
+      sanitized.lineup = {
+        ...lineup,
+        match_type: match_type || (lineup as any).match_type,
+        match_format: match_format || (lineup as any).match_format,
+      };
+    }
+    delete sanitized.match_type;
+    delete sanitized.match_format;
     (['id', 'created_at', 'match_players', 'match_staff'] as const).forEach(f => delete sanitized[f]);
     (['opponent_id', 'league_id', 'stadium_id', 'team_id'] as const).forEach(f => {
       if (sanitized[f] === '') sanitized[f] = null;
@@ -151,6 +174,8 @@ export const matchService = {
         error.message?.includes('column') || (error as any)?.status === 400;
 
       if (isColumnError) {
+        delete sanitized.match_type;
+        delete sanitized.match_format;
         delete sanitized.referee_central_id;
         delete sanitized.referee_assistant1_id;
         delete sanitized.referee_assistant2_id;

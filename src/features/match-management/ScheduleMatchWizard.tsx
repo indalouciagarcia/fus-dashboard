@@ -10,7 +10,7 @@ import { useArbitres } from '../../hooks/useArbitres';
 import { useOpponentPlayers } from '../../hooks/useOpponentPlayers';
 import { usePermissions } from '../../context/PermissionsContext';
 import type { OpponentPlayer } from '../../types';
-import { PLAYER_CATEGORIES } from '../../constants';
+import { PLAYER_CATEGORIES, normalizeAgeCategory } from '../../constants';
 import { Skeleton } from '../../components/ui/skeleton';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../../components/ui/button';
@@ -22,7 +22,7 @@ import {
   Calendar, MapPin, Trophy, Users, Briefcase,
   Shield, Layout, Gamepad2, CheckCircle2,
   Globe, Target, Save, Search, Filter, Loader2,
-  Trash2, X, UserCheck
+  Trash2, X, UserCheck, ArrowUpDown, Clock
 } from 'lucide-react';
 import type { Match, Player, MatchPhase } from '../../types';
 
@@ -45,6 +45,20 @@ const STEPS: { key: WizardStep; label: string; icon: React.ElementType }[] = [
 
 const FORMATIONS = ['4-3-3', '4-4-2', '4-2-3-1', '4-1-4-1', '3-5-2', '3-4-3', '5-3-2', '3-4-2-1', '4-3-2-1', '4-5-1', '5-4-1', '4-4-1-1'];
 const CATEGORIES = PLAYER_CATEGORIES; // PRO est déjà inclus dans PLAYER_CATEGORIES
+
+export const getCategoryRelativeLabel = (currentCat: string, targetCat: string) => {
+  const normCurrent = normalizeAgeCategory(currentCat);
+  const normTarget = normalizeAgeCategory(targetCat);
+  const currentIdx = PLAYER_CATEGORIES.indexOf(normCurrent as any);
+  const targetIdx = PLAYER_CATEGORIES.indexOf(normTarget as any);
+  if (currentIdx === -1 || targetIdx === -1 || currentIdx === targetIdx) {
+    return { label: 'Même Catégorie', badgeClass: 'bg-slate-100 text-slate-700 border-slate-200', isHigher: null };
+  }
+  if (targetIdx < currentIdx) {
+    return { label: 'Catégorie Supérieure ↗', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300', isHigher: true };
+  }
+  return { label: 'Catégorie Inférieure ↘', badgeClass: 'bg-amber-100 text-amber-800 border-amber-300', isHigher: false };
+};
 
 const POSITION_GROUPS = [
   { label: 'Gardiens',   roles: ['GK', 'G', 'GARDIEN', 'GKP'], color: 'from-amber-400 to-amber-600' },
@@ -76,55 +90,18 @@ const getPositionPriority = (position: string) => {
   return 9;
 };
 
-const getFormationPositions = (formation: string) => {
-  const roles: { [key: string]: { top: string; left: string; label: string }[] } = {
-    '4-3-3': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '15%', label: 'LB' }, { top: '76%', left: '36%', label: 'CB' }, { top: '76%', left: '64%', label: 'CB' }, { top: '72%', left: '85%', label: 'RB' },
-      { top: '50%', left: '32%', label: 'CM' }, { top: '58%', left: '50%', label: 'CDM' }, { top: '50%', left: '68%', label: 'CM' },
-      { top: '22%', left: '20%', label: 'LW' }, { top: '12%', left: '50%', label: 'ST' }, { top: '22%', left: '80%', label: 'RW' },
-    ],
-    '4-4-2': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '15%', label: 'LB' }, { top: '76%', left: '36%', label: 'CB' }, { top: '76%', left: '64%', label: 'CB' }, { top: '72%', left: '85%', label: 'RB' },
-      { top: '48%', left: '12%', label: 'LM' }, { top: '52%', left: '36%', label: 'CM' }, { top: '52%', left: '64%', label: 'CM' }, { top: '48%', left: '88%', label: 'RM' },
-      { top: '18%', left: '38%', label: 'ST' }, { top: '18%', left: '62%', label: 'ST' },
-    ],
-    '3-5-2': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '74%', left: '28%', label: 'CB' }, { top: '78%', left: '50%', label: 'CB' }, { top: '74%', left: '72%', label: 'CB' },
-      { top: '50%', left: '12%', label: 'LM' }, { top: '54%', left: '34%', label: 'CM' }, { top: '60%', left: '50%', label: 'CDM' }, { top: '54%', left: '66%', label: 'CM' }, { top: '50%', left: '88%', label: 'RM' },
-      { top: '18%', left: '38%', label: 'ST' }, { top: '18%', left: '62%', label: 'ST' },
-    ],
-    '4-2-3-1': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '15%', label: 'LB' }, { top: '76%', left: '36%', label: 'CB' }, { top: '76%', left: '64%', label: 'CB' }, { top: '72%', left: '85%', label: 'RB' },
-      { top: '60%', left: '36%', label: 'CDM' }, { top: '60%', left: '64%', label: 'CDM' },
-      { top: '40%', left: '20%', label: 'LAM' }, { top: '34%', left: '50%', label: 'CAM' }, { top: '40%', left: '80%', label: 'RAM' },
-      { top: '12%', left: '50%', label: 'ST' },
-    ],
-    '5-3-2': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '12%', label: 'LWB' }, { top: '75%', left: '30%', label: 'CB' }, { top: '78%', left: '50%', label: 'CB' }, { top: '75%', left: '70%', label: 'CB' }, { top: '72%', left: '88%', label: 'RWB' },
-      { top: '52%', left: '32%', label: 'CM' }, { top: '56%', left: '50%', label: 'CM' }, { top: '52%', left: '68%', label: 'CM' },
-      { top: '18%', left: '38%', label: 'ST' }, { top: '18%', left: '62%', label: 'ST' },
-    ],
-    '3-4-3': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '74%', left: '28%', label: 'CB' }, { top: '78%', left: '50%', label: 'CB' }, { top: '74%', left: '72%', label: 'CB' },
-      { top: '52%', left: '12%', label: 'LM' }, { top: '56%', left: '36%', label: 'CM' }, { top: '56%', left: '64%', label: 'CM' }, { top: '52%', left: '88%', label: 'RM' },
-      { top: '25%', left: '18%', label: 'LW' }, { top: '12%', left: '50%', label: 'ST' }, { top: '25%', left: '82%', label: 'RW' },
-    ],
-    '4-1-4-1': [
-      { top: '90%', left: '50%', label: 'GK' },
-      { top: '72%', left: '15%', label: 'LB' }, { top: '76%', left: '36%', label: 'CB' }, { top: '76%', left: '64%', label: 'CB' }, { top: '72%', left: '85%', label: 'RB' },
-      { top: '62%', left: '50%', label: 'CDM' },
-      { top: '42%', left: '12%', label: 'LM' }, { top: '45%', left: '34%', label: 'CM' }, { top: '45%', left: '66%', label: 'CM' }, { top: '42%', left: '88%', label: 'RM' },
-      { top: '12%', left: '50%', label: 'ST' },
-    ],
-  };
-  return roles[formation] || roles['4-3-3'];
-};
+export {
+  FORMATIONS_BY_FORMAT,
+  ALL_FORMATION_ROLES,
+  getFormationPositions,
+  inferMatchFormat
+} from './tacticalFormations';
+import {
+  FORMATIONS_BY_FORMAT,
+  ALL_FORMATION_ROLES,
+  getFormationPositions,
+  inferMatchFormat
+} from './tacticalFormations';
 
 const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuccess, initialMatch }) => {
   const { mainClub, opponentClubs: allOpponentClubs, isLoading: clubLoading } = useClubData();
@@ -160,7 +137,11 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
 
   // Step 1
   const [setup, setSetup] = useState({
-    match_type: 'amical' as 'amical' | 'league',
+    match_type: 'amical' as 'amical' | 'league' | 'internal_scrimmage',
+    internal_opposition_type: 'intra_squad' as 'intra_squad' | 'inter_category',
+    internal_target_category: '' as string,
+    internal_opponent_team_id: '' as string,
+    match_format: 11 as number,
     opponent_id: '',
     league_id: '',
     stadium_id: '',
@@ -173,10 +154,10 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
     qualif_status: '' as 'won' | 'lost' | '',
   });
 
-  const { players: opponentSquad = [] } = useOpponentPlayers(setup.opponent_id, setup.category);
+  const { players: rawOpponentSquad = [] } = useOpponentPlayers(setup.opponent_id, setup.category);
 
   // Match timing configuration
-  const [halfDuration, setHalfDuration] = useState<30 | 35 | 40 | 45>(45);
+  const [halfDuration, setHalfDuration] = useState<number>(45);
   const [enableExtraTime, setEnableExtraTime] = useState(false);
   const [enablePenalties, setEnablePenalties] = useState(false);
 
@@ -193,12 +174,49 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
   const [opponentLineup, setOpponentLineup] = useState<string[]>(Array(11).fill(''));
   const [opponentSubs, setOpponentSubs] = useState<string[]>([]);
 
-  // Pre-fill wizard if editing an existing match
+  const handleFormatChange = (newFormat: number) => {
+    if (newFormat === setup.match_format) return;
+    setSetup(prev => ({ ...prev, match_format: newFormat }));
+
+    const defaultFormation = FORMATIONS_BY_FORMAT[newFormat]?.[0] || '4-3-3';
+    setFormation(defaultFormation);
+    setOpponentFormation(defaultFormation);
+
+    setStartingXI(prev => {
+      const copy = [...prev];
+      if (copy.length < newFormat) {
+        return [...copy, ...Array(newFormat - copy.length).fill('')];
+      }
+      return copy.slice(0, newFormat);
+    });
+
+    setOpponentLineup(prev => {
+      const copy = [...prev];
+      if (copy.length < newFormat) {
+        return [...copy, ...Array(newFormat - copy.length).fill('')];
+      }
+      return copy.slice(0, newFormat);
+    });
+  };
+
+  // Pre-fill wizard if editing / orchestrating an existing match
   useEffect(() => {
     if (initialMatch) {
+      const rawLineup = initialMatch.lineup as any;
+      const internalMeta = rawLineup?.internal_opposition;
+      const isInternalMatch = (initialMatch as any).match_type === 'internal_scrimmage'
+        || !!internalMeta?.is_internal_scrimmage
+        || (initialMatch.notes && initialMatch.notes.includes('[Opposition Interne]'))
+        || (mainClub && initialMatch.opponent_id === mainClub.id);
+      const initialFormat = inferMatchFormat(initialMatch);
+
       setSetup({
-        match_type: initialMatch.league_id ? 'league' : 'amical',
-        opponent_id: initialMatch.opponent_id || '',
+        match_type: isInternalMatch ? 'internal_scrimmage' : (initialMatch.league_id ? 'league' : 'amical'),
+        internal_opposition_type: internalMeta?.internal_opposition_type || (initialMatch.notes?.includes('Vs ') ? 'inter_category' : 'intra_squad'),
+        internal_target_category: internalMeta?.internal_target_category || (initialMatch.notes?.match(/Vs\s+([A-Z0-9]+)/)?.[1] || ''),
+        internal_opponent_team_id: internalMeta?.internal_opponent_team_id || '',
+        match_format: initialFormat,
+        opponent_id: initialMatch.opponent_id || (isInternalMatch ? (mainClub?.id || '') : ''),
         league_id: initialMatch.league_id || '',
         stadium_id: initialMatch.stadium_id || '',
         team_id: initialMatch.team_id || '',
@@ -209,15 +227,81 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
         match_phase: (initialMatch.match_phase as MatchPhase) || '',
         qualif_status: (initialMatch.match_phase as 'won' | 'lost' | '') || '',
       });
-      if (initialMatch.formation) setFormation(initialMatch.formation);
-      if (initialMatch.half_duration_minutes) setHalfDuration(initialMatch.half_duration_minutes as any);
+
+      // Formation & Compo
+      const defaultForm = FORMATIONS_BY_FORMAT[initialFormat]?.[0] || '4-3-3';
+      const initialFormation = initialMatch.formation || rawLineup?.formation || defaultForm;
+      setFormation(initialFormation);
+
+      if (initialMatch.half_duration_minutes) setHalfDuration(Number(initialMatch.half_duration_minutes));
       if (initialMatch.enable_extra_time !== undefined) setEnableExtraTime(initialMatch.enable_extra_time);
       if (initialMatch.enable_penalties !== undefined) setEnablePenalties(initialMatch.enable_penalties);
+
+      // Arbitres
       if (initialMatch.referees_assigned) {
         setSelectedReferees(initialMatch.referees_assigned as any);
+      } else if (initialMatch.referee_central_id || initialMatch.referee_assistant1_id) {
+        setSelectedReferees({
+          central_id: initialMatch.referee_central_id || null,
+          assistant1_id: initialMatch.referee_assistant1_id || null,
+          assistant2_id: initialMatch.referee_assistant2_id || null,
+          fourth_id: initialMatch.referee_fourth_id || null,
+        });
       }
-      if (initialMatch.starting_eleven) setStartingXI(initialMatch.starting_eleven);
-      if (initialMatch.substitutes) setSubstitutes(initialMatch.substitutes);
+
+      // Staff
+      if (initialMatch.staff_ids && Array.isArray(initialMatch.staff_ids)) {
+        setSelectedStaffIds(initialMatch.staff_ids.map(String));
+      }
+
+      // Starting XI
+      const rawStarting = initialMatch.starting_eleven || rawLineup?.startingXI;
+      if (rawStarting && Array.isArray(rawStarting)) {
+        const sanitizedXI = rawStarting.map(item => {
+          if (!item) return '';
+          if (typeof item === 'object') return String(item.player_id || item.id || '');
+          return String(item);
+        });
+        while (sanitizedXI.length < initialFormat) sanitizedXI.push('');
+        setStartingXI(sanitizedXI.slice(0, initialFormat));
+      } else {
+        setStartingXI(Array(initialFormat).fill(''));
+      }
+
+      // Substitutes
+      const rawSubs = initialMatch.substitutes || rawLineup?.substitutes;
+      if (rawSubs && Array.isArray(rawSubs)) {
+        setSubstitutes(rawSubs.map(item => {
+          if (!item) return '';
+          if (typeof item === 'object') return String(item.player_id || item.id || '');
+          return String(item);
+        }));
+      }
+
+      // Opponent Lineup & Formation
+      if (initialMatch.opponent_formation) {
+        setOpponentFormation(initialMatch.opponent_formation);
+      } else {
+        setOpponentFormation(defaultForm);
+      }
+      if (initialMatch.opponent_lineup && Array.isArray(initialMatch.opponent_lineup)) {
+        const sanitizedOpp = initialMatch.opponent_lineup.map(item => {
+          if (!item) return '';
+          if (typeof item === 'object') return String(item.jersey_number || item.player_id || item.id || '');
+          return String(item);
+        });
+        while (sanitizedOpp.length < initialFormat) sanitizedOpp.push('');
+        setOpponentLineup(sanitizedOpp.slice(0, initialFormat));
+      } else {
+        setOpponentLineup(Array(initialFormat).fill(''));
+      }
+      if (initialMatch.opponent_subs && Array.isArray(initialMatch.opponent_subs)) {
+        setOpponentSubs(initialMatch.opponent_subs.map(item => {
+          if (!item) return '';
+          if (typeof item === 'object') return String(item.jersey_number || item.player_id || item.id || '');
+          return String(item);
+        }));
+      }
     }
   }, [initialMatch]);
 
@@ -228,35 +312,45 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
     ...(authState.userCategories || [])
   ]));
 
-  // Auto-select team when category changes in wizard setup
+  // Auto-select team when category changes in wizard setup (safeguarded against infinite loops)
   useEffect(() => {
     if (!initialMatch && currentStep === 'setup' && setup.category) {
       const matchingTeams = teams.filter(t => t.category === setup.category);
-      if (matchingTeams.length > 0) {
-        // Auto-select the first team that belongs to this category
-        setSetup(prev => ({ ...prev, team_id: matchingTeams[0].id }));
-      } else {
-        setSetup(prev => ({ ...prev, team_id: '' }));
-      }
+      const targetTeamId = matchingTeams.length > 0 ? matchingTeams[0].id : '';
 
-      // If current league is set but not valid for the new category, reset it
       setSetup(prev => {
+        let changed = false;
+        let next = prev;
+
+        if (prev.team_id !== targetTeamId) {
+          next = { ...next, team_id: targetTeamId };
+          changed = true;
+        }
+
         if (prev.league_id) {
           const currentLeague = leagues.find(l => l.id === prev.league_id);
           if (currentLeague && currentLeague.category && currentLeague.category !== setup.category) {
-            return { ...prev, league_id: '' };
+            next = { ...next, league_id: '' };
+            changed = true;
           }
         }
-        return prev;
+
+        return changed ? next : prev;
       });
     }
   }, [setup.category, teams, leagues, currentStep, initialMatch]);
 
-  // Auto-select staff when category changes in wizard setup
+  // Auto-select staff when category changes in wizard setup (safeguarded against infinite loops)
   useEffect(() => {
     if (!initialMatch && setup.category && staff.length > 0) {
       const matchingStaff = staff.filter(s => s.category === setup.category);
-      setSelectedStaffIds(matchingStaff.map(s => s.id));
+      const newIds = matchingStaff.map(s => s.id);
+      setSelectedStaffIds(prev => {
+        if (prev.length === newIds.length && prev.every((id, i) => id === newIds[i])) {
+          return prev;
+        }
+        return newIds;
+      });
     }
   }, [setup.category, staff, initialMatch]);
 
@@ -264,8 +358,13 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
 
   const goNext = () => {
     if (currentStep === 'setup') {
-      if (!setup.team_id || !setup.opponent_id) {
+      const effectiveOpp = setup.match_type === 'internal_scrimmage' ? (mainClub?.id || setup.opponent_id || 'internal') : setup.opponent_id;
+      if (!setup.team_id || !effectiveOpp) {
         alert("Veuillez sélectionner l'équipe et l'adversaire.");
+        return;
+      }
+      if (setup.match_type === 'internal_scrimmage' && setup.internal_opposition_type === 'inter_category' && !setup.internal_target_category) {
+        alert("Veuillez sélectionner la catégorie adverse pour l'opposition inter-catégorie.");
         return;
       }
     }
@@ -320,7 +419,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
 
         if (!placed) {
           const filledStartersCount = startingXI.filter(id => id !== '').length;
-          if (filledStartersCount >= 11) {
+          if (filledStartersCount >= setup.match_format) {
             setSubstitutes(prev => [...prev, player.id]);
           } else {
              const firstFree = nextXI.indexOf('');
@@ -364,7 +463,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
     const nextLineup = [...opponentLineup];
     const sourceIdx = parseInt(draggedId);
     
-    // Swap jersey numbers
+    // Swap player in slots
     const targetJersey = nextLineup[targetIdx];
     nextLineup[targetIdx] = nextLineup[sourceIdx];
     nextLineup[sourceIdx] = targetJersey;
@@ -388,13 +487,16 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
 
   // Auto-position players for home team
   const autoPositionPlayers = () => {
-    const availablePlayers = [...matchPlayers].sort((a, b) => {
+    const format = setup.match_format || 11;
+    const isIntraSquad = setup.match_type === 'internal_scrimmage' && setup.internal_opposition_type === 'intra_squad';
+    // Use allGroupPlayers so that search query filter in step 3 doesn't exclude valid squad players from auto-aligning
+    const availablePlayers = [...allGroupPlayers].sort((a, b) => {
       const priorityA = getPositionPriority(a.position);
       const priorityB = getPositionPriority(b.position);
       return priorityA - priorityB;
     });
     
-    const newXI = Array(11).fill('');
+    const newXI = Array(format).fill('');
     const newSubs: string[] = [];
     
     // First, place the goalkeeper
@@ -404,12 +506,12 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
     }
     
     // Get formation positions
-    const roles = getFormationPositions(formation);
+    const roles = getFormationPositions(formation, format);
     
     // Place remaining players by matching position
     const remainingPlayers = availablePlayers.filter(p => p.id !== gk?.id);
     
-    for (let i = 1; i < 11; i++) {
+    for (let i = 1; i < format; i++) {
       if (newXI[i]) continue;
       
       const positionLabel = roles[i]?.label;
@@ -425,7 +527,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
     }
     
     // Fill remaining slots with any available player
-    for (let i = 1; i < 11; i++) {
+    for (let i = 1; i < format; i++) {
       if (!newXI[i]) {
         const anyPlayer = remainingPlayers.find(p => !newXI.includes(p.id) && !newSubs.includes(p.id));
         if (anyPlayer) {
@@ -434,53 +536,76 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
       }
     }
     
-    // Remaining players go to subs
-    remainingPlayers.forEach(p => {
-      if (!newXI.includes(p.id) && !newSubs.includes(p.id)) {
-        newSubs.push(p.id);
-      }
-    });
+    // Only dump remaining players into substitutes if NOT an internal scrimmage intra-squad!
+    // In intra-squad scrimmage, remaining players MUST stay available for Team B (Chasubles / Reste du groupe)
+    if (!isIntraSquad) {
+      remainingPlayers.forEach(p => {
+        if (!newXI.includes(p.id) && !newSubs.includes(p.id)) {
+          newSubs.push(p.id);
+        }
+      });
+    }
     
     setStartingXI(newXI);
     setSubstitutes(newSubs);
   };
 
-  // Auto-position opponent players (1-22)
+  // Auto-position opponent players with real squad players
   const autoPositionOpponent = () => {
-    const newLineup = Array(11).fill('');
+    const format = setup.match_format || 11;
+    const availablePlayers = [...effectiveOpponentSquad].sort((a, b) => {
+      const priorityA = getPositionPriority(a.position);
+      const priorityB = getPositionPriority(b.position);
+      return priorityA - priorityB;
+    });
+    const newLineup = Array(format).fill('');
     const newSubs: string[] = [];
     
-    // GK is #1
-    newLineup[0] = '1';
-    
-    // Defenders: 2-5
-    const defenders = ['2', '3', '4', '5'];
-    const defPositions = [1, 2, 3, 4];
-    defenders.forEach((num, idx) => {
-      if (defPositions[idx] < 11) newLineup[defPositions[idx]] = num;
-    });
-    
-    // Midfielders: 6-10
-    const midfielders = ['6', '7', '8', '10'];
-    const midPositions = [5, 6, 7, 8];
-    midfielders.forEach((num, idx) => {
-      if (midPositions[idx] < 11) newLineup[midPositions[idx]] = num;
-    });
-    
-    // Attackers: 9, 11
-    const attackers = ['9', '11'];
-    const attPositions = [9, 10];
-    attackers.forEach((num, idx) => {
-      if (attPositions[idx] < 11) newLineup[attPositions[idx]] = num;
-    });
-    
-    // Subs: 12-22
-    for (let i = 12; i <= 22; i++) {
-      newSubs.push(i.toString());
+    // First, place the goalkeeper
+    const gk = availablePlayers.find(p => ['GK', 'G', 'GARDIEN', 'GKP'].includes(p.position?.toUpperCase() || ''));
+    if (gk) {
+      newLineup[0] = gk.id;
     }
+    
+    const roles = getFormationPositions(opponentFormation, format);
+    const remainingPlayers = availablePlayers.filter(p => p.id !== gk?.id);
+    
+    for (let i = 1; i < format; i++) {
+      if (newLineup[i]) continue;
+      const positionLabel = roles[i]?.label;
+      const matchingPlayer = remainingPlayers.find(p => 
+        !newLineup.includes(p.id) && 
+        !newSubs.includes(p.id) && 
+        p.position?.toUpperCase() === positionLabel
+      );
+      if (matchingPlayer) {
+        newLineup[i] = matchingPlayer.id;
+      }
+    }
+    
+    for (let i = 1; i < format; i++) {
+      if (!newLineup[i]) {
+        const anyPlayer = remainingPlayers.find(p => !newLineup.includes(p.id) && !newSubs.includes(p.id));
+        if (anyPlayer) {
+          newLineup[i] = anyPlayer.id;
+        }
+      }
+    }
+    
+    remainingPlayers.forEach(p => {
+      if (!newLineup.includes(p.id) && !newSubs.includes(p.id)) {
+        newSubs.push(p.id);
+      }
+    });
     
     setOpponentLineup(newLineup);
     setOpponentSubs(newSubs);
+
+    // If internal scrimmage, ensure any player assigned to opponent lineup/subs is removed from Team A substitutes
+    if (setup.match_type === 'internal_scrimmage') {
+      const usedIds = new Set([...newLineup, ...newSubs].filter(Boolean));
+      setSubstitutes(prev => prev.filter(id => !usedIds.has(id)));
+    }
   };
 
   const handleSave = async () => {
@@ -488,21 +613,57 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
       alert("Veuillez sélectionner une équipe. Si aucune n'apparaît, créez d'abord l'équipe dans la gestion des effectifs.");
       return;
     }
+    const isInternal = setup.match_type === 'internal_scrimmage';
+    const effectiveOpponentId = isInternal ? (mainClub?.id || setup.opponent_id) : setup.opponent_id;
+    if (!effectiveOpponentId) {
+      alert("Veuillez sélectionner le club adverse.");
+      return;
+    }
+    if (isInternal && setup.internal_opposition_type === 'inter_category' && !setup.internal_target_category) {
+      alert("Veuillez sélectionner la catégorie adverse pour l'opposition interne.");
+      return;
+    }
     setSaving(true);
     try {
-      const { qualif_status, match_phase: _mp, match_type, ...setupBase } = setup;
+      const { 
+        qualif_status, 
+        match_phase: _mp, 
+        match_type, 
+        match_format: _mf, 
+        internal_opposition_type, 
+        internal_target_category, 
+        internal_opponent_team_id, 
+        ...setupBase 
+      } = setup;
+
+      const internalMeta = isInternal ? {
+        is_internal_scrimmage: true,
+        internal_opposition_type,
+        internal_target_category: internal_opposition_type === 'inter_category' ? internal_target_category : null,
+        internal_opponent_team_id: internal_opposition_type === 'inter_category' ? (internal_opponent_team_id || null) : null,
+      } : null;
+
       const matchPayload: any = {
         ...setupBase,
-        league_id: match_type === 'amical' || setup.league_id === '' ? null : setup.league_id,
+        opponent_id: effectiveOpponentId,
+        league_id: match_type === 'amical' || match_type === 'internal_scrimmage' || setup.league_id === '' ? null : setup.league_id,
         stadium_id: setup.stadium_id === '' ? null : setup.stadium_id,
         match_time: setup.match_time,
         category: setup.category,
         is_home: setup.is_home,
         formation: formation,
-        score_home: 0,
-        score_away: 0,
-        status: 'scheduled',
-        lineup: { startingXI, substitutes, formation },
+        score_home: initialMatch ? (initialMatch.score_home ?? 0) : 0,
+        score_away: initialMatch ? (initialMatch.score_away ?? 0) : 0,
+        status: initialMatch ? (initialMatch.status ?? 'scheduled') : 'scheduled',
+        match_format: setup.match_format,
+        lineup: { 
+          startingXI, 
+          substitutes, 
+          formation, 
+          match_format: setup.match_format, 
+          match_type: setup.match_type,
+          internal_opposition: internalMeta 
+        },
         opponent_formation: opponentFormation,
         opponent_lineup: opponentLineup,
         opponent_subs: opponentSubs,
@@ -514,20 +675,26 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
         referees_assigned: selectedReferees,
         team_id: setup.team_id || teams.find(t => t.category === setup.category)?.id || null,
         match_phase: qualif_status !== '' ? qualif_status : (_mp === '' ? null : _mp),
+        notes: isInternal
+          ? `[Opposition Interne] ${internal_opposition_type === 'intra_squad' ? 'Entre le groupe' : `Vs ${internal_target_category}`} (${setup.match_format}v${setup.match_format}) - ${setup.category}`
+          : (initialMatch?.notes || null),
         // Match timing configuration
         half_duration_minutes: halfDuration,
         enable_extra_time: enableExtraTime,
         enable_penalties: enablePenalties,
-        current_half: 1,
-        time_elapsed_seconds: 0,
-        added_time_first_half: 0,
-        added_time_second_half: 0,
-        penalty_score_home: 0,
+        current_half: initialMatch?.current_half ?? 1,
+        time_elapsed_seconds: initialMatch?.time_elapsed_seconds ?? 0,
+        added_time_first_half: initialMatch?.added_time_first_half ?? 0,
+        added_time_second_half: initialMatch?.added_time_second_half ?? 0,
+        penalty_score_home: initialMatch?.penalty_score_home ?? 0,
+        penalty_score_away: initialMatch?.penalty_score_away ?? 0,
       };
       if (initialMatch) {
         await updateMatch({ id: initialMatch.id, data: matchPayload });
+        toast.success("✅ Match orchestré et mis à jour avec succès !");
       } else {
         await addMatch(matchPayload);
+        toast.success("🎉 Match planifié avec succès !");
       }
       onSuccess?.();
       onBack();
@@ -538,36 +705,91 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
     }
   };
 
-  const getOpponentName = (id: string) => opponentClubs.find(c => c.id === id)?.name || '—';
+  const getOpponentName = (id: string) => {
+    if (setup.match_type === 'internal_scrimmage' || (mainClub && id === mainClub.id)) {
+      if (setup.internal_opposition_type === 'intra_squad') {
+        const team = teams.find(t => t.id === setup.team_id);
+        const groupLabel = team ? team.name : setup.category;
+        return `${mainClub?.club_name || mainClub?.name || 'FUS Rabat'} (${groupLabel} — Chasubles / Reste du groupe)`;
+      }
+      return `${mainClub?.club_name || mainClub?.name || 'FUS Rabat'} (Cat. ${setup.internal_target_category || 'Adverse'})`;
+    }
+    return opponentClubs.find(c => c.id === id)?.name || '—';
+  };
   const getLeagueName = (id: string) => leagues.find(l => l.id === id)?.name || '—';
   const getStadiumName = (id: string) => stadiums.find(s => s.id === id)?.name || '—';
   const getPlayerById = (id: string) => players.find(p => p.id === id);
 
-  const positions = useMemo(() => getFormationPositions(formation), [formation]);
-  const opponentPositions = useMemo(() => getFormationPositions(opponentFormation), [opponentFormation]);
+  const positions = useMemo(() => getFormationPositions(formation, setup.match_format), [formation, setup.match_format]);
+  const opponentPositions = useMemo(() => getFormationPositions(opponentFormation, setup.match_format), [opponentFormation, setup.match_format]);
   
-  const matchPlayers = useMemo(() => {
-    // 1. Try to filter by the specific team selected
+  const allGroupPlayers = useMemo(() => {
     let filtered = players;
     
     if (setup.team_id) {
       const teamPlayers = players.filter(p => p.team_id === setup.team_id);
-      // If we found players for this specific team, use them
       if (teamPlayers.length > 0) {
         filtered = teamPlayers;
       } else if (setup.category) {
-        // Fallback to category if team is empty
-        filtered = players.filter(p => p.category?.toUpperCase() === setup.category?.toUpperCase());
+        filtered = players.filter(p => normalizeAgeCategory(p.category) === normalizeAgeCategory(setup.category));
       }
     } else if (setup.category) {
-      // If no team is selected, filter by category
-      filtered = players.filter(p => p.category?.toUpperCase() === setup.category?.toUpperCase());
+      filtered = players.filter(p => normalizeAgeCategory(p.category) === normalizeAgeCategory(setup.category));
     }
 
-    return filtered
-      .filter(p => p.full_name?.toLowerCase().includes(searchQuery.toLowerCase()))
-      .sort((a, b) => (a.jersey_number || 0) - (b.jersey_number || 0));
-  }, [players, setup.category, setup.team_id, searchQuery]);
+    return filtered.sort((a, b) => (a.jersey_number || 0) - (b.jersey_number || 0));
+  }, [players, setup.category, setup.team_id]);
+
+  const matchPlayers = useMemo(() => {
+    if (!searchQuery.trim()) return allGroupPlayers;
+    return allGroupPlayers.filter(p => p.full_name?.toLowerCase().includes(searchQuery.toLowerCase().trim()));
+  }, [allGroupPlayers, searchQuery]);
+
+  const effectiveOpponentSquad = useMemo<OpponentPlayer[]>(() => {
+    if (setup.match_type === 'internal_scrimmage') {
+      if (setup.internal_opposition_type === 'intra_squad') {
+        // En opposition interne intra-groupe, l'effectif restant pour l'adversaire (Chasubles)
+        // comprend tous les joueurs du groupe qui ne sont PAS dans le 11/8 de départ de l'équipe principale (startingXI).
+        // Si certains sont remplaçants de l'équipe A, ils restent sélectionnables et basculent dans l'équipe B sans conflit.
+        const remainingPlayers = allGroupPlayers.filter(p => !startingXI.includes(p.id));
+        return remainingPlayers.map(p => ({
+          id: p.id,
+          club_id: mainClub?.id || '',
+          full_name: p.full_name,
+          jersey_number: p.jersey_number ?? 0,
+          position: p.position || 'CM',
+          category: p.category || setup.category,
+          photo_url: p.photo_url || null,
+          nationality: p.nationality || 'Maroc',
+          is_captain: false,
+          notes: substitutes.includes(p.id) ? 'Remplaçant Équipe A (cliquer pour basculer)' : 'Opposition Interne - Reste du groupe',
+          created_at: '',
+          updated_at: '',
+        } as OpponentPlayer));
+      } else if (setup.internal_opposition_type === 'inter_category' && setup.internal_target_category) {
+        let targetPlayers = players.filter(p => normalizeAgeCategory(p.category) === normalizeAgeCategory(setup.internal_target_category));
+        if (setup.internal_opponent_team_id) {
+          const byTeam = targetPlayers.filter(p => p.team_id === setup.internal_opponent_team_id);
+          if (byTeam.length > 0) targetPlayers = byTeam;
+        }
+        return targetPlayers.map(p => ({
+          id: p.id,
+          club_id: mainClub?.id || '',
+          full_name: p.full_name,
+          jersey_number: p.jersey_number ?? 0,
+          position: p.position || 'CM',
+          category: p.category || setup.internal_target_category,
+          photo_url: p.photo_url || null,
+          nationality: p.nationality || 'Maroc',
+          is_captain: false,
+          notes: `Opposition Interne - Catégorie ${setup.internal_target_category}`,
+          created_at: '',
+          updated_at: '',
+        } as OpponentPlayer));
+      }
+    }
+    return rawOpponentSquad;
+  }, [setup.match_type, setup.internal_opposition_type, setup.internal_target_category, setup.internal_opponent_team_id, allGroupPlayers, players, startingXI, substitutes, mainClub, rawOpponentSquad, setup.category]);
 
   const groupedPlayers = useMemo(() => {
     return POSITION_GROUPS.map(group => ({
@@ -609,9 +831,11 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
               <ChevronLeft className="w-8 h-8" />
             </Button>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/50 mb-2">Planning Orchestration</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/50 mb-2">
+                {initialMatch?.id ? 'Orchestration & Édition de Match' : 'Planning Orchestration'}
+              </p>
               <h2 className="text-4xl font-black uppercase italic tracking-tight leading-none">
-                Planifier un Match
+                {initialMatch?.id ? 'Orchestrer le Match' : 'Planifier un Match'}
               </h2>
             </div>
           </div>
@@ -625,12 +849,13 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
           {STEPS.map((step, idx) => {
             const Icon = step.icon;
             const isActive = step.key === currentStep;
-            const isDone = idx < stepIndex;
+            const isClickable = Boolean(initialMatch?.id) || idx <= stepIndex;
+            const isDone = Boolean(initialMatch?.id) ? idx !== stepIndex : idx < stepIndex;
             return (
               <React.Fragment key={step.key}>
                 <button
-                  onClick={() => idx <= stepIndex && setCurrentStep(step.key)}
-                  className={`flex flex-col items-center gap-3 transition-all ${idx <= stepIndex ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} group`}
+                  onClick={() => isClickable && setCurrentStep(step.key)}
+                  className={`flex flex-col items-center gap-3 transition-all ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} group`}
                 >
                   <div className={`w-16 h-16 rounded-[1.8rem] flex items-center justify-center font-black transition-all duration-500 shadow-lg
                     ${isDone ? 'bg-emerald-400 text-white scale-90 translate-y-1'
@@ -643,7 +868,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                   </span>
                 </button>
                 {idx < STEPS.length - 1 && (
-                  <div className={`w-16 h-0.5 mx-6 mb-8 rounded-full transition-all duration-700 ${idx < stepIndex ? 'bg-emerald-400' : 'bg-white/20'}`} />
+                  <div className={`w-16 h-0.5 mx-6 mb-8 rounded-full transition-all duration-700 ${idx < stepIndex || Boolean(initialMatch?.id) ? 'bg-emerald-400' : 'bg-white/20'}`} />
                 )}
               </React.Fragment>
             );
@@ -702,20 +927,213 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                         })()}
                      </div>
                      <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Shield className="inline w-3.5 h-3.5 mr-2 text-primary" /> Club Adversaire</label>
-                        <select className="w-full h-16 rounded-2xl bg-white border border-transparent px-8 font-black text-lg outline-none focus:ring-4 ring-primary/20 appearance-none shadow-sm transition-all"
-                           value={setup.opponent_id} onChange={e => setSetup({ ...setup, opponent_id: e.target.value })}>
-                           <option value="">Sélectionner...</option>
-                           {opponentClubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                     </div>
-                     <div className="space-y-3">
                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Trophy className="inline w-3.5 h-3.5 mr-2 text-primary" /> Type de Match</label>
                         <select className="w-full h-16 rounded-2xl bg-white border border-transparent px-8 font-black text-lg outline-none focus:ring-4 ring-primary/20 appearance-none shadow-sm transition-all"
-                           value={setup.match_type} onChange={e => setSetup({ ...setup, match_type: e.target.value as 'amical' | 'league', league_id: e.target.value === 'amical' ? '' : setup.league_id, match_phase: e.target.value === 'amical' ? '' : setup.match_phase })}>
-                           <option value="amical">Match Amical</option>
+                           value={setup.match_type} 
+                           onChange={e => {
+                             const val = e.target.value as 'amical' | 'league' | 'internal_scrimmage';
+                             setSetup(prev => ({
+                               ...prev,
+                               match_type: val,
+                               league_id: val === 'league' ? prev.league_id : '',
+                               match_phase: val === 'league' ? prev.match_phase : '',
+                               opponent_id: val === 'internal_scrimmage' ? (mainClub?.id || prev.opponent_id) : (prev.opponent_id === mainClub?.id ? '' : prev.opponent_id),
+                             }));
+                           }}
+                        >
+                           <option value="amical">Match Amical (Club Extérieur)</option>
                            <option value="league">Match Officiel (Compétition)</option>
+                           <option value="internal_scrimmage">Opposition Interne (FUS Scrimmage)</option>
                         </select>
+                     </div>
+
+                     {/* Configuration Opposition Interne : Entre le groupe OU Vs une catégorie */}
+                     {setup.match_type === 'internal_scrimmage' && (
+                       <motion.div 
+                         initial={{ opacity: 0, y: 10 }}
+                         animate={{ opacity: 1, y: 0 }}
+                         className="space-y-4 p-5 rounded-3xl bg-white/80 border-2 border-primary/25 shadow-md"
+                       >
+                         <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                               <ArrowUpDown className="w-4 h-4" /> Modalité d'Opposition Interne
+                            </label>
+                            <Badge className="bg-primary/10 text-primary border-none text-[8px] font-black uppercase tracking-wider">
+                               FUS Club
+                            </Badge>
+                         </div>
+
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Option 1: Entre le groupe */}
+                            <div 
+                              onClick={() => setSetup(prev => ({ ...prev, internal_opposition_type: 'intra_squad' }))}
+                              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                setup.internal_opposition_type === 'intra_squad'
+                                  ? 'bg-red-50/50 border-primary shadow-sm ring-2 ring-primary/20'
+                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                               <div className="flex items-start justify-between">
+                                  <div className="flex items-center gap-2.5">
+                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
+                                       setup.internal_opposition_type === 'intra_squad' ? 'bg-primary text-white' : 'bg-slate-200 text-slate-600'
+                                     }`}>
+                                        <Users className="w-4 h-4" />
+                                     </div>
+                                     <div>
+                                        <p className="text-xs font-black uppercase tracking-tight text-slate-900">Entre le groupe</p>
+                                        <p className="text-[10px] font-semibold text-slate-500">Même effectif</p>
+                                     </div>
+                                  </div>
+                                  <input 
+                                    type="radio" 
+                                    name="internal_op_type" 
+                                    checked={setup.internal_opposition_type === 'intra_squad'} 
+                                    onChange={() => setSetup(prev => ({ ...prev, internal_opposition_type: 'intra_squad' }))}
+                                    className="w-4 h-4 accent-primary cursor-pointer mt-1" 
+                                  />
+                               </div>
+                               <p className="text-[9px] text-muted-foreground mt-3 font-semibold">
+                                  Équipe A vs Équipe B (Chasubles / Remplaçants)
+                                </p>
+                            </div>
+
+                            {/* Option 2: Vs une catégorie */}
+                            <div 
+                              onClick={() => setSetup(prev => ({ ...prev, internal_opposition_type: 'inter_category' }))}
+                              className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                setup.internal_opposition_type === 'inter_category'
+                                  ? 'bg-red-50/50 border-primary shadow-sm ring-2 ring-primary/20'
+                                  : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                               <div className="flex items-start justify-between">
+                                  <div className="flex items-center gap-2.5">
+                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
+                                       setup.internal_opposition_type === 'inter_category' ? 'bg-primary text-white' : 'bg-slate-200 text-slate-600'
+                                     }`}>
+                                        <ArrowUpDown className="w-4 h-4" />
+                                     </div>
+                                     <div>
+                                        <p className="text-xs font-black uppercase tracking-tight text-slate-900">Vs une catégorie</p>
+                                        <p className="text-[10px] font-semibold text-slate-500">Autre niveau</p>
+                                     </div>
+                                  </div>
+                                  <input 
+                                    type="radio" 
+                                    name="internal_op_type" 
+                                    checked={setup.internal_opposition_type === 'inter_category'} 
+                                    onChange={() => setSetup(prev => ({ ...prev, internal_opposition_type: 'inter_category' }))}
+                                    className="w-4 h-4 accent-primary cursor-pointer mt-1" 
+                                  />
+                               </div>
+                               <p className="text-[9px] text-muted-foreground mt-3 font-semibold">
+                                  Opposition Inférieure ↘ ou Supérieure ↗
+                                </p>
+                            </div>
+                         </div>
+
+                         {/* Sélecteur de Catégorie cible si "Vs une catégorie" */}
+                         {setup.internal_opposition_type === 'inter_category' && (
+                           <motion.div 
+                             initial={{ opacity: 0, height: 0 }}
+                             animate={{ opacity: 1, height: 'auto' }}
+                             className="space-y-2 pt-2 border-t border-slate-200"
+                           >
+                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-700 ml-1">
+                                 Catégorie Adverse à affronter :
+                              </label>
+                              <select 
+                                 value={setup.internal_target_category} 
+                                 onChange={e => setSetup(prev => ({ ...prev, internal_target_category: e.target.value }))}
+                                 className="w-full h-14 rounded-2xl bg-white border-2 border-primary/20 px-4 font-black text-sm outline-none focus:ring-4 ring-primary/20 shadow-sm cursor-pointer"
+                              >
+                                 <option value="">— Choisir la catégorie adverse —</option>
+                                 {CATEGORIES.filter(c => c !== setup.category).map(c => {
+                                   const rel = getCategoryRelativeLabel(setup.category, c);
+                                   return (
+                                     <option key={c} value={c}>
+                                       {c} — {rel.label}
+                                     </option>
+                                   );
+                                 })}
+                              </select>
+
+                              {setup.internal_target_category && (
+                                <div className="space-y-2 mt-2">
+                                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                    <span className="text-[11px] font-bold text-slate-700">
+                                       Affiche : <span className="text-primary font-black">{setup.category}</span> vs <span className="text-slate-900 font-black">{setup.internal_target_category}</span>
+                                    </span>
+                                    {(() => {
+                                      const rel = getCategoryRelativeLabel(setup.category, setup.internal_target_category);
+                                      return (
+                                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg border ${rel.badgeClass}`}>
+                                           {rel.label}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
+
+                                  {/* Équipe adverse spécifique si plusieurs équipes dans cette catégorie */}
+                                  {teams.filter(t => t.category === setup.internal_target_category).length > 0 && (
+                                    <div className="pt-2">
+                                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-600 block mb-1.5">
+                                        Équipe adverse ({setup.internal_target_category}) :
+                                      </label>
+                                      <select
+                                        value={setup.internal_opponent_team_id}
+                                        onChange={e => setSetup(prev => ({ ...prev, internal_opponent_team_id: e.target.value }))}
+                                        className="w-full h-12 rounded-xl bg-white border border-slate-200 px-3 font-bold text-xs outline-none focus:ring-2 ring-primary/20"
+                                      >
+                                        <option value="">Toutes les équipes ({setup.internal_target_category})</option>
+                                        {teams.filter(t => t.category === setup.internal_target_category).map(t => (
+                                          <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                           </motion.div>
+                         )}
+                       </motion.div>
+                     )}
+
+                     <div className="space-y-3">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3"><Shield className="inline w-3.5 h-3.5 mr-2 text-primary" /> Club Adversaire</label>
+                        {setup.match_type === 'internal_scrimmage' ? (
+                          <div className="h-16 rounded-2xl bg-white border-2 border-primary/20 px-6 flex items-center justify-between shadow-sm">
+                             <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center p-1.5 border border-primary/20">
+                                   {mainClub?.logo_url ? (
+                                     <img src={mainClub.logo_url} alt="FUS" className="w-full h-full object-contain" />
+                                   ) : (
+                                     <Shield className="w-5 h-5 text-primary" />
+                                   )}
+                                </div>
+                                <div>
+                                   <p className="text-sm font-black uppercase tracking-tight text-slate-900">
+                                      {mainClub?.club_name || mainClub?.name || 'FUS Rabat'}
+                                   </p>
+                                   <p className="text-[10px] font-bold text-primary">
+                                      {setup.internal_opposition_type === 'intra_squad' 
+                                        ? `${teams.find(t => t.id === setup.team_id)?.name || setup.category} — Chasubles / Reste du groupe`
+                                        : (setup.internal_target_category ? `Catégorie ${setup.internal_target_category}` : 'Autre Catégorie')}
+                                   </p>
+                                </div>
+                             </div>
+                             <Badge className="bg-primary text-white border-none text-[9px] font-black uppercase px-3 py-1">
+                                Interne FUS
+                             </Badge>
+                          </div>
+                        ) : (
+                          <select className="w-full h-16 rounded-2xl bg-white border border-transparent px-8 font-black text-lg outline-none focus:ring-4 ring-primary/20 appearance-none shadow-sm transition-all"
+                             value={setup.opponent_id} onChange={e => setSetup({ ...setup, opponent_id: e.target.value })}>
+                             <option value="">Sélectionner...</option>
+                             {opponentClubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        )}
                      </div>
                      {setup.match_type === 'league' && (
                        <div className="space-y-3">
@@ -752,7 +1170,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                         </select>
                      </div>
                   </div>
-                  <div className="space-y-8">
+                  <div className="space-y-6">
                      <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-3">
                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-3">Date Prévue</label>
@@ -763,10 +1181,87 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                            <Input type="time" value={setup.match_time} onChange={e => setSetup({ ...setup, match_time: e.target.value })} className="h-16 rounded-2xl bg-white border-transparent font-black shadow-sm text-lg focus:ring-4 ring-primary/20" />
                         </div>
                      </div>
-                     <div className="pt-6">
+                     <div className="pt-2">
                         <div className="bg-white/50 rounded-[2.5rem] p-3 flex border-2 border-secondary shadow-inner">
                            <button type="button" onClick={() => setSetup({ ...setup, is_home: true })} className={`flex-1 h-16 rounded-[1.8rem] text-[11px] font-black uppercase tracking-widest transition-all ${setup.is_home ? 'bg-primary text-white shadow-2xl scale-105' : 'text-muted-foreground hover:bg-white'}`}>Domicile</button>
                            <button type="button" onClick={() => setSetup({ ...setup, is_home: false })} className={`flex-1 h-16 rounded-[1.8rem] text-[11px] font-black uppercase tracking-widest transition-all ${!setup.is_home ? 'bg-slate-900 text-white shadow-2xl scale-105' : 'text-muted-foreground hover:bg-white'}`}>Extérieur</button>
+                        </div>
+                     </div>
+
+                     {/* Format du match (6v6 à 11v11) */}
+                     <div className="space-y-3 p-6 rounded-3xl bg-white border-2 border-primary/20 shadow-md">
+                        <div className="flex items-center justify-between">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                              <Users className="w-4 h-4" /> Format de Match (Effectif)
+                           </label>
+                           <Badge className="bg-primary text-white font-black text-[10px] px-3 py-1 rounded-xl shadow-sm">
+                              {setup.match_format} vs {setup.match_format}
+                           </Badge>
+                        </div>
+                        <div className="grid grid-cols-6 gap-2 pt-1">
+                           {[6, 7, 8, 9, 10, 11].map(fmt => (
+                             <button
+                               key={fmt}
+                               type="button"
+                               onClick={() => handleFormatChange(fmt)}
+                               className={`h-12 rounded-2xl font-black text-xs transition-all flex flex-col items-center justify-center border-2 ${
+                                 setup.match_format === fmt
+                                   ? 'bg-primary text-white border-primary shadow-lg scale-105 ring-2 ring-primary/20'
+                                   : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-primary/40'
+                               }`}
+                             >
+                               <span>{fmt}v{fmt}</span>
+                               <span className="text-[8px] opacity-70 font-semibold">{fmt} tit.</span>
+                             </button>
+                           ))}
+                        </div>
+                        <p className="text-[9px] text-muted-foreground font-semibold">
+                           Configure les terrains tactiques ({setup.match_format} titulaires + remplaçants).
+                        </p>
+                     </div>
+
+                     {/* Durée d'une mi-temps (Minutes) */}
+                     <div className="space-y-3 p-6 rounded-3xl bg-white border-2 border-primary/20 shadow-md">
+                        <div className="flex items-center justify-between">
+                           <label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                              <Clock className="w-4 h-4" /> Durée d'une Mi-Temps
+                           </label>
+                           <Badge className="bg-slate-900 text-white font-black text-[10px] px-3 py-1 rounded-xl shadow-sm">
+                              2 × {halfDuration}' = {halfDuration * 2} min
+                           </Badge>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1.5 pt-1">
+                           {[15, 20, 25, 30, 35, 40, 45].map(mins => (
+                             <button
+                               key={mins}
+                               type="button"
+                               onClick={() => setHalfDuration(mins)}
+                               className={`h-11 rounded-xl font-black text-xs transition-all border-2 ${
+                                 halfDuration === mins
+                                   ? 'bg-primary text-white border-primary shadow-md scale-105'
+                                   : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-primary/40'
+                               }`}
+                             >
+                               {mins}'
+                             </button>
+                           ))}
+                        </div>
+                        <div className="flex items-center gap-3 pt-2">
+                           <span className="text-[10px] font-black text-slate-500 uppercase">Personnalisé :</span>
+                           <div className="relative flex-1">
+                              <Input
+                                 type="number"
+                                 min={5}
+                                 max={60}
+                                 value={halfDuration}
+                                 onChange={e => {
+                                   const val = Math.max(1, Math.min(120, parseInt(e.target.value) || 45));
+                                   setHalfDuration(val);
+                                 }}
+                                 className="h-11 rounded-xl bg-slate-50 border-slate-200 font-black text-sm px-3"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">min / mi-temps</span>
+                           </div>
                         </div>
                      </div>
 
@@ -907,11 +1402,11 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                   <div className="lg:col-span-4 space-y-8 flex flex-col">
                      <div className="bg-secondary/20 p-6 rounded-[2.5rem] border border-secondary/50 shadow-inner">
                         <h4 className="font-black text-[10px] uppercase tracking-widest text-primary mb-4 flex items-center justify-between">
-                           <span>Système Tactique</span>
+                           <span>Système Tactique ({setup.match_format}v{setup.match_format})</span>
                            <Badge variant="outline" className="text-[8px] bg-white border-primary/20">{formation}</Badge>
                         </h4>
                         <div className="grid grid-cols-3 gap-2">
-                           {FORMATIONS.map(f => (
+                           {(FORMATIONS_BY_FORMAT[setup.match_format] || FORMATIONS).map(f => (
                               <button key={f} onClick={() => setFormation(f)} className={`h-11 rounded-xl text-[10px] font-black border-2 transition-all ${formation === f ? 'border-primary bg-primary text-white shadow-lg' : 'border-secondary text-muted-foreground bg-white hover:border-primary/10'}`}>{f}</button>
                            ))}
                         </div>
@@ -940,22 +1435,25 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                            </div>
                          )}
 
-                         {/* Generate 22 Button */}
+                         {/* Generate Lineup Button */}
                          <button
                            onClick={autoPositionPlayers}
                            className="mb-3 w-full h-14 rounded-2xl bg-gradient-to-r from-primary to-blue-600 text-white font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 relative overflow-hidden"
                          >
                            <Users className="w-4 h-4" />
-                           ⚡ Générer 22 joueurs
+                           ⚡ Aligner {setup.match_format} Titulaires
                            <span className="ml-1 bg-white/20 px-2 py-0.5 rounded-lg text-[8px] font-black">
-                             11 + {Math.min(Math.max(matchPlayers.length - 11, 0), 11)} remplaçants
+                             {setup.match_type === 'internal_scrimmage' && setup.internal_opposition_type === 'intra_squad'
+                               ? `${setup.match_format} tit. (reste dispo pour Chasubles)`
+                               : `${setup.match_format} + ${Math.min(Math.max(matchPlayers.length - setup.match_format, 0), setup.match_format)} subs`
+                             }
                            </span>
                          </button>
 
                          {/* Reset Button */}
                          {(startingXI.some(id => id !== '') || substitutes.length > 0) && (
                            <button
-                             onClick={() => { setStartingXI(Array(11).fill('')); setSubstitutes([]); }}
+                             onClick={() => { setStartingXI(Array(setup.match_format).fill('')); setSubstitutes([]); }}
                              className="mb-3 w-full h-9 rounded-xl bg-red-50 text-red-500 border-2 border-red-100 hover:bg-red-100 font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
                            >
                              <Trash2 className="w-3.5 h-3.5" /> Réinitialiser la sélection
@@ -1031,7 +1529,7 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                   <div className="lg:col-span-8 flex flex-col items-center">
                      <div className="w-full flex justify-between items-center mb-6 px-10">
                         <div className="flex items-center gap-4">
-                           <Badge className="bg-emerald-500 text-white font-black px-4 py-2 rounded-xl text-[10px]">XI: {startingXI.filter(id => id !== '').length}/11</Badge>
+                           <Badge className="bg-emerald-500 text-white font-black px-4 py-2 rounded-xl text-[10px]">Titulaires: {startingXI.filter(id => id !== '').length}/{setup.match_format}</Badge>
                            <Badge className="bg-blue-500 text-white font-black px-4 py-2 rounded-xl text-[10px]">Subs: {substitutes.length}</Badge>
                         </div>
                         <div className="flex items-center gap-2 opacity-50 italic text-[10px] font-bold uppercase">
@@ -1084,128 +1582,185 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                        <CardContent className="p-6">
                           <div className="flex items-center gap-4 mb-6 border-b pb-4">
                              <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center p-3 border-2 border-white shadow-inner">
-                                {opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url ? <img src={opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url} className="w-full h-full object-contain" /> : <Shield className="w-7 h-7 text-muted-foreground opacity-10" />}
+                                {setup.match_type === 'internal_scrimmage' ? (
+                                   mainClub?.logo_url ? <img src={mainClub.logo_url} className="w-full h-full object-contain" /> : <Shield className="w-7 h-7 text-primary" />
+                                ) : (
+                                   opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url ? <img src={opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url} className="w-full h-full object-contain" /> : <Shield className="w-7 h-7 text-muted-foreground opacity-10" />
+                                )}
                              </div>
                              <div>
                                 <h3 className="text-lg font-black uppercase italic tracking-tighter leading-none">{getOpponentName(setup.opponent_id)}</h3>
-                                <p className="text-[9px] font-bold text-muted-foreground uppercase mt-1 tracking-widest">Scouting Adverse</p>
+                                <p className="text-[9px] font-bold text-muted-foreground uppercase mt-1 tracking-widest">
+                                   {setup.match_type === 'internal_scrimmage' ? 'Opposition Interne FUS' : 'Scouting Adverse'}
+                                </p>
                              </div>
                           </div>
                           
                           <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 flex justify-between items-center">
-                             SYSTÈME ADVERSE <Badge className="bg-primary/10 text-primary border-none text-[9px] uppercase">{opponentFormation}</Badge>
+                             SYSTÈME ADVERSE ({setup.match_format}v{setup.match_format}) <Badge className="bg-primary/10 text-primary border-none text-[9px] uppercase">{opponentFormation}</Badge>
                           </h4>
                           <div className="grid grid-cols-4 gap-2">
-                             {FORMATIONS.map(f => (
+                             {(FORMATIONS_BY_FORMAT[setup.match_format] || FORMATIONS).map(f => (
                                <button key={f} onClick={() => setOpponentFormation(f)} className={`h-9 rounded-lg text-[9px] font-black border-2 transition-all ${opponentFormation === f ? 'bg-primary border-primary text-white shadow-lg' : 'bg-slate-50 border-transparent text-muted-foreground hover:border-primary/20'}`}>{f}</button>
                              ))}
                           </div>
                        </CardContent>
                     </Card>
 
-                    {/* Auto-position opponent button */}
-                    <button
-                      onClick={autoPositionOpponent}
-                      className="w-full h-12 rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 text-white font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 mb-4"
-                    >
-                      <Users className="w-4 h-4" />
-                      Positionnement Auto (1-22)
-                    </button>
+                    {/* Auto-position & Reset buttons */}
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      <button
+                        onClick={autoPositionOpponent}
+                        className="h-12 rounded-2xl bg-gradient-to-r from-primary to-blue-600 text-white font-black text-xs uppercase tracking-wider shadow-md hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <Users className="w-4 h-4" />
+                        ⚡ Auto ({setup.match_format})
+                      </button>
+                      <button
+                        onClick={() => { setOpponentLineup(Array(setup.match_format).fill('')); setOpponentSubs([]); }}
+                        className="h-12 rounded-2xl bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Vider tout
+                      </button>
+                    </div>
 
-                    {/* Banque de numéros 1-22 avec couleurs par position */}
-                    <Card className="rounded-[2.5rem] border-primary/20 shadow-lg overflow-hidden bg-gradient-to-br from-primary/5 to-white">
-                       <CardContent className="p-5">
-                          <h4 className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
-                             <Users className="w-3.5 h-3.5" /> Banque de Numéros (1-22)
-                          </h4>
-                          <p className="text-[9px] text-muted-foreground mb-3">Défense • Milieu • Attaque</p>
-                          <div className="grid grid-cols-7 gap-2">
-                             {Array.from({ length: 22 }, (_, i) => i + 1).map(num => {
-                                const isUsed = opponentLineup.includes(num.toString()) || opponentSubs.includes(num.toString());
-                                // Color by position: GK(1)=amber, Def(2-5)=blue, Mid(6-10)=green, Att(9,11)=red
-                                let colorClass = 'bg-white border-2 border-primary/30 text-primary hover:bg-primary hover:text-white';
-                                if (num === 1) colorClass = 'bg-gradient-to-br from-amber-400 to-amber-600 text-white border-transparent';
-                                else if (num >= 2 && num <= 5) colorClass = 'bg-gradient-to-br from-blue-500 to-blue-700 text-white border-transparent';
-                                else if (num >= 6 && num <= 10) colorClass = 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white border-transparent';
-                                else if (num === 9 || num === 11) colorClass = 'bg-gradient-to-br from-rose-500 to-rose-700 text-white border-transparent';
-                                else colorClass = 'bg-gradient-to-br from-slate-500 to-slate-700 text-white border-transparent';
-                                
-                                return (
-                                   <button
-                                      key={num}
-                                      onClick={() => {
-                                         if (isUsed) return;
-                                         const emptySlot = opponentLineup.findIndex(slot => slot === '');
-                                         if (emptySlot !== -1) {
-                                            updateOpponentJersey(emptySlot, num.toString());
-                                         } else {
-                                            addOpponentSub();
-                                            updateOpponentSub(opponentSubs.length, num.toString());
-                                         }
-                                      }}
-                                      disabled={isUsed}
-                                      className={`w-9 h-9 rounded-xl font-black text-xs transition-all ${
-                                         isUsed 
-                                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
-                                            : `${colorClass} hover:shadow-lg hover:scale-110`
-                                      }`}
-                                   >
-                                      {num}
-                                   </button>
-                                );
-                             })}
-                          </div>
-                       </CardContent>
-                    </Card>
+                    {/* Liste des joueurs adverses disponibles (FUS ou Club) */}
+                    {effectiveOpponentSquad.length > 0 ? (
+                      <Card className="rounded-[2.5rem] border-primary/20 shadow-lg overflow-hidden bg-white mb-4">
+                         <CardContent className="p-5">
+                            <div className="flex items-center justify-between mb-3">
+                               <h4 className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                                  <Users className="w-3.5 h-3.5" />
+                                  {setup.match_type === 'internal_scrimmage' && setup.internal_opposition_type === 'intra_squad'
+                                    ? `Reste du Groupe ${teams.find(t => t.id === setup.team_id)?.name || setup.category} (${effectiveOpponentSquad.length})`
+                                    : `Effectif Disponible (${effectiveOpponentSquad.length})`
+                                  }
+                               </h4>
+                               <span className="text-[8px] font-bold text-slate-400 uppercase">Cliquer pour aligner</span>
+                            </div>
+                            {setup.match_type === 'internal_scrimmage' && setup.internal_opposition_type === 'intra_squad' && (
+                               <div className="bg-primary/5 p-2.5 rounded-xl border border-primary/10 mb-2.5">
+                                  <p className="text-[9px] text-slate-600 font-semibold leading-tight">
+                                     🎯 <strong>Même groupe ({teams.find(t => t.id === setup.team_id)?.name || setup.category})</strong> : L'adversaire est composé exclusivement des joueurs restants non affectés à l'Équipe A.
+                                  </p>
+                               </div>
+                            )}
+                            <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                               {effectiveOpponentSquad.map(p => {
+                                  const isStarter = opponentLineup.includes(p.id) || opponentLineup.includes(String(p.jersey_number));
+                                  const isSub = opponentSubs.includes(p.id) || opponentSubs.includes(String(p.jersey_number));
+                                  const isUsed = isStarter || isSub;
+                                  return (
+                                     <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => {
+                                           if (isUsed) {
+                                             setOpponentLineup(prev => prev.map(val => (val === p.id || val === String(p.jersey_number)) ? '' : val));
+                                             setOpponentSubs(prev => prev.filter(val => val !== p.id && val !== String(p.jersey_number)));
+                                             return;
+                                           }
+                                           const val = p.id;
+                                           if (setup.match_type === 'internal_scrimmage') {
+                                             setSubstitutes(prev => prev.filter(id => id !== val));
+                                           }
+                                           const emptySlot = opponentLineup.findIndex(slot => slot === '');
+                                           if (emptySlot !== -1) {
+                                              updateOpponentJersey(emptySlot, val);
+                                           } else {
+                                              setOpponentSubs(prev => [...prev, val]);
+                                           }
+                                        }}
+                                        className={`w-full p-2.5 rounded-xl text-left flex items-center justify-between transition-all ${
+                                           isStarter
+                                              ? 'bg-primary/10 border-2 border-primary text-primary font-black shadow-sm'
+                                              : isSub
+                                              ? 'bg-blue-50 border-2 border-blue-300 text-blue-800 font-bold'
+                                              : 'bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800'
+                                        }`}
+                                     >
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                           <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center text-[9px] font-black text-slate-700 shrink-0 shadow-sm">
+                                              {p.photo_url && p.photo_url !== 'null' ? (
+                                                <img src={p.photo_url} alt="" className="w-full h-full object-cover" />
+                                              ) : (
+                                                p.jersey_number || '#'
+                                              )}
+                                           </div>
+                                           <span className="font-bold truncate text-[11px]">{p.full_name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                           <span className="text-[8px] font-black uppercase text-slate-500 bg-slate-200/60 px-1.5 py-0.5 rounded">{p.position}</span>
+                                           {substitutes.includes(p.id) && !isUsed && (
+                                             <span className="text-[8px] font-black bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded" title="Actuellement remplaçant Équipe A - Cliquer pour basculer vers les Chasubles">
+                                               BANC A
+                                             </span>
+                                           )}
+                                           {isStarter && <span className="text-[8px] font-black bg-primary text-white px-2 py-0.5 rounded-full">TIT</span>}
+                                           {isSub && <span className="text-[8px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full">SUB</span>}
+                                        </div>
+                                     </button>
+                                  );
+                               })}
+                            </div>
+                         </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="p-4 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center mb-4">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">Aucun joueur disponible pour cette sélection</p>
+                      </div>
+                    )}
 
                     <Card className="rounded-[3rem] border-secondary/50 shadow-xl flex-1 flex flex-col overflow-hidden bg-white">
                        <div className="p-6 pb-4">
                           <div className="flex items-center justify-between mb-4">
-                             <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Composition (11 titulaires)</h4>
+                             <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                Composition ({setup.match_format} titulaires)
+                             </h4>
                              <button 
-                                onClick={() => setOpponentLineup(Array(11).fill(''))}
+                                onClick={() => setOpponentLineup(Array(setup.match_format).fill(''))}
                                 className="text-[9px] text-red-500 hover:text-red-700 font-bold uppercase"
                              >
-                                Tout effacer
+                                Vider titulaires
                              </button>
                           </div>
-                          <div className="space-y-2 overflow-y-auto max-h-[280px] custom-scrollbar pr-2">
+                          <div className="space-y-2 overflow-y-auto max-h-[300px] custom-scrollbar pr-2">
                              {opponentPositions.map((pos, idx) => {
-                                const jersey = opponentLineup[idx];
-                                const oppP = jersey ? opponentSquad.find(op => String(op.jersey_number) === String(jersey) || op.id === jersey) : null;
-                                const name = oppP ? oppP.full_name : (jersey ? `Joueur #${jersey}` : 'Vide');
-                                const avatar = jersey ? ((oppP?.photo_url && oppP.photo_url !== 'null') ? oppP.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=020617&color=fff&size=200`) : null;
+                                const playerRef = opponentLineup[idx];
+                                const oppP = playerRef ? (effectiveOpponentSquad.find(op => op.id === playerRef || String(op.jersey_number) === String(playerRef)) || players.find(p => p.id === playerRef)) : null;
+                                const name = oppP ? oppP.full_name : (playerRef ? `Joueur #${playerRef}` : `Poste ${pos.label} — Libre`);
+                                const avatar = oppP ? ((oppP.photo_url && oppP.photo_url !== 'null') ? oppP.photo_url : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=020617&color=fff&size=200`) : null;
 
                                 return (
-                                   <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-secondary/20 hover:bg-white hover:shadow-md transition-all group">
+                                   <div key={idx} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${playerRef ? 'bg-slate-50 border-secondary/30 hover:bg-white hover:shadow-md' : 'bg-slate-50/50 border-dashed border-slate-200'}`}>
                                       <div className="flex items-center gap-3 min-w-0">
                                          {avatar ? (
                                             <img src={avatar} className="w-8 h-8 rounded-full object-cover border border-slate-300 shadow-sm shrink-0" alt="" />
                                          ) : (
-                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-[9px] font-black shrink-0 ${jersey ? 'bg-primary' : 'bg-slate-400'}`}>
+                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-[9px] font-black shrink-0 ${playerRef ? 'bg-primary' : 'bg-slate-300'}`}>
                                                {pos.label}
                                             </div>
                                          )}
                                          <div className="min-w-0">
-                                           <p className="text-[10px] font-black uppercase text-slate-800 truncate leading-tight">{name}</p>
-                                           {jersey ? (
-                                             <p className="text-[8px] font-bold text-slate-400 uppercase">Poste {pos.label} • Maillot #{jersey}</p>
-                                           ) : (
-                                             <p className="text-[8px] font-bold text-slate-400 uppercase">Poste {pos.label}</p>
-                                           )}
+                                           <p className={`text-[10px] font-black uppercase truncate leading-tight ${playerRef ? 'text-slate-900' : 'text-slate-400 italic'}`}>{name}</p>
+                                           <p className="text-[8px] font-bold text-slate-400 uppercase">
+                                             Poste {pos.label} {oppP?.jersey_number ? `• Maillot #${oppP.jersey_number}` : ''}
+                                           </p>
                                          </div>
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
-                                         {jersey && (
+                                         {playerRef && (
                                             <button
                                                onClick={() => updateOpponentJersey(idx, '')}
                                                className="w-6 h-6 rounded-lg bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center"
+                                               title="Retirer ce joueur"
                                             >
-                                               <X className="w-3 h-3" />
+                                               <X className="w-3.5 h-3.5" />
                                             </button>
                                          )}
-                                         <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${jersey ? 'bg-primary text-white shadow' : 'bg-white border-2 border-slate-200 text-slate-300'}`}>
-                                            {jersey || '-'}
+                                         <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${playerRef ? 'bg-primary text-white shadow' : 'bg-white border-2 border-dashed border-slate-200 text-slate-300'}`}>
+                                            {oppP?.jersey_number || (playerRef ? '#' : '-')}
                                          </span>
                                       </div>
                                    </div>
@@ -1218,24 +1773,26 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
 
                   <div className="lg:col-span-8 flex flex-col items-center">
                      <div className="w-full flex justify-center mb-4">
-                        <Badge className="bg-slate-950 text-white font-black px-8 py-3 rounded-2xl shadow-2xl text-[10px] uppercase tracking-widest">Visualisation Tactique Scouting</Badge>
+                        <Badge className="bg-slate-950 text-white font-black px-8 py-3 rounded-2xl shadow-2xl text-[10px] uppercase tracking-widest">Visualisation Tactique Scouting ({setup.match_format}v{setup.match_format})</Badge>
                      </div>
                      <p className="text-[10px] text-muted-foreground mb-4 flex items-center gap-2">
                         <span className="inline-block w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                        Glissez-déposez les numéros sur le terrain pour les permuter
+                        Glissez-déposez les joueurs sur le terrain pour les permuter
                      </p>
                      <Pitch 
                         positions={opponentPositions} 
                         isOpponent 
                         opponentJerseyNumbers={opponentLineup} 
-                        opponentSquad={opponentSquad}
+                        opponentSquad={effectiveOpponentSquad}
                         onDropPlayer={handleOpponentSwap}
                         onClearSlot={handleOpponentClear}
                      />
                      
                      <div className="w-full mt-8 bg-secondary/10 p-6 rounded-[3rem] border-2 border-dashed border-secondary/50">
                         <div className="flex items-center justify-between mb-4 px-4">
-                           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Banc de l'Adversaire</p>
+                           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                              <Users className="w-3.5 h-3.5" /> Banc de l'Adversaire ({opponentSubs.length})
+                           </p>
                            <Button 
                              variant="ghost" 
                              size="sm" 
@@ -1246,30 +1803,36 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                            </Button>
                         </div>
                         <div className="flex flex-wrap gap-3">
-                           {opponentSubs.map((jersey, idx) => (
-                              <motion.div 
-                                key={idx}
-                                layout
-                                className="flex items-center gap-3 bg-white p-2 pr-4 rounded-2xl border-2 border-slate-100 shadow-md group"
-                              >
-                                 <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
-                                    <Shield className="w-4 h-4 opacity-30" />
-                                 </div>
-                                 <input 
-                                   type="text" 
-                                   placeholder="#" 
-                                   value={jersey}
-                                   onChange={(e) => updateOpponentSub(idx, e.target.value)}
-                                   className="w-10 h-10 text-center rounded-xl bg-slate-50 border-none font-black text-[10px]"
-                                 />
-                                 <button 
-                                   onClick={() => removeOpponentSub(idx)}
-                                   className="w-6 h-6 rounded-lg bg-red-50 text-red-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
-                                 >
-                                    <X className="w-3.5 h-3.5 mx-auto" />
-                                 </button>
-                              </motion.div>
-                           ))}
+                           {opponentSubs.map((subId, idx) => {
+                              const oppP = effectiveOpponentSquad.find(p => p.id === subId || String(p.jersey_number) === String(subId)) || players.find(p => p.id === subId);
+                              const name = oppP ? oppP.full_name : (subId ? `Joueur #${subId}` : `Remplaçant #${idx + 1}`);
+                              const avatar = oppP?.photo_url && oppP.photo_url !== 'null' ? oppP.photo_url : null;
+                              return (
+                                <motion.div 
+                                  key={idx}
+                                  layout
+                                  className="flex items-center gap-2.5 bg-white p-2 pr-3.5 rounded-2xl border-2 border-slate-200 shadow-sm group hover:border-primary/40 transition-all"
+                                >
+                                   <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 font-black text-[10px] overflow-hidden border border-slate-200">
+                                      {avatar ? (
+                                        <img src={avatar} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        oppP?.jersey_number || '#'
+                                      )}
+                                   </div>
+                                   <span className="text-[10px] font-black uppercase text-slate-800 max-w-[120px] truncate">
+                                      {name}
+                                   </span>
+                                   <button 
+                                     onClick={() => removeOpponentSub(idx)}
+                                     className="w-6 h-6 rounded-lg bg-red-50 text-red-500 opacity-60 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white flex items-center justify-center ml-1"
+                                     title="Retirer du banc"
+                                   >
+                                      <X className="w-3.5 h-3.5" />
+                                   </button>
+                                </motion.div>
+                              );
+                           })}
                            {opponentSubs.length === 0 && <p className="text-[10px] italic text-muted-foreground/40 px-4">Aucun remplaçant répertorié</p>}
                         </div>
                      </div>
@@ -1289,11 +1852,13 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                         {setup.is_home ? (
                            mainClub?.logo_url ? <img src={mainClub.logo_url} className="w-full h-full object-contain" /> : <Shield className="w-16 h-16 text-primary opacity-20" />
                         ) : (
-                           opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url ? <img src={opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url} className="w-full h-full object-contain" /> : <Target className="w-16 h-16 text-muted-foreground opacity-20" />
+                           setup.match_type === 'internal_scrimmage' 
+                              ? (mainClub?.logo_url ? <img src={mainClub.logo_url} className="w-full h-full object-contain" /> : <Shield className="w-16 h-16 text-primary opacity-20" />)
+                              : (opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url ? <img src={opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url} className="w-full h-full object-contain" /> : <Target className="w-16 h-16 text-muted-foreground opacity-20" />)
                         )}
                      </div>
                      <div className="text-center">
-                        <p className="font-black text-2xl uppercase tracking-tighter italic">{setup.is_home ? (mainClub?.club_name || 'My Club') : getOpponentName(setup.opponent_id)}</p>
+                        <p className="font-black text-2xl uppercase tracking-tighter italic">{setup.is_home ? (mainClub?.club_name || 'My Club') : (setup.match_type === 'internal_scrimmage' ? (setup.internal_opposition_type === 'intra_squad' ? 'Opposition Interne (Intra-squad)' : `Interne (${setup.internal_target_category})`) : getOpponentName(setup.opponent_id))}</p>
                         <Badge className="mt-4 bg-primary text-white border-white/20 font-black uppercase text-[10px] px-6 py-2 rounded-xl">DOMICILE</Badge>
                      </div>
                   </div>
@@ -1307,11 +1872,13 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                         {!setup.is_home ? (
                            mainClub?.logo_url ? <img src={mainClub.logo_url} className="w-full h-full object-contain" /> : <Shield className="w-16 h-16 text-primary opacity-20" />
                         ) : (
-                           opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url ? <img src={opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url} className="w-full h-full object-contain" /> : <Target className="w-16 h-16 text-muted-foreground opacity-20" />
+                           setup.match_type === 'internal_scrimmage'
+                              ? (mainClub?.logo_url ? <img src={mainClub.logo_url} className="w-full h-full object-contain" /> : <Shield className="w-16 h-16 text-primary opacity-20" />)
+                              : (opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url ? <img src={opponentClubs.find(c => c.id === setup.opponent_id)?.logo_url} className="w-full h-full object-contain" /> : <Target className="w-16 h-16 text-muted-foreground opacity-20" />)
                         )}
                      </div>
                      <div className="text-center">
-                        <p className="font-black text-2xl uppercase tracking-tighter italic">{!setup.is_home ? (mainClub?.club_name || 'My Club') : getOpponentName(setup.opponent_id)}</p>
+                        <p className="font-black text-2xl uppercase tracking-tighter italic">{!setup.is_home ? (mainClub?.club_name || 'My Club') : (setup.match_type === 'internal_scrimmage' ? (setup.internal_opposition_type === 'intra_squad' ? 'Opposition Interne (Intra-squad)' : `Interne (${setup.internal_target_category})`) : getOpponentName(setup.opponent_id))}</p>
                         <Badge className="mt-4 bg-slate-900 text-white border-white/20 font-black uppercase text-[10px] px-6 py-2 rounded-xl">EXTÉRIEUR</Badge>
                      </div>
                   </div>
@@ -1321,7 +1888,14 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                   <div className="bg-secondary/20 rounded-[3rem] p-10 space-y-8 border border-secondary/50 shadow-inner">
                      <h4 className="text-[11px] font-black uppercase tracking-widest text-primary flex items-center gap-4"><Calendar className="w-5 h-5" /> Fiche Logistique</h4>
                      <div className="space-y-4">
-                        <InfoRow label="Compétition Officielle" value={getLeagueName(setup.league_id)} />
+                        <InfoRow 
+                           label="Compétition / Cadre" 
+                           value={
+                              setup.match_type === 'internal_scrimmage' 
+                                ? `Opposition Interne (${setup.internal_opposition_type === 'intra_squad' ? 'Même effectif' : `Vs ${setup.internal_target_category}`})` 
+                                : (setup.match_type === 'amical' ? 'Match Amical' : getLeagueName(setup.league_id))
+                           } 
+                        />
                         <InfoRow label="Phase du Match" value={
                            setup.qualif_status === 'won' ? '✅ Gagné' :
                            setup.qualif_status === 'lost' ? '❌ Perdu' :
@@ -1343,8 +1917,11 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                   <div className="bg-secondary/20 rounded-[3rem] p-10 space-y-8 border border-secondary/50 shadow-inner">
                      <h4 className="text-[11px] font-black uppercase tracking-widest text-primary flex items-center gap-4"><Users className="w-5 h-5" /> Fiche Sportive</h4>
                      <div className="space-y-4">
+                        <InfoRow label="Format Effectif" value={`${setup.match_format} vs ${setup.match_format}`} />
+                        <InfoRow label="Durée Mi-Temps" value={`2 × ${halfDuration}' (${halfDuration * 2} min)`} />
                         <InfoRow label="Système Tactique" value={formation} />
-                        <InfoRow label="Effectif Convoqué" value={`${startingXI.filter(id => id !== '').length + substitutes.length} joueurs`} />
+                        <InfoRow label="Titulaires FUS" value={`${startingXI.filter(id => id !== '').length}/${setup.match_format}`} />
+                        <InfoRow label="Remplaçants FUS" value={`${substitutes.length} joueurs`} />
                         <InfoRow label="Encadrement Staff" value={`${selectedStaffIds.length} membres`} />
                         <InfoRow label="Terrain" value={setup.is_home ? 'Domicile' : 'Extérieur'} />
                         <InfoRow label="Système Adverse" value={opponentFormation} />
@@ -1364,16 +1941,24 @@ const ScheduleMatchWizard: React.FC<ScheduleMatchWizardProps> = ({ onBack, onSuc
                  <div key={s.key} className={`rounded-full transition-all duration-700 ${s.key === currentStep ? 'w-12 h-3 bg-primary shadow-xl shadow-primary/20' : idx < stepIndex ? 'w-3 h-3 bg-primary/40' : 'w-3 h-3 bg-secondary'}`} />
               ))}
            </div>
-           {currentStep === 'validate' ? (
-              <Button onClick={handleSave} disabled={saving} className="h-16 px-14 rounded-[2.2rem] bg-slate-950 hover:bg-black text-white font-black uppercase tracking-widest text-[11px] gap-5 shadow-2xl transition-all active:scale-95 group">
-                 {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />}
-                 {saving ? 'Synchronisation...' : 'Confirmer le Planning'}
-              </Button>
-           ) : (
-              <Button onClick={goNext} className="h-16 px-14 rounded-[2.2rem] bg-primary hover:bg-slate-900 text-white font-black uppercase tracking-widest text-[11px] gap-5 shadow-2xl group transition-all hover:scale-105 active:scale-95">
-                 Suivant <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-              </Button>
-           )}
+           <div className="flex items-center gap-3">
+              {Boolean(initialMatch?.id) && currentStep !== 'validate' && (
+                 <Button onClick={handleSave} disabled={saving} variant="outline" className="h-16 px-8 rounded-[2rem] border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 font-black uppercase tracking-widest text-[11px] gap-3 shadow-lg transition-all active:scale-95">
+                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5 text-emerald-600" />}
+                    Sauvegarder
+                 </Button>
+              )}
+              {currentStep === 'validate' ? (
+                 <Button onClick={handleSave} disabled={saving} className="h-16 px-14 rounded-[2.2rem] bg-slate-950 hover:bg-black text-white font-black uppercase tracking-widest text-[11px] gap-5 shadow-2xl transition-all active:scale-95 group">
+                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-6 h-6 text-primary group-hover:scale-110 transition-transform" />}
+                    {saving ? 'Synchronisation...' : initialMatch?.id ? 'Valider l\'Orchestration' : 'Confirmer le Planning'}
+                 </Button>
+              ) : (
+                 <Button onClick={goNext} className="h-16 px-14 rounded-[2.2rem] bg-primary hover:bg-slate-900 text-white font-black uppercase tracking-widest text-[11px] gap-5 shadow-2xl group transition-all hover:scale-105 active:scale-95">
+                    Suivant <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                 </Button>
+              )}
+           </div>
         </div>
       </div>
     </motion.div>
