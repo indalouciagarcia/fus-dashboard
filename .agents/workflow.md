@@ -144,6 +144,9 @@ Implement the navigation bar and integrate the design system.
 
 @qa_tester
 Run the end‑to‑end test suite and generate `qa_report.md`.
+
+@github_deployer
+Vérifier le build, sécuriser les variables d'environnement (Mapbox, Supabase) et déployer sur GitHub / Netlify.
 ```
 
 These `@` mentions can be placed anywhere in an artifact (e.g., `workflow.md`, `backlog.md`, or a user story). The referenced agent will read its `SKILL.md` prompt template, substitute the text after the mention as the **goal**, and produce the required artefacts.

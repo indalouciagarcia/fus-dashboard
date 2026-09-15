@@ -301,6 +301,7 @@ export const CITY_COORDINATES: Record<string, { lat: number; lng: number; countr
 
 /** Couleur associée à chaque continent pour les marqueurs */
 export const CONTINENT_COLORS: Record<string, string> = {
+  "Maroc":        "#e11d48", // rouge/rose Maroc
   "Afrique":      "#ef4444", // rouge
   "Europe":       "#3b82f6", // bleu
   "Amérique":     "#22c55e", // vert

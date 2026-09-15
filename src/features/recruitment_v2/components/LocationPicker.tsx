@@ -111,21 +111,29 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
   // Clé API Mapbox
   const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
-  // Toutes les villes avec coordonnées, filtrées par recherche et continent
+  // Toutes les villes avec coordonnées, filtrées par recherche et continent/pays
   const allCityEntries = useMemo(() => {
     return Object.entries(CITY_COORDINATES).filter(([cityName, data]) => {
       const matchSearch = !searchQuery || cityName.toLowerCase().includes(searchQuery.toLowerCase()) || data.country.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchContinent = !activeContinent || data.continent === activeContinent;
-      return matchSearch && matchContinent;
+      const matchRegion = !activeContinent 
+        ? true 
+        : activeContinent === 'Maroc' 
+        ? data.country === 'Maroc' 
+        : data.continent === activeContinent;
+      return matchSearch && matchRegion;
     });
   }, [searchQuery, activeContinent]);
 
-  // Centrer la carte sur le continent filtré
+  // Centrer la carte sur le continent ou pays filtré
   const handleContinentFilter = (cont: string | null) => {
     setActiveContinent(cont);
     setShowContinentFilter(false);
-    if (!cont) return;
+    if (!cont) {
+      setViewState({ longitude: 10, latitude: 20, zoom: 1.8 });
+      return;
+    }
     const centers: Record<string, { lat: number; lng: number; zoom: number }> = {
+      "Maroc":        { lat: 31.7917, lng: -7.0926, zoom: 5.5 },
       "Afrique":      { lat: 5,   lng: 20,   zoom: 2.5 },
       "Europe":       { lat: 50,  lng: 10,   zoom: 3.2 },
       "Amérique":     { lat: -10, lng: -60,  zoom: 2.2 },
@@ -135,7 +143,13 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
     if (c) setViewState({ longitude: c.lng, latitude: c.lat, zoom: c.zoom });
   };
 
-  const continentOptions = ["Afrique", "Europe", "Amérique", "Asie/Océanie"];
+  const regionOptions = [
+    { id: "Maroc", label: "Maroc 🇲🇦", color: CONTINENT_COLORS["Maroc"] || "#e11d48" },
+    { id: "Afrique", label: "Afrique", color: CONTINENT_COLORS["Afrique"] || "#ef4444" },
+    { id: "Europe", label: "Europe", color: CONTINENT_COLORS["Europe"] || "#3b82f6" },
+    { id: "Amérique", label: "Amérique", color: CONTINENT_COLORS["Amérique"] || "#22c55e" },
+    { id: "Asie/Océanie", label: "Asie/Océanie", color: CONTINENT_COLORS["Asie/Océanie"] || "#f59e0b" },
+  ];
 
   return (
     <div className="w-full">
@@ -228,57 +242,98 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
         <div className="space-y-3">
 
           {/* Barre d'outils : search + filtre continent */}
-          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            {/* Recherche */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Rechercher une ville ou un pays..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-xs font-medium outline-none focus:ring-2 ring-primary/20 focus:border-primary bg-white"
-              />
-              {searchQuery && (
-                <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                  <X className="w-3 h-3" />
+          {/* Barre d'outils carte : recherche + filtre continent / région */}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+              {/* Recherche */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher une ville ou un pays..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-xs font-medium outline-none focus:ring-2 ring-primary/20 focus:border-primary bg-white"
+                />
+                {searchQuery && (
+                  <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filtre continent / pays */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowContinentFilter(v => !v)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  {activeContinent === 'Maroc' ? '🇲🇦 Maroc' : (activeContinent || 'Toutes les zones')}
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
                 </button>
-              )}
+                {showContinentFilter && (
+                  <div className="absolute right-0 mt-1 z-30 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 min-w-[190px]">
+                    <button
+                      type="button"
+                      onClick={() => handleContinentFilter(null)}
+                      className={cn("w-full text-left px-3 py-1.5 rounded-xl text-xs font-bold transition-colors", !activeContinent ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700")}
+                    >
+                      🌍 Toutes les zones
+                    </button>
+                    {regionOptions.map(reg => (
+                      <button
+                        key={reg.id}
+                        type="button"
+                        onClick={() => handleContinentFilter(reg.id)}
+                        className={cn("w-full text-left px-3 py-1.5 rounded-xl text-xs font-bold transition-colors", activeContinent === reg.id ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700")}
+                      >
+                        <span className="inline-block w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: reg.color }} />
+                        {reg.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Filtre continent */}
-            <div className="relative">
+            {/* Focus rapide (pills) avec Maroc mis en valeur */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+              <span className="text-[11px] font-semibold text-slate-400 shrink-0">Focus rapide :</span>
               <button
                 type="button"
-                onClick={() => setShowContinentFilter(v => !v)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap"
+                onClick={() => handleContinentFilter(null)}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0",
+                  !activeContinent ? "bg-slate-800 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                )}
               >
-                <Globe className="w-3.5 h-3.5" />
-                {activeContinent || 'Tous les continents'}
-                <ChevronDown className="w-3 h-3 text-slate-400" />
+                Monde
               </button>
-              {showContinentFilter && (
-                <div className="absolute right-0 mt-1 z-30 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 min-w-[180px]">
+              {regionOptions.map(reg => {
+                const isActive = activeContinent === reg.id;
+                return (
                   <button
+                    key={reg.id}
                     type="button"
-                    onClick={() => handleContinentFilter(null)}
-                    className={cn("w-full text-left px-3 py-1.5 rounded-xl text-xs font-bold transition-colors", !activeContinent ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700")}
+                    onClick={() => handleContinentFilter(isActive ? null : reg.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 border",
+                      isActive
+                        ? "shadow-sm border-transparent text-white"
+                        : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
+                    )}
+                    style={isActive ? { backgroundColor: reg.color } : {}}
                   >
-                    🌍 Tous les continents
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: isActive ? '#ffffff' : reg.color }}
+                    />
+                    {reg.label}
                   </button>
-                  {continentOptions.map(cont => (
-                    <button
-                      key={cont}
-                      type="button"
-                      onClick={() => handleContinentFilter(cont)}
-                      className={cn("w-full text-left px-3 py-1.5 rounded-xl text-xs font-bold transition-colors", activeContinent === cont ? "bg-primary/10 text-primary" : "hover:bg-slate-50 text-slate-700")}
-                    >
-                      <span className="inline-block w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: CONTINENT_COLORS[cont] }} />
-                      {cont}
-                    </button>
-                  ))}
-                </div>
-              )}
+                );
+              })}
             </div>
           </div>
 
@@ -458,22 +513,22 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
 
           {/* Légende des couleurs */}
           <div className="flex flex-wrap gap-3 justify-center text-[10px] font-bold">
-            {continentOptions.map(cont => (
+            {regionOptions.map(reg => (
               <button
-                key={cont}
+                key={reg.id}
                 type="button"
-                onClick={() => handleContinentFilter(activeContinent === cont ? null : cont)}
+                onClick={() => handleContinentFilter(activeContinent === reg.id ? null : reg.id)}
                 className={cn(
                   "flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all",
-                  activeContinent === cont ? "border-current shadow-sm" : "border-transparent hover:border-slate-200"
+                  activeContinent === reg.id ? "border-current shadow-sm" : "border-transparent hover:border-slate-200"
                 )}
                 style={{
-                  color: CONTINENT_COLORS[cont],
-                  backgroundColor: activeContinent === cont ? `${CONTINENT_COLORS[cont]}15` : 'transparent',
+                  color: reg.color,
+                  backgroundColor: activeContinent === reg.id ? `${reg.color}15` : 'transparent',
                 }}
               >
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CONTINENT_COLORS[cont] }} />
-                {cont}
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: reg.color }} />
+                {reg.label}
               </button>
             ))}
             <span className="flex items-center gap-1.5 px-2.5 py-1 text-slate-400">
